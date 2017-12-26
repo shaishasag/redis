@@ -960,8 +960,8 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
     if (rsi && dictSize(server.lua_scripts)) {
         di = dictGetIterator(server.lua_scripts);
         while((de = dictNext(di)) != NULL) {
-            robj *body = dictGetVal(de);
-            if (rdbSaveAuxField(rdb,"lua",3,body->ptr,sdslen(body->ptr)) == -1)
+            robj *body = (redisObject *)dictGetVal(de);
+            if (rdbSaveAuxField(rdb,(void*)"lua",3,body->ptr,sdslen((const sds)body->ptr)) == -1)
                 goto werr;
         }
         dictReleaseIterator(di);

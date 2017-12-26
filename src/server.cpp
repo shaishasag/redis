@@ -2018,8 +2018,6 @@ void resetCommandTableStats(void) {
         c->microseconds = 0;
         c->calls = 0;
     }
-    dictReleaseIterator(di);
-
 }
 
 /* ========================== Redis OP Array API ============================ */
@@ -3298,7 +3296,6 @@ sds genRedisInfoString(const char *section) {
                 c->name, c->calls, c->microseconds,
                 (c->calls == 0) ? 0 : ((float)c->microseconds/c->calls));
         }
-        dictReleaseIterator(di);
     }
 
     /* Cluster */
