@@ -235,7 +235,7 @@ int dict::dictRehash(int n)
         de = ht[0].table[rehashidx];
         /* Move all the keys in this bucket from the old to the new hash HT */
         while(de) {
-            unsigned int h;
+            uint64_t h;
 
             nextde = de->next;
             /* Get the index in the new hash table */
@@ -506,7 +506,7 @@ void dictRelease(dict *d)
 dictEntry* dict::dictFind(const void *key)
 {
     dictEntry *he;
-    unsigned int h, idx, table;
+    uint64_t h, idx, table;
 
     if (ht[0].used + ht[1].used == 0) return NULL; /* dict is empty */
     if (dictIsRehashing()) _dictRehashStep();
@@ -629,7 +629,7 @@ void dictReleaseIterator(dictIterator *iter)
 dictEntry* dict::dictGetRandomKey()
 {
     dictEntry *he, *orighe;
-    unsigned int h;
+    unsigned long h;
     int listlen, listele;
 
     if (dictSize(this) == 0) return NULL;

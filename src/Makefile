@@ -230,8 +230,13 @@ $(REDIS_CLI_NAME): $(REDIS_CLI_OBJ)
 $(REDIS_BENCHMARK_NAME): $(REDIS_BENCHMARK_OBJ)
 	$(REDIS_LD) -o $@ $^ ../deps/hiredis/libhiredis.a $(FINAL_LIBS)
 
+<<<<<<< HEAD
 dict-benchmark: dict.cpp zmalloc.cpp sds.cpp siphash.cpp
 	$(REDIS_CPP) $(FINAL_CPPFLAGS) $^ -D DICT_BENCHMARK_MAIN -o $@ $(FINAL_LIBS)
+=======
+dict-benchmark: dict.c zmalloc.c sds.c siphash.c
+	$(REDIS_CC) $(FINAL_CFLAGS) $^ -D DICT_BENCHMARK_MAIN -o $@ $(FINAL_LIBS)
+>>>>>>> c9cb699bfb98529a7324a9a5c6311ce4e6b0a5a4
 
 # Because the jemalloc.h header is generated as a part of the jemalloc build,
 # building it should complete before building any other object. Instead of
@@ -268,8 +273,13 @@ lcov:
 	@geninfo -o redis.info .
 	@genhtml --legend -o lcov-html redis.info
 
+<<<<<<< HEAD
 test-sds: sds.cpp sds.h
 	$(REDIS_CC) sds.cpp zmalloc.cpp -DSDS_TEST_MAIN $(FINAL_LIBS) -o /tmp/sds_test
+=======
+test-sds: sds.c sds.h
+	$(REDIS_CC) sds.c zmalloc.c -DSDS_TEST_MAIN $(FINAL_LIBS) -o /tmp/sds_test
+>>>>>>> c9cb699bfb98529a7324a9a5c6311ce4e6b0a5a4
 	/tmp/sds_test
 
 .PHONY: lcov

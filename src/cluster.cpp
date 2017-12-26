@@ -5433,6 +5433,7 @@ int clusterRedirectBlockedClientIfNeeded(client *c) {
                     clusterRedirectClient(c,node,slot,
                         CLUSTER_REDIR_MOVED);
                 }
+                dictReleaseIterator(di);
                 return 1;
             }
         }

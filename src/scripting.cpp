@@ -367,6 +367,13 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
         c->flags &= ~CLIENT_MULTI;
     }
 
+    /* Reflect MULTI state */
+    if (server.lua_multi_emitted || (server.lua_caller->flags & CLIENT_MULTI)) {
+        c->flags |= CLIENT_MULTI;
+    } else {
+        c->flags &= ~CLIENT_MULTI;
+    }
+
     /* By using Lua debug hooks it is possible to trigger a recursive call
      * to luaRedisGenericCommand(), which normally should never happen.
      * To make this function reentrant is futile and makes it slower, but
@@ -1178,7 +1185,6 @@ sds luaCreateFunction(client *c, lua_State *lua, robj *body) {
         sdsfree(sha);
         return (sds)dictGetKey(de);
     }
-
     sds funcdef = sdsempty();
     funcdef = sdscat(funcdef,"function ");
     funcdef = sdscatlen(funcdef,funcname,42);
