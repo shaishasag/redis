@@ -37,13 +37,13 @@
 struct clusterNode;
 
 /* clusterLink encapsulates everything needed to talk with a remote node. */
-typedef struct clusterLink {
+struct clusterLink {
     mstime_t ctime;             /* Link creation time */
     int fd;                     /* TCP socket file descriptor */
     sds sndbuf;                 /* Packet send buffer */
     sds rcvbuf;                 /* Packet reception buffer */
-    struct clusterNode *node;   /* Node related to this link if any, or NULL */
-} clusterLink;
+    clusterNode *node;   /* Node related to this link if any, or NULL */
+};
 
 /* Cluster node flags and macros. */
 #define CLUSTER_NODE_MASTER 1     /* The node is a master */
@@ -97,12 +97,12 @@ typedef struct clusterLink {
 #define CLUSTERMSG_TYPE_COUNT 9         /* Total number of message types. */
 
 /* This structure represent elements of node->fail_reports. */
-typedef struct clusterNodeFailReport {
-    struct clusterNode *node;  /* Node reporting the failure condition. */
+struct clusterNodeFailReport {
+    clusterNode *node;  /* Node reporting the failure condition. */
     mstime_t time;             /* Time of the last report from this node. */
-} clusterNodeFailReport;
+};
 
-typedef struct clusterNode {
+struct clusterNode {
     mstime_t ctime; /* Node object creation time. */
     char name[CLUSTER_NAMELEN]; /* Node name, hex string, sha1-size */
     int flags;      /* CLUSTER_NODE_... */
@@ -110,8 +110,8 @@ typedef struct clusterNode {
     unsigned char slots[CLUSTER_SLOTS/8]; /* slots handled by this node */
     int numslots;   /* Number of slots handled by this node */
     int numslaves;  /* Number of slave nodes, if this is a master */
-    struct clusterNode **slaves; /* pointers to slave nodes */
-    struct clusterNode *slaveof; /* pointer to the master node. Note that it
+    clusterNode **slaves; /* pointers to slave nodes */
+    clusterNode *slaveof; /* pointer to the master node. Note that it
                                     may be NULL even if the node is a slave
                                     if we don't have the master node in our
                                     tables. */
@@ -127,9 +127,9 @@ typedef struct clusterNode {
     int cport;                  /* Latest known cluster port of this node. */
     clusterLink *link;          /* TCP/IP link with this node */
     list *fail_reports;         /* List of nodes signaling this as failing */
-} clusterNode;
+};
 
-typedef struct clusterState {
+struct clusterState {
     clusterNode *myself;  /* This node */
     uint64_t currentEpoch;
     int state;            /* CLUSTER_OK, CLUSTER_FAIL, ... */
@@ -167,14 +167,14 @@ typedef struct clusterState {
     long long stats_bus_messages_received[CLUSTERMSG_TYPE_COUNT];
     long long stats_pfail_nodes;    /* Number of nodes in PFAIL status,
                                        excluding nodes without address. */
-} clusterState;
+};
 
 /* Redis cluster messages header */
 
 /* Initially we don't know our "name", but we'll find it once we connect
  * to the first node, using the getsockname() function. Then we'll use this
  * address for all the next messages. */
-typedef struct {
+struct clusterMsgDataGossip{
     char nodename[CLUSTER_NAMELEN];
     uint32_t ping_sent;
     uint32_t pong_received;
@@ -183,26 +183,26 @@ typedef struct {
     uint16_t cport;             /* cluster port last time it was seen */
     uint16_t flags;             /* node->flags copy */
     uint32_t notused1;
-} clusterMsgDataGossip;
+} ;
 
-typedef struct {
+struct clusterMsgDataFail{
     char nodename[CLUSTER_NAMELEN];
-} clusterMsgDataFail;
+} ;
 
-typedef struct {
+struct clusterMsgDataPublish{
     uint32_t channel_len;
     uint32_t message_len;
     /* We can't reclare bulk_data as bulk_data[] since this structure is
      * nested. The 8 bytes are removed from the count during the message
      * length computation. */
     unsigned char bulk_data[8];
-} clusterMsgDataPublish;
+} ;
 
-typedef struct {
+struct clusterMsgDataUpdate{
     uint64_t configEpoch; /* Config epoch of the specified instance. */
     char nodename[CLUSTER_NAMELEN]; /* Name of the slots owner. */
     unsigned char slots[CLUSTER_SLOTS/8]; /* Slots bitmap. */
-} clusterMsgDataUpdate;
+};
 
 union clusterMsgData {
     /* PING, MEET and PONG */
@@ -229,7 +229,7 @@ union clusterMsgData {
 
 #define CLUSTER_PROTO_VER 1 /* Cluster bus protocol version. */
 
-typedef struct {
+struct clusterMsg {
     char sig[4];        /* Siganture "RCmb" (Redis Cluster message bus). */
     uint32_t totlen;    /* Total length of this message */
     uint16_t ver;       /* Protocol version, currently set to 1. */
@@ -252,7 +252,7 @@ typedef struct {
     unsigned char state; /* Cluster state from the POV of the sender */
     unsigned char mflags[3]; /* Message flags: CLUSTERMSG_FLAG[012]_... */
     union clusterMsgData data;
-} clusterMsg;
+};
 
 #define CLUSTERMSG_MIN_LEN (sizeof(clusterMsg)-sizeof(union clusterMsgData))
 

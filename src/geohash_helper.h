@@ -41,11 +41,11 @@
 typedef uint64_t GeoHashFix52Bits;
 typedef uint64_t GeoHashVarBits;
 
-typedef struct {
+struct GeoHashRadius{
     GeoHashBits hash;
     GeoHashArea area;
     GeoHashNeighbors neighbors;
-} GeoHashRadius;
+};
 
 int GeoHashBitsComparator(const GeoHashBits *a, const GeoHashBits *b);
 uint8_t geohashEstimateStepsByRadius(double range_meters, double lat);

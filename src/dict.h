@@ -17,6 +17,25 @@
  *     notice, this list of conditions and the following disclaimer in the
  *     documentation and/or other materials provided with the distribution.
  *   * Neither the name of Redis nor the names of its contributors may be used
+/* Hash Tables Implementation.
+ *
+ * This file implements in-memory hash tables with insert/del/replace/find/
+ * get-random-element operations. Hash tables will auto-resize if needed
+ * tables of power of two in size are used, collisions are handled by
+ * chaining. See the source code for more information... :)
+ *
+ * Copyright (c) 2006-2012, Salvatore Sanfilippo <antirez at gmail dot com>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *   * Redistributions of source code must retain the above copyright notice,
+ *     this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in the
+ *     documentation and/or other materials provided with the distribution.
+ *   * Neither the name of Redis nor the names of its contributors may be used
  *     to endorse or promote products derived from this software without
  *     specific prior written permission.
  *
@@ -44,7 +63,9 @@
 /* Unused arguments generate annoying warnings... */
 #define DICT_NOTUSED(V) ((void) V)
 
-typedef struct dictEntry {
+class dictEntry {
+public:
+    dictEntry(dictEntry *next_entry=NULL);
     void *key;
     union {
         void *val;
@@ -52,50 +73,100 @@ typedef struct dictEntry {
         int64_t s64;
         double d;
     } v;
-    struct dictEntry *next;
-} dictEntry;
+    dictEntry *next;
+} ;
 
-typedef struct dictType {
+struct dictType {
     uint64_t (*hashFunction)(const void *key);
     void *(*keyDup)(void *privdata, const void *key);
     void *(*valDup)(void *privdata, const void *obj);
     int (*keyCompare)(void *privdata, const void *key1, const void *key2);
     void (*keyDestructor)(void *privdata, void *key);
     void (*valDestructor)(void *privdata, void *obj);
-} dictType;
+} ;
 
 /* This is our hash table structure. Every dictionary has two of this as we
  * implement incremental rehashing, for the old to the new table. */
-typedef struct dictht {
+class dictht {
+public:
+    dictht();
+    ~dictht();
+    void reset();
+
+//private:     
     dictEntry **table;
     unsigned long size;
     unsigned long sizemask;
     unsigned long used;
-} dictht;
+} ;
 
-typedef struct dict {
+typedef void (dictScanFunction)(void *privdata, const dictEntry *de);
+typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
+
+// remove declarations of functions that became class members
+// get rid of macros that should be member functions
+class dict {
+public:
+    dict();
+    dict(dictType *in_type, void *in_privDataPtr);
+    ~dict();
+    
+    inline bool dictIsRehashing() { return rehashidx != -1;}
+    int dictResize();
+    int dictExpand(unsigned long size);
+    int dictRehash(int n);
+    void _dictRehashStep(); // should be private?
+    int dictAdd(void *key, void *val);
+    dictEntry* dictAddRaw(void *key, dictEntry **existing);
+    int dictReplace(void *key, void *val);
+    dictEntry* dictAddOrFind(void *key);
+    int dictDelete(const void *key);
+    dictEntry* dictUnlink(const void *key);
+    void dictFreeUnlinkedEntry(dictEntry *he);
+    dictEntry* dictFind(const void *key);
+    void* dictFetchValue(const void *key);
+    long long dictFingerprint();
+    dictEntry* dictGetRandomKey();
+    unsigned int dictGetSomeKeys(dictEntry **des, unsigned int count);
+    unsigned long dictScan(unsigned long v,
+                       dictScanFunction *fn,
+                       dictScanBucketFunction* bucketfn,
+                       void *privdata);
+    void dictEmpty(void(callback)(void*));
+    unsigned int dictGetHash(const void *key);
+    dictEntry** dictFindEntryRefByPtrAndHash(const void *oldptr, unsigned int hash);
+
+//private:    
+    int _dictKeyIndex(const void *key, unsigned int hash, dictEntry **existing);
+    int _dictExpandIfNeeded();
+    dictEntry *dictGenericDelete(const void *key, int nofree);
+    int _dictClear(dictht *ht, void(callback)(void *));
+    
     dictType *type;
     void *privdata;
     dictht ht[2];
     long rehashidx; /* rehashing not in progress if rehashidx == -1 */
     unsigned long iterators; /* number of iterators currently running */
-} dict;
+} ;
 
 /* If safe is set to 1 this is a safe iterator, that means, you can call
  * dictAdd, dictFind, and other functions against the dictionary even while
  * iterating. Otherwise it is a non safe iterator, and only dictNext()
  * should be called while iterating. */
-typedef struct dictIterator {
+class dictIterator {
+public:
+    dictIterator(dict *in_d, int in_safe=0);
+    ~dictIterator();
+    
     dict *d;
     long index;
-    int table, safe;
-    dictEntry *entry, *nextEntry;
+    int table;
+    int safe;
+    dictEntry *entry;
+    dictEntry *nextEntry;
     /* unsafe iterator fingerprint for misuse detection. */
     long long fingerprint;
-} dictIterator;
-
-typedef void (dictScanFunction)(void *privdata, const dictEntry *de);
-typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
+};
 
 /* This is the initial size of every hash table */
 #define DICT_HT_INITIAL_SIZE     4
@@ -145,11 +216,9 @@ typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
 #define dictGetDoubleVal(he) ((he)->v.d)
 #define dictSlots(d) ((d)->ht[0].size+(d)->ht[1].size)
 #define dictSize(d) ((d)->ht[0].used+(d)->ht[1].used)
-#define dictIsRehashing(d) ((d)->rehashidx != -1)
 
 /* API */
 dict *dictCreate(dictType *type, void *privDataPtr);
-int dictExpand(dict *d, unsigned long size);
 int dictAdd(dict *d, void *key, void *val);
 dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing);
 dictEntry *dictAddOrFind(dict *d, void *key);
@@ -160,7 +229,6 @@ void dictFreeUnlinkedEntry(dict *d, dictEntry *he);
 void dictRelease(dict *d);
 dictEntry * dictFind(dict *d, const void *key);
 void *dictFetchValue(dict *d, const void *key);
-int dictResize(dict *d);
 dictIterator *dictGetIterator(dict *d);
 dictIterator *dictGetSafeIterator(dict *d);
 dictEntry *dictNext(dictIterator *iter);
@@ -173,13 +241,13 @@ uint64_t dictGenCaseHashFunction(const unsigned char *buf, int len);
 void dictEmpty(dict *d, void(callback)(void*));
 void dictEnableResize(void);
 void dictDisableResize(void);
-int dictRehash(dict *d, int n);
+
 int dictRehashMilliseconds(dict *d, int ms);
 void dictSetHashFunctionSeed(uint8_t *seed);
 uint8_t *dictGetHashFunctionSeed(void);
 unsigned long dictScan(dict *d, unsigned long v, dictScanFunction *fn, dictScanBucketFunction *bucketfn, void *privdata);
-uint64_t dictGetHash(dict *d, const void *key);
-dictEntry **dictFindEntryRefByPtrAndHash(dict *d, const void *oldptr, uint64_t hash);
+unsigned int dictGetHash(dict *d, const void *key);
+dictEntry **dictFindEntryRefByPtrAndHash(dict *d, const void *oldptr, unsigned int hash);
 
 /* Hash table types */
 extern dictType dictTypeHeapStringCopyKey;

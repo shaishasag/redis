@@ -2,7 +2,7 @@
 #define stdbool_h
 
 #include <wtypes.h>
-
+#if 0
 /* MSVC doesn't define _Bool or bool in C, but does have BOOL */
 /* Note this doesn't pass autoconf's test because (bool) 0.5 != true */
 /* Clang-cl uses MSVC headers, so needs msvc_compat, but has _Bool as
@@ -16,5 +16,5 @@ typedef BOOL _Bool;
 #define false 0
 
 #define __bool_true_false_are_defined 1
-
+#endif
 #endif /* stdbool_h */

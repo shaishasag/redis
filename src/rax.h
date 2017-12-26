@@ -65,7 +65,7 @@
  */
 
 #define RAX_NODE_MAX_SIZE ((1<<29)-1)
-typedef struct raxNode {
+struct raxNode {
     uint32_t iskey:1;     /* Does this node contain a key? */
     uint32_t isnull:1;    /* Associated value is NULL (don't store it). */
     uint32_t iscompr:1;   /* Node is compressed. */
@@ -98,26 +98,26 @@ typedef struct raxNode {
      * in the representation above as "value-ptr" field).
      */
     unsigned char data[];
-} raxNode;
+};
 
-typedef struct rax {
+struct rax {
     raxNode *head;
     uint64_t numele;
     uint64_t numnodes;
-} rax;
+};
 
 /* Stack data structure used by raxLowWalk() in order to, optionally, return
  * a list of parent nodes to the caller. The nodes do not have a "parent"
  * field for space concerns, so we use the auxiliary stack when needed. */
 #define RAX_STACK_STATIC_ITEMS 32
-typedef struct raxStack {
+struct raxStack {
     void **stack; /* Points to static_items or an heap allocated array. */
     size_t items, maxitems; /* Number of items contained and total space. */
     /* Up to RAXSTACK_STACK_ITEMS items we avoid to allocate on the heap
      * and use this static array of pointers instead. */
     void *static_items[RAX_STACK_STATIC_ITEMS];
     int oom; /* True if pushing into this stack failed for OOM at some point. */
-} raxStack;
+};
 
 /* Radix tree iterator state is encapsulated into this data structure. */
 #define RAX_ITER_STATIC_LEN 128
@@ -127,7 +127,7 @@ typedef struct raxStack {
 #define RAX_ITER_EOF (1<<1)    /* End of iteration reached. */
 #define RAX_ITER_SAFE (1<<2)   /* Safe iterator, allows operations while
                                   iterating. But it is slower. */
-typedef struct raxIterator {
+struct raxIterator {
     int flags;
     rax *rt;                /* Radix tree we are iterating. */
     unsigned char *key;     /* The current string. */
@@ -137,7 +137,7 @@ typedef struct raxIterator {
     unsigned char key_static_string[RAX_ITER_STATIC_LEN];
     raxNode *node;          /* Current node. Only for unsafe iteration. */
     raxStack stack;         /* Stack used for unsafe iteration. */
-} raxIterator;
+} ;
 
 /* A special pointer returned for not found items. */
 extern void *raxNotFound;
@@ -148,7 +148,6 @@ int raxInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old);
 int raxRemove(rax *rax, unsigned char *s, size_t len, void **old);
 void *raxFind(rax *rax, unsigned char *s, size_t len);
 void raxFree(rax *rax);
-void raxFreeWithCallback(rax *rax, void (*free_callback)(void*));
 void raxStart(raxIterator *it, rax *rt);
 int raxSeek(raxIterator *it, const char *op, unsigned char *ele, size_t len);
 int raxNext(raxIterator *it);
@@ -156,8 +155,6 @@ int raxPrev(raxIterator *it);
 int raxRandomWalk(raxIterator *it, size_t steps);
 int raxCompare(raxIterator *iter, const char *op, unsigned char *key, size_t key_len);
 void raxStop(raxIterator *it);
-int raxEOF(raxIterator *it);
 void raxShow(rax *rax);
-uint64_t raxSize(rax *rax);
 
 #endif

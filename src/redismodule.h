@@ -101,7 +101,6 @@
 typedef long long mstime_t;
 
 /* Incomplete structures for compiler checks but opaque access. */
-typedef struct RedisModuleCtx RedisModuleCtx;
 typedef struct RedisModuleKey RedisModuleKey;
 typedef struct RedisModuleString RedisModuleString;
 typedef struct RedisModuleCallReply RedisModuleCallReply;
@@ -120,7 +119,7 @@ typedef void (*RedisModuleTypeDigestFunc)(RedisModuleDigest *digest, void *value
 typedef void (*RedisModuleTypeFreeFunc)(void *value);
 
 #define REDISMODULE_TYPE_METHOD_VERSION 1
-typedef struct RedisModuleTypeMethods {
+struct RedisModuleTypeMethods {
     uint64_t version;
     RedisModuleTypeLoadFunc rdb_load;
     RedisModuleTypeSaveFunc rdb_save;
@@ -128,7 +127,7 @@ typedef struct RedisModuleTypeMethods {
     RedisModuleTypeMemUsageFunc mem_usage;
     RedisModuleTypeDigestFunc digest;
     RedisModuleTypeFreeFunc free;
-} RedisModuleTypeMethods;
+};
 
 #define REDISMODULE_GET_API(name) \
     RedisModule_GetApi("RedisModule_" #name, ((void **)&RedisModule_ ## name))

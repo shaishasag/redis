@@ -84,7 +84,7 @@ int THPIsEnabled(void);
 #define latencyAddSampleIfNeeded(event,var) \
     if (server.latency_monitor_threshold && \
         (var) >= server.latency_monitor_threshold) \
-          latencyAddSample((event),(var));
+          latencyAddSample((char *)(event),(mstime_t)(var));
 
 /* Remove time from a nested event. */
 #define latencyRemoveNestedEvent(event_var,nested_var) \

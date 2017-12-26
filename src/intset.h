@@ -32,11 +32,11 @@
 #define __INTSET_H
 #include <stdint.h>
 
-typedef struct intset {
+struct intset {
     uint32_t encoding;
     uint32_t length;
     int8_t contents[];
-} intset;
+};
 
 intset *intsetNew(void);
 intset *intsetAdd(intset *is, int64_t value, uint8_t *success);

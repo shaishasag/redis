@@ -41,7 +41,7 @@
  * recompress: 1 bit, bool, true if node is temporarry decompressed for usage.
  * attempted_compress: 1 bit, boolean, used for verifying during testing.
  * extra: 12 bits, free for future use; pads out the remainder of 32 bits */
-typedef struct quicklistNode {
+struct quicklistNode {
     struct quicklistNode *prev;
     struct quicklistNode *next;
     unsigned char *zl;
@@ -52,17 +52,17 @@ typedef struct quicklistNode {
     unsigned int recompress : 1; /* was this node previous compressed? */
     unsigned int attempted_compress : 1; /* node can't compress; too small */
     unsigned int extra : 10; /* more bits to steal for future usage */
-} quicklistNode;
+};
 
 /* quicklistLZF is a 4+N byte struct holding 'sz' followed by 'compressed'.
  * 'sz' is byte length of 'compressed' field.
  * 'compressed' is LZF data with total (compressed) length 'sz'
  * NOTE: uncompressed length is stored in quicklistNode->sz.
  * When quicklistNode->zl is compressed, node->zl points to a quicklistLZF */
-typedef struct quicklistLZF {
+struct quicklistLZF {
     unsigned int sz; /* LZF size in bytes*/
     char compressed[];
-} quicklistLZF;
+};
 
 /* quicklist is a 40 byte struct (on 64-bit systems) describing a quicklist.
  * 'count' is the number of total entries.
@@ -70,24 +70,24 @@ typedef struct quicklistLZF {
  * 'compress' is: -1 if compression disabled, otherwise it's the number
  *                of quicklistNodes to leave uncompressed at ends of quicklist.
  * 'fill' is the user-requested (or default) fill factor. */
-typedef struct quicklist {
+struct quicklist {
     quicklistNode *head;
     quicklistNode *tail;
     unsigned long count;        /* total count of all entries in all ziplists */
     unsigned long len;          /* number of quicklistNodes */
     int fill : 16;              /* fill factor for individual nodes */
     unsigned int compress : 16; /* depth of end nodes not to compress;0=off */
-} quicklist;
+};
 
-typedef struct quicklistIter {
+struct quicklistIter {
     const quicklist *quicklist;
     quicklistNode *current;
     unsigned char *zi;
     long offset; /* offset in current ziplist */
     int direction;
-} quicklistIter;
+};
 
-typedef struct quicklistEntry {
+struct quicklistEntry {
     const quicklist *quicklist;
     quicklistNode *node;
     unsigned char *zi;
@@ -95,7 +95,7 @@ typedef struct quicklistEntry {
     long long longval;
     unsigned int sz;
     int offset;
-} quicklistEntry;
+};
 
 #define QUICKLIST_HEAD 0
 #define QUICKLIST_TAIL -1

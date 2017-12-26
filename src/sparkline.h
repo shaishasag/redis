@@ -39,7 +39,7 @@ struct sample {
 struct sequence {
     int length;
     int labels;
-    struct sample *samples;
+    sample *samples;
     double min, max;
 };
 

@@ -14,6 +14,9 @@
 
 #include "lua.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #if defined(LUA_COMPAT_GETN)
 LUALIB_API int (luaL_getn) (lua_State *L, int t);
@@ -168,6 +171,9 @@ LUALIB_API void (luaL_pushresult) (luaL_Buffer *B);
 
 
 #define luaL_reg	luaL_Reg
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

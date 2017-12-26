@@ -15,6 +15,9 @@
 #define LUA_FILEHANDLE		"FILE*"
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #define LUA_COLIBNAME	"coroutine"
 LUALIB_API int (luaopen_base) (lua_State *L);
 
@@ -43,6 +46,9 @@ LUALIB_API int (luaopen_package) (lua_State *L);
 /* open all previous libraries */
 LUALIB_API void (luaL_openlibs) (lua_State *L); 
 
+#ifdef __cplusplus
+}
+#endif
 
 
 #ifndef lua_assert

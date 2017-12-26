@@ -390,7 +390,7 @@ static int __redisGetSubscribeCallback(redisAsyncContext *ac, redisReply *reply,
             memcpy(dstcb,dictGetEntryVal(de),sizeof(*dstcb));
 
             /* If this is an unsubscribe message, remove it. */
-            if (strcasecmp(stype+pvariant,"unsubscribe") == 0) {
+            if (strcasecmp((const char*)stype+pvariant,"unsubscribe") == 0) {
                 dictDelete(callbacks,sname);
 
                 /* If this was the last unsubscribe message, revert to
