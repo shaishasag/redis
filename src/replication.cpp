@@ -2298,7 +2298,7 @@ void replicationScriptCacheInit(void) {
  *    to reclaim otherwise unused memory.
  */
 void replicationScriptCacheFlush(void) {
-    dictEmpty(server.repl_scriptcache_dict,NULL);
+    server.repl_scriptcache_dict->dictEmpty(NULL);
     listRelease(server.repl_scriptcache_fifo);
     server.repl_scriptcache_fifo = listCreate();
 }
@@ -2315,13 +2315,13 @@ void replicationScriptCacheAdd(sds sha1) {
         listNode *ln = listLast(server.repl_scriptcache_fifo);
         sds oldest = (sds)listNodeValue(ln);
 
-        retval = dictDelete(server.repl_scriptcache_dict,oldest);
+        retval = server.repl_scriptcache_dict->dictDelete(oldest);
         serverAssert(retval == DICT_OK);
         listDelNode(server.repl_scriptcache_fifo,ln);
     }
 
     /* Add current. */
-    retval = dictAdd(server.repl_scriptcache_dict,key,NULL);
+    retval = server.repl_scriptcache_dict->dictAdd(key,NULL);
     listAddNodeHead(server.repl_scriptcache_fifo,key);
     serverAssert(retval == DICT_OK);
 }
@@ -2329,7 +2329,7 @@ void replicationScriptCacheAdd(sds sha1) {
 /* Returns non-zero if the specified entry exists inside the cache, that is,
  * if all the slaves are aware of this script SHA1. */
 int replicationScriptCacheExists(sds sha1) {
-    return dictFind(server.repl_scriptcache_dict,sha1) != NULL;
+    return server.repl_scriptcache_dict->dictFind(sha1) != NULL;
 }
 
 /* ----------------------- SYNCHRONOUS REPLICATION --------------------------

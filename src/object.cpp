@@ -736,13 +736,13 @@ size_t objectComputeSize(robj *o, size_t sample_size) {
         if (o->encoding == OBJ_ENCODING_HT) {
             d = (dict *)o->ptr;
             dictIterator di(d);
-            asize = sizeof(*o)+sizeof(dict)+(sizeof(struct dictEntry*)*dictSlots(d));
+            asize = sizeof(*o)+sizeof(dict)+(sizeof(struct dictEntry*)*d->dictSlots());
             while((de = dictNext(&di)) != NULL && samples < sample_size) {
-                ele = (sds)dictGetKey(de);
+                ele = (sds)de->dictGetKey();
                 elesize += sizeof(struct dictEntry) + sdsAllocSize(ele);
                 samples++;
             }
-            if (samples) asize += (double)elesize/samples*dictSize(d);
+            if (samples) asize += (double)elesize/samples*d->dictSize();
         } else if (o->encoding == OBJ_ENCODING_INTSET) {
             intset *is = (intset *)o->ptr;
             asize = sizeof(*o)+sizeof(*is)+is->encoding*is->length;
@@ -756,14 +756,14 @@ size_t objectComputeSize(robj *o, size_t sample_size) {
             d = ((zset*)o->ptr)->_dict;
             zskiplist *zsl = ((zset*)o->ptr)->zsl;
             zskiplistNode *znode = zsl->header->level[0].forward;
-            asize = sizeof(*o)+sizeof(zset)+(sizeof(struct dictEntry*)*dictSlots(d));
+            asize = sizeof(*o)+sizeof(zset)+(sizeof(struct dictEntry*)*d->dictSlots());
             while(znode != NULL && samples < sample_size) {
                 elesize += sdsAllocSize(znode->ele);
                 elesize += sizeof(struct dictEntry) + zmalloc_size(znode);
                 samples++;
                 znode = znode->level[0].forward;
             }
-            if (samples) asize += (double)elesize/samples*dictSize(d);
+            if (samples) asize += (double)elesize/samples*d->dictSize();
         } else {
             serverPanic("Unknown sorted set encoding");
         }
@@ -773,16 +773,16 @@ size_t objectComputeSize(robj *o, size_t sample_size) {
         } else if (o->encoding == OBJ_ENCODING_HT) {
             d = (dict *)o->ptr;
             dictIterator di(d);
-            asize = sizeof(*o)+sizeof(dict)+(sizeof(struct dictEntry*)*dictSlots(d));
+            asize = sizeof(*o)+sizeof(dict)+(sizeof(struct dictEntry*)*d->dictSlots());
             while((de = dictNext(&di)) != NULL && samples < sample_size) {
-                ele = (sds)dictGetKey(de);
-                ele2 = (sds)dictGetVal(de);
+                ele = (sds)de->dictGetKey();
+                ele2 = (sds)de->dictGetVal();
                 elesize += sdsAllocSize(ele) + sdsAllocSize(ele2);
                 elesize += sizeof(struct dictEntry);
                 samples++;
             }
 
-            if (samples) asize += (double)elesize/samples*dictSize(d);
+            if (samples) asize += (double)elesize/samples*d->dictSize();
         } else {
             serverPanic("Unknown hash encoding");
         }
@@ -873,21 +873,21 @@ struct redisMemOverhead *getMemoryOverheadData(void) {
 
     for (j = 0; j < server.dbnum; j++) {
         redisDb *db = server.db+j;
-        long long keyscount = dictSize(db->_dict);
+        long long keyscount = db->_dict->dictSize();
         if (keyscount==0) continue;
 
         mh->total_keys += keyscount;
         mh->db = (redisMemOverhead::redisMemOverhead_db*)zrealloc(mh->db,sizeof(mh->db[0])*(mh->num_dbs+1));
         mh->db[mh->num_dbs].dbid = j;
 
-        mem = dictSize(db->_dict) * sizeof(dictEntry) +
-              dictSlots(db->_dict) * sizeof(dictEntry*) +
-              dictSize(db->_dict) * sizeof(robj);
+        mem = db->_dict->dictSize() * sizeof(dictEntry) +
+              db->_dict->dictSlots() * sizeof(dictEntry*) +
+              db->_dict->dictSize() * sizeof(robj);
         mh->db[mh->num_dbs].overhead_ht_main = mem;
         mem_total+=mem;
 
-        mem = dictSize(db->expires) * sizeof(dictEntry) +
-              dictSlots(db->expires) * sizeof(dictEntry*);
+        mem = db->expires->dictSize() * sizeof(dictEntry) +
+              db->expires->dictSlots() * sizeof(dictEntry*);
         mh->db[mh->num_dbs].overhead_ht_expires = mem;
         mem_total+=mem;
 
@@ -998,8 +998,8 @@ sds getMemoryDoctorReport(void) {
 robj *objectCommandLookup(client *c, robj *key) {
     dictEntry *de;
 
-    if ((de = dictFind(c->db->_dict,key->ptr)) == NULL) return NULL;
-    return (robj*) dictGetVal(de);
+    if ((de = c->db->_dict->dictFind(key->ptr)) == NULL) return NULL;
+    return (robj*) de->dictGetVal();
 }
 
 robj *objectCommandLookupOrReply(client *c, robj *key, robj *reply) {

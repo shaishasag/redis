@@ -273,7 +273,7 @@ dictEntry* replaceSateliteDictKeyPtrAndOrDefragDictEntry(dict *d, sds oldkey, sd
  * all the various pointers it has. Returns a stat of how many pointers were
  * moved. */
 int defragKey(redisDb *db, dictEntry *de) {
-    sds keysds = (sds)dictGetKey(de);
+    sds keysds = (sds)de->dictGetKey();
     robj *newob, *ob;
     unsigned char *newzl;
     dict *d;
@@ -284,7 +284,7 @@ int defragKey(redisDb *db, dictEntry *de) {
     newsds = activeDefragSds(keysds);
     if (newsds)
         defragged++, de->key = newsds;
-    if (dictSize(db->expires)) {
+    if (db->expires->dictSize()) {
          /* Dirty code:
           * I can't search in db->expires for that key after i already released
           * the pointer it holds it won't be able to do the string compare */
@@ -293,7 +293,7 @@ int defragKey(redisDb *db, dictEntry *de) {
     }
 
     /* Try to defrag robj and / or string value. */
-    ob = (robj *)dictGetVal(de);
+    ob = (robj *)de->dictGetVal();
     if ((newob = activeDefragStringOb(ob, &defragged))) {
         de->v.val = newob;
         ob = newob;
@@ -335,7 +335,7 @@ int defragKey(redisDb *db, dictEntry *de) {
             d = ob->ptr;
             dictIterator di(d);
             while((de = dictNext(&di)) != NULL) {
-                sds sdsele = (sds)dictGetKey(de);
+                sds sdsele = (sds)de->dictGetKey();
                 if ((newsds = activeDefragSds(sdsele)))
                     defragged++, de->key = newsds;
                 defragged += dictIterDefragEntry(di);
@@ -369,12 +369,12 @@ int defragKey(redisDb *db, dictEntry *de) {
             dictIterator di(d);
             while((de = dictNext(&di)) != NULL) {
                 double* newscore;
-                sds sdsele = (sds)dictGetKey(de);
+                sds sdsele = (sds)de->dictGetKey();
                 if ((newsds = activeDefragSds(sdsele)))
                     defragged++, de->key = newsds;
-                newscore = zslDefrag(zs->zsl, *(double*)dictGetVal(de), sdsele, newsds);
+                newscore = zslDefrag(zs->zsl, *(double*)de->dictGetVal(), sdsele, newsds);
                 if (newscore) {
-                    dictSetVal(d, de, newscore);
+                    d->dictSetVal(de, newscore);
                     defragged++;
                 }
                 defragged += dictIterDefragEntry(di);
@@ -391,10 +391,10 @@ int defragKey(redisDb *db, dictEntry *de) {
             d = ob->ptr;
             dictIterator di(d);
             while((de = dictNext(&di)) != NULL) {
-                sds sdsele = (sds)dictGetKey(de);
+                sds sdsele = (sds)de->dictGetKey();
                 if ((newsds = activeDefragSds(sdsele)))
                     defragged++, de->key = newsds;
-                sdsele = (sds)dictGetVal(de);
+                sdsele = (sds)de->dictGetVal();
                 if ((newsds = activeDefragSds(sdsele)))
                     defragged++, de->v.val = newsds;
                 defragged += dictIterDefragEntry(di);
@@ -553,7 +553,7 @@ void activeDefragCycle(void) {
         }
 
         do {
-            cursor = dictScan(db->_dict, cursor, defragScanCallback, defragDictBucketCallback, db);
+            cursor = db->_dict->dictScan(cursor, defragScanCallback, defragDictBucketCallback, db);
             /* Once in 16 scan iterations, or 1000 pointer reallocations
              * (if we have a lot of pointers in one hash bucket), check if we
              * reached the tiem limit. */

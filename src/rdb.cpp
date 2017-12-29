@@ -678,11 +678,11 @@ ssize_t rdbSaveObject(rio *rdb, robj *o) {
             dictIterator di(set);
             dictEntry *de;
 
-            if ((n = rdbSaveLen(rdb,dictSize(set))) == -1) return -1;
+            if ((n = rdbSaveLen(rdb,set->dictSize())) == -1) return -1;
             nwritten += n;
 
             while((de = dictNext(&di)) != NULL) {
-                sds ele = (sds)dictGetKey(de);
+                sds ele = (sds)de->dictGetKey();
                 if ((n = rdbSaveRawString(rdb,(unsigned char*)ele,sdslen(ele)))
                     == -1) return -1;
                 nwritten += n;
@@ -744,12 +744,12 @@ ssize_t rdbSaveObject(rio *rdb, robj *o) {
             dictIterator di((dict*)o->ptr);
             dictEntry *de;
 
-            if ((n = rdbSaveLen(rdb,dictSize((dict*)o->ptr))) == -1) return -1;
+            if ((n = rdbSaveLen(rdb,((dict*)o->ptr)->dictSize())) == -1) return -1;
             nwritten += n;
 
             while((de = dictNext(&di)) != NULL) {
-                sds field = (sds)dictGetKey(de);
-                sds value = (sds)dictGetVal(de);
+                sds field = (sds)de->dictGetKey();
+                sds value = (sds)de->dictGetVal();
 
                 if ((n = rdbSaveRawString(rdb,(unsigned char*)field,
                         sdslen(field))) == -1) return -1;
@@ -895,7 +895,7 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
     for (j = 0; j < server.dbnum; j++) {
         redisDb *db = server.db+j;
         dict *d = db->_dict;
-        if (dictSize(d) == 0) continue;
+        if (d->dictSize() == 0) continue;
 
         /* Write the SELECT DB opcode */
         if (rdbSaveType(rdb,RDB_OPCODE_SELECTDB) == -1) goto werr;
@@ -906,11 +906,11 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
          * However this does not limit the actual size of the DB to load since
          * these sizes are just hints to resize the hash tables. */
         uint32_t db_size, expires_size;
-        db_size = (dictSize(db->_dict) <= UINT32_MAX) ?
-                                dictSize(db->_dict) :
+        db_size = (db->_dict->dictSize() <= UINT32_MAX) ?
+                                db->_dict->dictSize() :
                                 UINT32_MAX;
-        expires_size = (dictSize(db->expires) <= UINT32_MAX) ?
-                                dictSize(db->expires) :
+        expires_size = (db->expires->dictSize() <= UINT32_MAX) ?
+                                db->expires->dictSize() :
                                 UINT32_MAX;
         if (rdbSaveType(rdb,RDB_OPCODE_RESIZEDB) == -1) goto werr;
         if (rdbSaveLen(rdb,db_size) == -1) goto werr;
@@ -919,9 +919,9 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
         /* Iterate this DB writing every entry */
         dictIterator di(d, 1);
         while((de = dictNext(&di)) != NULL) {
-            sds keystr = (sds)dictGetKey(de);
+            sds keystr = (sds)de->dictGetKey();
             robj key;
-            robj* o = (robj*)dictGetVal(de);
+            robj* o = (robj*)de->dictGetVal();
             long long expire;
 
             initStaticStringObject(key,keystr);
@@ -944,10 +944,10 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
      * the script cache as well: on successful PSYNC after a restart, we need
      * to be able to process any EVALSHA inside the replication backlog the
      * master will send us. */
-    if (rsi && dictSize(server.lua_scripts)) {
+    if (rsi && server.lua_scripts->dictSize()) {
         dictIterator di(server.lua_scripts);
         while((de = dictNext(&di)) != NULL) {
-            robj* body = (robj*)dictGetVal(de);
+            robj* body = (robj*)de->dictGetVal();
             if (rdbSaveAuxField(rdb,(void*)"lua",3,body->ptr,sdslen((sds)body->ptr)) == -1)
                 goto werr;
         }
@@ -957,10 +957,10 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
      * the script cache as well: on successful PSYNC after a restart, we need
      * to be able to process any EVALSHA inside the replication backlog the
      * master will send us. */
-    if (rsi && dictSize(server.lua_scripts)) {
+    if (rsi && server.lua_scripts->dictSize()) {
         di = dictGetIterator(server.lua_scripts);
         while((de = dictNext(di)) != NULL) {
-            robj *body = (redisObject *)dictGetVal(de);
+            robj *body = (redisObject *)de->dictGetVal();
             if (rdbSaveAuxField(rdb,(void*)"lua",3,body->ptr,sdslen((const sds)body->ptr)) == -1)
                 goto werr;
         }
@@ -1231,7 +1231,7 @@ robj *rdbLoadObject(int rdbtype, rio *rdb) {
             /* This will also be called when the set was just converted
              * to a regular hash table encoded set. */
             if (o->encoding == OBJ_ENCODING_HT) {
-                dictAdd((dict*)o->ptr,sdsele,NULL);
+                ((dict*)o->ptr)->dictAdd(sdsele,NULL);
             } else {
                 sdsfree(sdsele);
             }
@@ -1265,7 +1265,7 @@ robj *rdbLoadObject(int rdbtype, rio *rdb) {
             if (sdslen(sdsele) > maxelelen) maxelelen = sdslen(sdsele);
 
             znode = zslInsert(zs->zsl,score,sdsele);
-            dictAdd(zs->_dict,sdsele,&znode->score);
+            zs->_dict->dictAdd(sdsele,&znode->score);
         }
 
         /* Convert *after* loading, since sorted sets are not stored ordered. */
@@ -1324,7 +1324,7 @@ robj *rdbLoadObject(int rdbtype, rio *rdb) {
                 == NULL) return NULL;
 
             /* Add pair to hash table */
-            ret = dictAdd((dict*)o->ptr, field, value);
+            ret = ((dict*)o->ptr)->dictAdd(field, value);
             if (ret == DICT_ERR) {
                 rdbExitReportCorruptRDB("Duplicate keys detected");
             }

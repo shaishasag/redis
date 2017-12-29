@@ -448,12 +448,12 @@ void initSentinel(void) {
 
     /* Remove usual Redis commands from the command table, then just add
      * the SENTINEL command. */
-    dictEmpty(server.commands,NULL);
+    server.commands->dictEmpty(NULL);
     for (j = 0; j < sizeof(sentinelcmds)/sizeof(sentinelcmds[0]); j++) {
         int retval;
         struct redisCommand *cmd = sentinelcmds+j;
 
-        retval = dictAdd(server.commands, sdsnew(cmd->name), cmd);
+        retval = server.commands->dictAdd(sdsnew(cmd->name), cmd);
         serverAssert(retval == DICT_OK);
     }
 
@@ -645,7 +645,7 @@ void sentinelGenerateInitialMonitorEvents(void) {
 
     dictIterator di(sentinel.masters);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
         sentinelEvent(LL_WARNING,"+monitor",ri,"%@ quorum %d",ri->quorum);
     }
 }
@@ -1022,7 +1022,7 @@ int sentinelTryConnectionSharing(sentinelRedisInstance *ri) {
 
     dictIterator di(sentinel.masters);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* master = (sentinelRedisInstance*)dictGetVal(de), *match;
+        sentinelRedisInstance* master = (sentinelRedisInstance*)de->dictGetVal(), *match;
         /* We want to share with the same physical Sentinel referenced
          * in other masters, so skip our master. */
         if (master == ri->master) continue;
@@ -1055,7 +1055,7 @@ int sentinelUpdateSentinelAddressInAllMasters(sentinelRedisInstance *ri) {
 
     dictIterator di(sentinel.masters);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* master = (sentinelRedisInstance*)dictGetVal(de), *match;
+        sentinelRedisInstance* master = (sentinelRedisInstance*)de->dictGetVal(), *match;
         match = getSentinelRedisInstanceByAddrAndRunID(master->sentinels,
                                                        NULL,0,ri->runid);
         /* If there is no match, this master does not know about this
@@ -1165,7 +1165,7 @@ sentinelRedisInstance *createSentinelRedisInstance(char *name, int flags, char *
     else if (flags & SRI_SLAVE) table = master->slaves;
     else if (flags & SRI_SENTINEL) table = master->sentinels;
     sdsname = sdsnew(name);
-    if (dictFind(table,sdsname)) {
+    if (table->dictFind(sdsname)) {
         releaseSentinelAddr(addr);
         sdsfree(sdsname);
         errno = EBUSY;
@@ -1224,7 +1224,7 @@ sentinelRedisInstance *createSentinelRedisInstance(char *name, int flags, char *
     ri->slave_conf_change_time = mstime();
 
     /* Add into the right table. */
-    dictAdd(table, ri->name, ri);
+    table->dictAdd(ri->name, ri);
     return ri;
 }
 
@@ -1269,7 +1269,7 @@ sentinelRedisInstance *sentinelRedisInstanceLookupSlave(
     serverAssert(ri->flags & SRI_MASTER);
     anetFormatAddr(buf,sizeof(buf),ip,port);
     key = sdsnew(buf);
-    slave = (sentinelRedisInstance *)dictFetchValue(ri->slaves,key);
+    slave = (sentinelRedisInstance *)ri->slaves->dictFetchValue(key);
     sdsfree(key);
     return slave;
 }
@@ -1301,10 +1301,10 @@ int removeMatchingSentinelFromMaster(sentinelRedisInstance *master, char *runid)
 
     dictIterator di(master->sentinels, 1);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
 
         if (ri->runid && strcmp(ri->runid,runid) == 0) {
-            dictDelete(master->sentinels,ri->name);
+            master->sentinels->dictDelete(ri->name);
             removed++;
         }
     }
@@ -1325,7 +1325,7 @@ sentinelRedisInstance *getSentinelRedisInstanceByAddrAndRunID(dict *instances, c
     serverAssert(ip || runid);   /* User must pass at least one search param. */
     dictIterator di(instances);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
 
         if (runid && !ri->runid) continue;
         if ((runid == NULL || strcmp(ri->runid, runid) == 0) &&
@@ -1345,7 +1345,7 @@ sentinelRedisInstance *sentinelGetMasterByName(char *name) {
     sentinelRedisInstance *ri;
     sds sdsname = sdsnew(name);
 
-    ri = (sentinelRedisInstance *)dictFetchValue(sentinel.masters,sdsname);
+    ri = (sentinelRedisInstance *)sentinel.masters->dictFetchValue(sdsname);
     sdsfree(sdsname);
     return ri;
 }
@@ -1356,7 +1356,7 @@ void sentinelAddFlagsToDictOfRedisInstances(dict *instances, int flags) {
 
     dictIterator di(instances);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
         ri->flags |= flags;
     }
 }
@@ -1368,7 +1368,7 @@ void sentinelDelFlagsToDictOfRedisInstances(dict *instances, int flags) {
 
     dictIterator di(instances);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
         ri->flags &= ~flags;
     }
 }
@@ -1426,7 +1426,7 @@ int sentinelResetMastersByPattern(char *pattern, int flags) {
 
     dictIterator di(sentinel.masters);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
 
         if (ri->name) {
             if (stringmatch(pattern,ri->name,0)) {
@@ -1460,7 +1460,7 @@ int sentinelResetMasterAndChangeAddress(sentinelRedisInstance *master, char *ip,
     {
         dictIterator di(master->slaves);
         while((de = dictNext(&di)) != NULL) {
-            sentinelRedisInstance* slave = (sentinelRedisInstance*)dictGetVal(de);
+            sentinelRedisInstance* slave = (sentinelRedisInstance*)de->dictGetVal();
 
             if (sentinelAddrIsEqual(slave->addr,newaddr)) continue;
             slaves = (sentinelAddr **)zrealloc(slaves,sizeof(sentinelAddr*)*(numslaves+1));
@@ -1542,7 +1542,7 @@ void sentinelPropagateDownAfterPeriod(sentinelRedisInstance *master) {
     for (j = 0; d[j]; j++) {
         dictIterator di(d[j]);
         while((de = dictNext(&di)) != NULL) {
-            sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+            sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
             ri->down_after_period = master->down_after_period;
         }
     }
@@ -1698,7 +1698,7 @@ void rewriteConfigSentinelOption(struct rewriteConfigState *state) {
             sentinelAddr *master_addr;
 
             /* sentinel monitor */
-            master = (sentinelRedisInstance *)dictGetVal(de);
+            master = (sentinelRedisInstance *)de->dictGetVal();
             master_addr = sentinelGetCurrentMasterAddress(master);
             line = sdscatprintf(sdsempty(),"sentinel monitor %s %s %d %d",
                 master->name, master_addr->ip, master_addr->port,
@@ -1771,7 +1771,7 @@ void rewriteConfigSentinelOption(struct rewriteConfigState *state) {
                 while((de = dictNext(&di2)) != NULL) {
                     sentinelAddr *slave_addr;
 
-                    ri = (sentinelRedisInstance *)dictGetVal(de);
+                    ri = (sentinelRedisInstance *)de->dictGetVal();
                     slave_addr = ri->addr;
 
                     /* If master_addr (obtained using sentinelGetCurrentMasterAddress()
@@ -1793,7 +1793,7 @@ void rewriteConfigSentinelOption(struct rewriteConfigState *state) {
                 dictIterator di2 (master->sentinels);
         
                 while((de = dictNext(&di2)) != NULL) {
-                    ri = (sentinelRedisInstance *)dictGetVal(de);
+                    ri = (sentinelRedisInstance *)de->dictGetVal();
                     if (ri->runid == NULL) continue;
                     line = sdscatprintf(sdsempty(),
                         "sentinel known-sentinel %s %s %d %s",
@@ -2497,7 +2497,7 @@ void sentinelForceHelloUpdateDictOfRedisInstances(dict *instances) {
 
     dictIterator di(instances, 1);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
         if (ri->last_pub_time >= (SENTINEL_PUBLISH_PERIOD+1))
             ri->last_pub_time -= (SENTINEL_PUBLISH_PERIOD+1);
     }
@@ -2728,11 +2728,11 @@ void addReplySentinelRedisInstance(client *c, sentinelRedisInstance *ri) {
         fields++;
 
         addReplyBulkCString(c,"num-slaves");
-        addReplyBulkLongLong(c,dictSize(ri->slaves));
+        addReplyBulkLongLong(c,ri->slaves->dictSize());
         fields++;
 
         addReplyBulkCString(c,"num-other-sentinels");
-        addReplyBulkLongLong(c,dictSize(ri->sentinels));
+        addReplyBulkLongLong(c,ri->sentinels->dictSize());
         fields++;
 
         addReplyBulkCString(c,"quorum");
@@ -2814,9 +2814,9 @@ void addReplyDictOfRedisInstances(client *c, dict *instances) {
     dictEntry *de;
 
     dictIterator di(instances);
-    addReplyMultiBulkLen(c,dictSize(instances));
+    addReplyMultiBulkLen(c,instances->dictSize());
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
 
         addReplySentinelRedisInstance(c,ri);
     }
@@ -2830,7 +2830,7 @@ sentinelRedisInstance *sentinelGetMasterByNameOrReplyError(client *c,
 {
     sentinelRedisInstance *ri;
 
-    ri = (sentinelRedisInstance *)dictFetchValue(sentinel.masters,name->ptr);
+    ri = (sentinelRedisInstance *)sentinel.masters->dictFetchValue(name->ptr);
     if (!ri) {
         addReplyError(c,"No such master with that name");
         return NULL;
@@ -2845,11 +2845,11 @@ int sentinelIsQuorumReachable(sentinelRedisInstance *master, int *usableptr) {
     dictEntry *de;
     int usable = 1; /* Number of usable Sentinels. Init to 1 to count myself. */
     int result = SENTINEL_ISQR_OK;
-    int voters = dictSize(master->sentinels)+1; /* Known Sentinels + myself. */
+    int voters = master->sentinels->dictSize()+1; /* Known Sentinels + myself. */
 
     dictIterator di(master->sentinels);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
 
         if (ri->flags & (SRI_S_DOWN|SRI_O_DOWN)) continue;
         usable++;
@@ -3046,7 +3046,7 @@ void sentinelCommand(client *c) {
         if ((ri = sentinelGetMasterByNameOrReplyError(c,c->argv[2]))
             == NULL) return;
         sentinelEvent(LL_WARNING,"-monitor",ri,"%@");
-        dictDelete(sentinel.masters,c->argv[2]->ptr);
+        sentinel.masters->dictDelete(c->argv[2]->ptr);
         sentinelFlushConfig();
         addReply(c,shared.ok);
     } else if (!strcasecmp((const char*)c->argv[1]->ptr,"ckquorum")) {
@@ -3097,7 +3097,7 @@ void sentinelCommand(client *c) {
                 sentinelRedisInstance *ri;
                 ri = sentinelGetMasterByName((char*)c->argv[i]->ptr);
                 if (!ri) continue; /* ignore non-existing names */
-                dictAdd(masters_local, ri->name, ri);
+                masters_local->dictAdd(ri->name, ri);
             }
         }
 
@@ -3109,14 +3109,14 @@ void sentinelCommand(client *c) {
          *   3.) other master name
          *   ...
          */
-        addReplyMultiBulkLen(c,dictSize(masters_local) * 2);
+        addReplyMultiBulkLen(c,masters_local->dictSize() * 2);
 
         dictEntry *de;
         dictIterator di(masters_local);
         while ((de = dictNext(&di)) != NULL) {
-            sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+            sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
             addReplyBulkCBuffer(c,ri->name,strlen(ri->name));
-            addReplyMultiBulkLen(c,dictSize(ri->slaves) + 1); /* +1 for self */
+            addReplyMultiBulkLen(c,ri->slaves->dictSize() + 1); /* +1 for self */
             addReplyMultiBulkLen(c,2);
             addReplyLongLong(c, now - ri->info_refresh);
             if (ri->info)
@@ -3127,7 +3127,7 @@ void sentinelCommand(client *c) {
             dictEntry *sde;
             dictIterator sdi(ri->slaves);
             while ((sde = dictNext(&sdi)) != NULL) {
-                sentinelRedisInstance* sri = (sentinelRedisInstance*)dictGetVal(sde);
+                sentinelRedisInstance* sri = (sentinelRedisInstance*)sde->dictGetVal();
                 addReplyMultiBulkLen(c,2);
                 addReplyLongLong(c, now - sri->info_refresh);
                 if (sri->info)
@@ -3222,7 +3222,7 @@ void sentinelInfoCommand(client *c) {
             "sentinel_running_scripts:%d\r\n"
             "sentinel_scripts_queue_length:%ld\r\n"
             "sentinel_simulate_failure_flags:%lu\r\n",
-            dictSize(sentinel.masters),
+            sentinel.masters->dictSize(),
             sentinel.tilt,
             sentinel.running_scripts,
             listLength(sentinel.scripts_queue),
@@ -3230,7 +3230,7 @@ void sentinelInfoCommand(client *c) {
 
         dictIterator di(sentinel.masters);
         while((de = dictNext(&di)) != NULL) {
-            sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+            sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
             char *status = "ok";
 
             if (ri->flags & SRI_O_DOWN) status = "odown";
@@ -3240,8 +3240,8 @@ void sentinelInfoCommand(client *c) {
                 "slaves=%lu,sentinels=%lu\r\n",
                 master_id++, ri->name, status,
                 ri->addr->ip, ri->addr->port,
-                dictSize(ri->slaves),
-                dictSize(ri->sentinels)+1);
+                ri->slaves->dictSize(),
+                ri->sentinels->dictSize()+1);
         }
     }
 
@@ -3255,11 +3255,11 @@ void sentinelRoleCommand(client *c) {
 
     addReplyMultiBulkLen(c,2);
     addReplyBulkCBuffer(c,"sentinel",8);
-    addReplyMultiBulkLen(c,dictSize(sentinel.masters));
+    addReplyMultiBulkLen(c,sentinel.masters->dictSize());
 
     dictIterator di(sentinel.masters);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
 
         addReplyBulkCString(c,ri->name);
     }
@@ -3453,7 +3453,7 @@ void sentinelCheckObjectivelyDown(sentinelRedisInstance *master) {
         /* Count all the other sentinels. */
         dictIterator di(master->sentinels);
         while((de = dictNext(&di)) != NULL) {
-            sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+            sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
 
             if (ri->flags & SRI_MASTER_DOWN) quorum++;
         }
@@ -3526,7 +3526,7 @@ void sentinelAskMasterStateToOtherSentinels(sentinelRedisInstance *master, int f
 
     dictIterator di(master->sentinels);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
         mstime_t elapsed = mstime() - ri->last_master_down_reply_time;
         char port[32];
         int retval;
@@ -3614,14 +3614,14 @@ int sentinelLeaderIncr(dict *counters, char *runid) {
     dictEntry *existing, *de;
     uint64_t oldval;
 
-    de = dictAddRaw(counters,runid,&existing);
+    de = counters->dictAddRaw(runid,&existing);
     if (existing) {
-        oldval = dictGetUnsignedIntegerVal(existing);
-        dictSetUnsignedIntegerVal(existing,oldval+1);
+        oldval = existing->dictGetUnsignedIntegerVal();
+        existing->dictSetUnsignedIntegerVal(oldval+1);
         return oldval+1;
     } else {
         serverAssert(de != NULL);
-        dictSetUnsignedIntegerVal(de,1);
+        de->dictSetUnsignedIntegerVal(1);
         return 1;
     }
 }
@@ -3644,13 +3644,13 @@ char *sentinelGetLeader(sentinelRedisInstance *master, uint64_t epoch) {
     serverAssert(master->flags & (SRI_O_DOWN|SRI_FAILOVER_IN_PROGRESS));
     counters = dictCreate(&leaderVotesDictType,NULL);
 
-    voters = dictSize(master->sentinels)+1; /* All the other sentinels and me.*/
+    voters = master->sentinels->dictSize()+1; /* All the other sentinels and me.*/
 
     /* Count other sentinels votes */
     {
         dictIterator di(master->sentinels);
         while((de = dictNext(&di)) != NULL) {
-            sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+            sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
             if (ri->leader != NULL && ri->leader_epoch == sentinel.current_epoch)
                 sentinelLeaderIncr(counters,ri->leader);
         }
@@ -3662,11 +3662,11 @@ char *sentinelGetLeader(sentinelRedisInstance *master, uint64_t epoch) {
     {
         dictIterator di(counters);
         while((de = dictNext(&di)) != NULL) {
-            uint64_t votes = dictGetUnsignedIntegerVal(de);
+            uint64_t votes = de->dictGetUnsignedIntegerVal();
 
             if (votes > max_votes) {
                 max_votes = votes;
-                winner = (char *)dictGetKey(de);
+                winner = (char *)de->dictGetKey();
             }
         }
     }
@@ -3881,7 +3881,7 @@ int compareSlavesForPromotion(const void *a, const void *b) {
 
 sentinelRedisInstance *sentinelSelectSlave(sentinelRedisInstance *master) {
     sentinelRedisInstance **instance =
-        (sentinelRedisInstance **)zmalloc(sizeof(instance[0])*dictSize(master->slaves));
+        (sentinelRedisInstance **)zmalloc(sizeof(instance[0])*master->slaves->dictSize());
     sentinelRedisInstance *selected = NULL;
     int instances = 0;
     dictEntry *de;
@@ -3893,7 +3893,7 @@ sentinelRedisInstance *sentinelSelectSlave(sentinelRedisInstance *master) {
 
     dictIterator di(master->slaves);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* slave = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* slave = (sentinelRedisInstance*)de->dictGetVal();
         mstime_t info_validity_time;
 
         if (slave->flags & (SRI_S_DOWN|SRI_O_DOWN)) continue;
@@ -4028,7 +4028,7 @@ void sentinelFailoverDetectEnd(sentinelRedisInstance *master) {
     {
         dictIterator di(master->slaves);
         while((de = dictNext(&di)) != NULL) {
-            sentinelRedisInstance* slave = (sentinelRedisInstance*)dictGetVal(de);
+            sentinelRedisInstance* slave = (sentinelRedisInstance*)de->dictGetVal();
 
             if (slave->flags & (SRI_PROMOTED|SRI_RECONF_DONE)) continue;
             if (slave->flags & SRI_S_DOWN) continue;
@@ -4057,7 +4057,7 @@ void sentinelFailoverDetectEnd(sentinelRedisInstance *master) {
 
         dictIterator di(master->slaves);
         while((de = dictNext(&di)) != NULL) {
-            sentinelRedisInstance* slave = (sentinelRedisInstance*)dictGetVal(de);
+            sentinelRedisInstance* slave = (sentinelRedisInstance*)de->dictGetVal();
             int retval;
 
             if (slave->flags & (SRI_RECONF_DONE|SRI_RECONF_SENT)) continue;
@@ -4083,7 +4083,7 @@ void sentinelFailoverReconfNextSlave(sentinelRedisInstance *master) {
     {
         dictIterator di(master->slaves);
         while((de = dictNext(&di)) != NULL) {
-            sentinelRedisInstance* slave = (sentinelRedisInstance*)dictGetVal(de);
+            sentinelRedisInstance* slave = (sentinelRedisInstance*)de->dictGetVal();
 
             if (slave->flags & (SRI_RECONF_SENT|SRI_RECONF_INPROG))
                 in_progress++;
@@ -4094,7 +4094,7 @@ void sentinelFailoverReconfNextSlave(sentinelRedisInstance *master) {
     while(in_progress < master->parallel_syncs &&
           (de = dictNext(&di)) != NULL)
     {
-        sentinelRedisInstance* slave = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* slave = (sentinelRedisInstance*)de->dictGetVal();
         int retval;
 
         /* Skip the promoted slave, and already configured slaves. */
@@ -4239,7 +4239,7 @@ void sentinelHandleDictOfRedisInstances(dict *instances) {
     /* There are a number of things we need to perform against every master. */
     dictIterator di(instances);
     while((de = dictNext(&di)) != NULL) {
-        sentinelRedisInstance* ri = (sentinelRedisInstance*)dictGetVal(de);
+        sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
 
         sentinelHandleRedisInstance(ri);
         if (ri->flags & SRI_MASTER) {

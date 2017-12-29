@@ -115,7 +115,7 @@ static int dictExpand(dict *ht, unsigned long size) {
 
             nextHe = he->next;
             /* Get the new element index */
-            h = dictHashKey(ht, he->key) & n.sizemask;
+            h = ht->dictHashKey(he->key) & n.sizemask;
             he->next = n.table[h];
             n.table[h] = he;
             ht->used--;
@@ -185,7 +185,7 @@ static int dictDelete(dict *ht, const void *key) {
 
     if (ht->size == 0)
         return DICT_ERR;
-    h = dictHashKey(ht, key) & ht->sizemask;
+    h = ht->dictHashKey(key) & ht->sizemask;
     de = ht->table[h];
 
     prevde = NULL;
@@ -245,7 +245,7 @@ static dictEntry *dictFind(dict *ht, const void *key) {
     unsigned int h;
 
     if (ht->size == 0) return NULL;
-    h = dictHashKey(ht, key) & ht->sizemask;
+    h = ht->dictHashKey(key) & ht->sizemask;
     he = ht->table[h];
     while(he) {
         if (dictCompareHashKeys(ht, key, he->key))
@@ -325,7 +325,7 @@ static int _dictKeyIndex(dict *ht, const void *key) {
     if (_dictExpandIfNeeded(ht) == DICT_ERR)
         return -1;
     /* Compute the key hash value */
-    h = dictHashKey(ht, key) & ht->sizemask;
+    h = ht->dictHashKey(key) & ht->sizemask;
     /* Search if this slot does not already contain the given key */
     he = ht->table[h];
     while(he) {

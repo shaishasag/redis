@@ -40,7 +40,7 @@
 char *redisGitSHA1(void) {
     return REDIS_GIT_SHA1;
 }
-
+ 
 char *redisGitDirty(void) {
     return REDIS_GIT_DIRTY;
 }

@@ -697,8 +697,8 @@ dictType replScriptCacheDictType = {
 int htNeedsResize(dict *dict) {
     long long size, used;
 
-    size = dictSlots(dict);
-    used = dictSize(dict);
+    size = dict->dictSlots();
+    used = dict->dictSize();
     return (size > DICT_HT_INITIAL_SIZE &&
             (used*100/size < HASHTABLE_MIN_FILL));
 }
@@ -1008,9 +1008,9 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
         for (j = 0; j < server.dbnum; j++) {
             long long size, used, vkeys;
 
-            size = dictSlots(server.db[j]._dict);
-            used = dictSize(server.db[j]._dict);
-            vkeys = dictSize(server.db[j].expires);
+            size = server.db[j]._dict->dictSlots();
+            used = server.db[j]._dict->dictSize();
+            vkeys = server.db[j].expires->dictSize();
             if (used || vkeys) {
                 serverLog(LL_VERBOSE,"DB %d: %lld keys (%lld volatile) in %lld slots HT.",j,used,vkeys,size);
                 /* dictPrintStats(server._dict); */
@@ -2000,10 +2000,10 @@ void populateCommandTable(void) {
             }
             f++;
         }
-        retval1 = dictAdd(server.commands, sdsnew(c->name), c);
+        retval1 = server.commands->dictAdd(sdsnew(c->name), c);
         /* Populate an additional dictionary that will be unaffected
          * by rename-command statements in redis.conf. */
-        retval2 = dictAdd(server.orig_commands, sdsnew(c->name), c);
+        retval2 = server.orig_commands->dictAdd(sdsnew(c->name), c);
         serverAssert(retval1 == DICT_OK && retval2 == DICT_OK);
     }
 }
@@ -2014,7 +2014,7 @@ void resetCommandTableStats(void) {
 
     dictIterator di(server.commands, 1);
     while((de = dictNext(&di)) != NULL) {
-        c = (struct redisCommand *) dictGetVal(de);
+        c = (struct redisCommand *) de->dictGetVal();
         c->microseconds = 0;
         c->calls = 0;
     }
@@ -2060,14 +2060,14 @@ void redisOpArrayFree(redisOpArray *oa) {
 /* ====================== Commands lookup and execution ===================== */
 
 struct redisCommand *lookupCommand(sds name) {
-    return (struct redisCommand *)dictFetchValue(server.commands, name);
+    return (struct redisCommand *)server.commands->dictFetchValue(name);
 }
 
 struct redisCommand *lookupCommandByCString(char *s) {
     struct redisCommand *cmd;
     sds name = sdsnew(s);
 
-    cmd = (struct redisCommand *)dictFetchValue(server.commands, name);
+    cmd = (struct redisCommand *)server.commands->dictFetchValue(name);
     sdsfree(name);
     return cmd;
 }
@@ -2080,9 +2080,9 @@ struct redisCommand *lookupCommandByCString(char *s) {
  * rewriteClientCommandVector() in order to set client->cmd pointer
  * correctly even if the command was renamed. */
 struct redisCommand *lookupCommandOrOriginal(sds name) {
-    struct redisCommand *cmd = (struct redisCommand *)dictFetchValue(server.commands, name);
+    struct redisCommand *cmd = (struct redisCommand *)server.commands->dictFetchValue(name);
 
-    if (!cmd) cmd = (struct redisCommand *)dictFetchValue(server.orig_commands,name);
+    if (!cmd) cmd = (struct redisCommand *)server.commands->dictFetchValue(name);
     return cmd;
 }
 
@@ -2745,19 +2745,19 @@ void commandCommand(client *c) {
     dictEntry *de;
 
     if (c->argc == 1) {
-        addReplyMultiBulkLen(c, dictSize(server.commands));
+        addReplyMultiBulkLen(c, server.commands->dictSize());
         dictIterator di(server.commands);
         while ((de = dictNext(&di)) != NULL) {
-            addReplyCommand(c, (struct redisCommand *)dictGetVal(de));
+            addReplyCommand(c, (struct redisCommand *)de->dictGetVal());
         }
     } else if (!strcasecmp((const char*)c->argv[1]->ptr, "info")) {
         int i;
         addReplyMultiBulkLen(c, c->argc-2);
         for (i = 2; i < c->argc; i++) {
-            addReplyCommand(c, (struct redisCommand *)dictFetchValue(server.commands, c->argv[i]->ptr));
+            addReplyCommand(c, (struct redisCommand *)server.commands->dictFetchValue(c->argv[i]->ptr));
         }
     } else if (!strcasecmp((const char*)c->argv[1]->ptr, "count") && c->argc == 2) {
-        addReplyLongLong(c, dictSize(server.commands));
+        addReplyLongLong(c, server.commands->dictSize());
     } else if (!strcasecmp((const char*)c->argv[1]->ptr,"getkeys") && c->argc >= 3) {
         struct redisCommand *cmd = lookupCommand((sds)c->argv[2]->ptr);
         int *keys, numkeys, j;
@@ -2876,7 +2876,7 @@ sds genRedisInfoString(const char *section) {
             REDIS_VERSION,
             redisGitSHA1(),
             strtol(redisGitDirty(),NULL,10) > 0,
-            (unsigned long long) redisBuildId(),
+            redisBuildId(),
             mode,
             name.sysname, name.release, name.machine,
             server.arch_bits,
@@ -3125,10 +3125,10 @@ sds genRedisInfoString(const char *section) {
             server.stat_evictedkeys,
             server.stat_keyspace_hits,
             server.stat_keyspace_misses,
-            dictSize(server.pubsub_channels),
+            server.pubsub_channels->dictSize(),
             listLength(server.pubsub_patterns),
             server.stat_fork_time,
-            dictSize(server.migrate_cached_sockets),
+            server.migrate_cached_sockets->dictSize(),
             getSlaveKeyWithExpireCount(),
             server.stat_active_defrag_hits,
             server.stat_active_defrag_misses,
@@ -3289,7 +3289,7 @@ sds genRedisInfoString(const char *section) {
         dictEntry *de;
         dictIterator di(server.commands, 1);
         while((de = dictNext(&di)) != NULL) {
-            c = (struct redisCommand *) dictGetVal(de);
+            c = (struct redisCommand *) de->dictGetVal();
             if (!c->calls) continue;
             info = sdscatprintf(info,
                 "cmdstat_%s:calls=%lld,usec=%lld,usec_per_call=%.2f\r\n",
@@ -3314,8 +3314,8 @@ sds genRedisInfoString(const char *section) {
         for (j = 0; j < server.dbnum; j++) {
             long long keys, vkeys;
 
-            keys = dictSize(server.db[j]._dict);
-            vkeys = dictSize(server.db[j].expires);
+            keys = server.db[j]._dict->dictSize();
+            vkeys = server.db[j].expires->dictSize();
             if (keys || vkeys) {
                 info = sdscatprintf(info,
                     "db%d:keys=%lld,expires=%lld,avg_ttl=%lld\r\n",
@@ -3409,7 +3409,7 @@ void version(void) {
         atoi(redisGitDirty()) > 0,
         ZMALLOC_LIB,
         sizeof(long) == 4 ? 32 : 64,
-        (unsigned long long) redisBuildId());
+        redisBuildId());
     exit(0);
 }
 

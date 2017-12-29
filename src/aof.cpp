@@ -888,7 +888,7 @@ int rewriteSetObject(rio *r, robj *key, robj *o) {
         dictEntry *de;
 
         while((de = dictNext(&di)) != NULL) {
-            sds ele = (sds)dictGetKey(de);
+            sds ele = (sds)de->dictGetKey();
             if (count == 0) {
                 int cmd_items = (items > AOF_REWRITE_ITEMS_PER_CMD) ?
                     AOF_REWRITE_ITEMS_PER_CMD : items;
@@ -953,8 +953,8 @@ int rewriteSortedSetObject(rio *r, robj *key, robj *o) {
         dictEntry *de;
 
         while((de = dictNext(&di)) != NULL) {
-            sds ele = (sds)dictGetKey(de);
-            double* score = (double*)dictGetVal(de);
+            sds ele = (sds)de->dictGetKey();
+            double* score = (double*)de->dictGetVal();
 
             if (count == 0) {
                 int cmd_items = (items > AOF_REWRITE_ITEMS_PER_CMD) ?
@@ -1070,7 +1070,7 @@ int rewriteAppendOnlyFileRio(rio *aof) {
         char selectcmd[] = "*2\r\n$6\r\nSELECT\r\n";
         redisDb *db = server.db+j;
         dict *d = db->_dict;
-        if (dictSize(d) == 0) continue;
+        if (d->dictSize() == 0) continue;
 
         /* SELECT the new DB */
         if (rioWrite(aof,selectcmd,sizeof(selectcmd)-1) == 0) goto werr;
@@ -1083,8 +1083,8 @@ int rewriteAppendOnlyFileRio(rio *aof) {
             robj key, *o;
             long long expiretime;
 
-            keystr = (sds)dictGetKey(de);
-            o = (robj *)dictGetVal(de);
+            keystr = (sds)de->dictGetKey();
+            o = (robj *)de->dictGetVal();
             initStaticStringObject(key,keystr);
 
             expiretime = getExpire(db,&key);

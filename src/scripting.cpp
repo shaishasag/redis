@@ -1181,9 +1181,9 @@ sds luaCreateFunction(client *c, lua_State *lua, robj *body) {
     sha1hex(funcname+2, (char *)body->ptr,sdslen((sds)body->ptr));
 
     sds sha = sdsnewlen(funcname+2,40);
-    if ((de = dictFind(server.lua_scripts,sha)) != NULL) {
+    if ((de = server.lua_scripts->dictFind(sha)) != NULL) {
         sdsfree(sha);
-        return (sds)dictGetKey(de);
+        return (sds)de->dictGetKey();
     }
     sds funcdef = sdsempty();
     funcdef = sdscat(funcdef,"function ");
@@ -1218,7 +1218,7 @@ sds luaCreateFunction(client *c, lua_State *lua, robj *body) {
     /* We also save a SHA1 -> Original script map in a dictionary
      * so that we can replicate / write in the AOF all the
      * EVALSHA commands as EVAL using the original script. */
-    int retval = dictAdd(server.lua_scripts,sha,body);
+    int retval = server.lua_scripts->dictAdd(sha,body);
     serverAssertWithInfo(c ? c : server.lua_client,NULL,retval == DICT_OK);
     incrRefCount(body);
     return sha;
@@ -1431,7 +1431,7 @@ void evalGenericCommand(client *c, int evalsha) {
             /* This script is not in our script cache, replicate it as
              * EVAL, then add it into the script cache, as from now on
              * slaves and AOF know about it. */
-            robj *script = (robj *)dictFetchValue(server.lua_scripts,c->argv[1]->ptr);
+            robj *script = (robj *)server.lua_scripts->dictFetchValue(c->argv[1]->ptr);
 
             replicationScriptCacheAdd((sds)c->argv[1]->ptr);
             serverAssertWithInfo(c,NULL,script != NULL);
@@ -1478,7 +1478,7 @@ void scriptCommand(client *c) {
 
         addReplyMultiBulkLen(c, c->argc-2);
         for (j = 2; j < c->argc; j++) {
-            if (dictFind(server.lua_scripts,c->argv[j]->ptr))
+            if (server.lua_scripts->dictFind(c->argv[j]->ptr))
                 addReply(c,shared.cone);
             else
                 addReply(c,shared.czero);

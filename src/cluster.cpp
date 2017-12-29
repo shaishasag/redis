@@ -530,7 +530,7 @@ void clusterReset(int hard) {
     {
         dictIterator di(server.cluster->nodes, 1);
         while((de = dictNext(&di)) != NULL) {
-            clusterNode* node = (clusterNode*)dictGetVal(de);
+            clusterNode* node = (clusterNode*)de->dictGetVal();
 
             if (node == myself) continue;
             clusterDelNode(node);
@@ -549,7 +549,7 @@ void clusterReset(int hard) {
         /* To change the Node ID we need to remove the old name from the
          * nodes table, change the ID, and re-add back with new name. */
         oldname = sdsnewlen(myself->name, CLUSTER_NAMELEN);
-        dictDelete(server.cluster->nodes,oldname);
+        server.cluster->nodes->dictDelete(oldname);
         sdsfree(oldname);
         getRandomHexChars(myself->name, CLUSTER_NAMELEN);
         clusterAddNode(myself);
@@ -853,7 +853,7 @@ void freeClusterNode(clusterNode *n) {
 
     /* Unlink from the set of nodes. */
     nodename = sdsnewlen(n->name, CLUSTER_NAMELEN);
-    serverAssert(dictDelete(server.cluster->nodes,nodename) == DICT_OK);
+    serverAssert(server.cluster->nodes->dictDelete(nodename) == DICT_OK);
     sdsfree(nodename);
 
     /* Release link and associated data structures. */
@@ -867,8 +867,7 @@ void freeClusterNode(clusterNode *n) {
 int clusterAddNode(clusterNode *node) {
     int retval;
 
-    retval = dictAdd(server.cluster->nodes,
-            sdsnewlen(node->name,CLUSTER_NAMELEN), node);
+    retval = server.cluster->nodes->dictAdd(sdsnewlen(node->name,CLUSTER_NAMELEN), node);
     return (retval == DICT_OK) ? C_OK : C_ERR;
 }
 
@@ -901,7 +900,7 @@ void clusterDelNode(clusterNode *delnode) {
     {
         dictIterator di(server.cluster->nodes, 1);
         while((de = dictNext(&di)) != NULL) {
-            clusterNode* node = (clusterNode*)dictGetVal(de);
+            clusterNode* node = (clusterNode*)de->dictGetVal();
 
             if (node == delnode) continue;
             clusterNodeDelFailureReport(node,delnode);
@@ -917,10 +916,10 @@ clusterNode *clusterLookupNode(const char *name) {
     sds s = sdsnewlen(name, CLUSTER_NAMELEN);
     dictEntry *de;
 
-    de = dictFind(server.cluster->nodes,s);
+    de = server.cluster->nodes->dictFind(s);
     sdsfree(s);
     if (de == NULL) return NULL;
-    return (clusterNode *)dictGetVal(de);
+    return (clusterNode *)de->dictGetVal();
 }
 
 /* This is only used after the handshake. When we connect a given IP/PORT
@@ -933,7 +932,7 @@ void clusterRenameNode(clusterNode *node, char *newname) {
 
     serverLog(LL_DEBUG,"Renaming node %.40s into %.40s",
         node->name, newname);
-    retval = dictDelete(server.cluster->nodes, s);
+    retval = server.cluster->nodes->dictDelete(s);
     sdsfree(s);
     serverAssert(retval == DICT_OK);
     memcpy(node->name, newname, CLUSTER_NAMELEN);
@@ -952,7 +951,7 @@ uint64_t clusterGetMaxEpoch(void) {
 
     dictIterator di(server.cluster->nodes, 1);
     while((de = dictNext(&di)) != NULL) {
-        clusterNode* node = (clusterNode*)dictGetVal(de);
+        clusterNode* node = (clusterNode*)de->dictGetVal();
         if (node->configEpoch > max) max = node->configEpoch;
     }
 
@@ -1106,10 +1105,10 @@ void clusterBlacklistCleanup(void) {
     dictEntry *de;
     dictIterator di(server.cluster->nodes_black_list, 1);
     while((de = dictNext(&di)) != NULL) {
-        int64_t expire = dictGetUnsignedIntegerVal(de);
+        int64_t expire = de->dictGetUnsignedIntegerVal();
 
         if (expire < server.unixtime)
-            dictDelete(server.cluster->nodes_black_list,dictGetKey(de));
+            server.cluster->nodes_black_list->dictDelete(de->dictGetKey());
     }
 }
 
@@ -1119,13 +1118,13 @@ void clusterBlacklistAddNode(clusterNode *node) {
     sds id = sdsnewlen(node->name,CLUSTER_NAMELEN);
 
     clusterBlacklistCleanup();
-    if (dictAdd(server.cluster->nodes_black_list,id,NULL) == DICT_OK) {
+    if (server.cluster->nodes_black_list->dictAdd(id,NULL) == DICT_OK) {
         /* If the key was added, duplicate the sds string representation of
          * the key for the next lookup. We'll free it at the end. */
         id = sdsdup(id);
     }
-    de = dictFind(server.cluster->nodes_black_list,id);
-    dictSetUnsignedIntegerVal(de,time(NULL)+CLUSTER_BLACKLIST_TTL);
+    de = server.cluster->nodes_black_list->dictFind(id);
+    de->dictSetUnsignedIntegerVal(time(NULL)+CLUSTER_BLACKLIST_TTL);
     sdsfree(id);
 }
 
@@ -1137,7 +1136,7 @@ int clusterBlacklistExists(char *nodeid) {
     int retval;
 
     clusterBlacklistCleanup();
-    retval = dictFind(server.cluster->nodes_black_list,id) != NULL;
+    retval = server.cluster->nodes_black_list->dictFind(id) != NULL;
     sdsfree(id);
     return retval;
 }
@@ -1235,7 +1234,7 @@ int clusterHandshakeInProgress(char *ip, int port, int cport) {
     dictEntry *de;
     dictIterator di(server.cluster->nodes, 1);
     while((de = dictNext(&di)) != NULL) {
-        clusterNode* node = (clusterNode*)dictGetVal(de);
+        clusterNode* node = (clusterNode*)de->dictGetVal();
 
         if (!nodeInHandshake(node)) continue;
         if (!strcasecmp(node->ip,ip) &&
@@ -1976,7 +1975,7 @@ int clusterProcessPacket(clusterLink *link) {
 
         /* Don't bother creating useless objects if there are no
          * Pub/Sub subscribers. */
-        if (dictSize(server.pubsub_channels) ||
+        if (server.pubsub_channels->dictSize() ||
            listLength(server.pubsub_patterns))
         {
             channel_len = ntohl(hdr->data.publish.msg.channel_len);
@@ -2173,7 +2172,7 @@ void clusterBroadcastMessage(void *buf, size_t len) {
 
     dictIterator di(server.cluster->nodes, 1);
     while((de = dictNext(&di)) != NULL) {
-        clusterNode* node = (clusterNode*)dictGetVal(de);
+        clusterNode* node = (clusterNode*)de->dictGetVal();
 
         if (!node->link) continue;
         if (node->flags & (CLUSTER_NODE_MYSELF|CLUSTER_NODE_HANDSHAKE))
@@ -2297,7 +2296,7 @@ void clusterSendPing(clusterLink *link, int type) {
      * nodes available minus two (ourself and the node we are sending the
      * message to). However practically there may be less valid nodes since
      * nodes in handshake state, disconnected, are not considered. */
-    int freshnodes = dictSize(server.cluster->nodes)-2;
+    int freshnodes = server.cluster->nodes->dictSize()-2;
 
     /* How many gossip sections we want to add? 1/10 of the number of nodes
      * and anyway at least 3. Why 1/10?
@@ -2325,7 +2324,7 @@ void clusterSendPing(clusterLink *link, int type) {
      * Since we have non-voting slaves that lower the probability of an entry
      * to feature our node, we set the number of entires per packet as
      * 10% of the total nodes we have. */
-    wanted = floor(dictSize(server.cluster->nodes)/10);
+    wanted = floor(server.cluster->nodes->dictSize()/10);
     if (wanted < 3) wanted = 3;
     if (wanted > freshnodes) wanted = freshnodes;
 
@@ -2352,8 +2351,8 @@ void clusterSendPing(clusterLink *link, int type) {
     /* Populate the gossip fields */
     int maxiterations = wanted*3;
     while(freshnodes > 0 && gossipcount < wanted && maxiterations--) {
-        dictEntry *de = dictGetRandomKey(server.cluster->nodes);
-        clusterNode* _this = (clusterNode*)dictGetVal(de);
+        dictEntry *de = server.cluster->nodes->dictGetRandomKey();
+        clusterNode* _this = (clusterNode*)de->dictGetVal();
 
         /* Don't include this node: the whole packet header is about us
          * already, so we just gossip about other nodes. */
@@ -2389,7 +2388,7 @@ void clusterSendPing(clusterLink *link, int type) {
 
         dictIterator di(server.cluster->nodes, 1);
         while((de = dictNext(&di)) != NULL && pfail_wanted > 0) {
-            clusterNode* node = (clusterNode*)dictGetVal(de);
+            clusterNode* node = (clusterNode*)de->dictGetVal();
             if (node->flags & CLUSTER_NODE_HANDSHAKE) continue;
             if (node->flags & CLUSTER_NODE_NOADDR) continue;
             if (!(node->flags & CLUSTER_NODE_PFAIL)) continue;
@@ -2434,7 +2433,7 @@ void clusterBroadcastPong(int target) {
 
     dictIterator di(server.cluster->nodes, 1);
     while((de = dictNext(&di)) != NULL) {
-        clusterNode* node = (clusterNode*)dictGetVal(de);
+        clusterNode* node = (clusterNode*)de->dictGetVal();
 
         if (!node->link) continue;
         if (node == myself || nodeInHandshake(node)) continue;
@@ -3046,7 +3045,7 @@ void clusterHandleSlaveMigration(int max_slaves) {
     {
         dictIterator di(server.cluster->nodes, 1);
         while((de = dictNext(&di)) != NULL) {
-            clusterNode* node = (clusterNode*)dictGetVal(de);
+            clusterNode* node = (clusterNode*)de->dictGetVal();
             int okslaves = 0, is_orphaned = 1;
 
             /* We want to migrate only if this master is working, orphaned, and
@@ -3232,7 +3231,7 @@ void clusterCron(void) {
         dictIterator di(server.cluster->nodes, 1);
         server.cluster->stats_pfail_nodes = 0;
         while((de = dictNext(&di)) != NULL) {
-            clusterNode* node = (clusterNode*)dictGetVal(de);
+            clusterNode* node = (clusterNode*)de->dictGetVal();
 
             /* Not interested in reconnecting the link with myself or nodes
              * for which we have no address. */
@@ -3308,8 +3307,8 @@ void clusterCron(void) {
         /* Check a few random nodes and ping the one with the oldest
          * pong_received time. */
         for (j = 0; j < 5; j++) {
-            de = dictGetRandomKey(server.cluster->nodes);
-            clusterNode* _this = (clusterNode*)dictGetVal(de);
+            de = server.cluster->nodes->dictGetRandomKey();
+            clusterNode* _this = (clusterNode*)de->dictGetVal();
 
             /* Don't ping nodes disconnected or with a ping currently active. */
             if (_this->link == NULL || _this->ping_sent != 0) continue;
@@ -3338,7 +3337,7 @@ void clusterCron(void) {
     {
         dictIterator di(server.cluster->nodes, 1);
         while((de = dictNext(&di)) != NULL) {
-            clusterNode* node = (clusterNode*)dictGetVal(de);
+            clusterNode* node = (clusterNode*)de->dictGetVal();
             now = mstime(); /* Use an updated time at every iteration. */
             mstime_t delay;
 
@@ -3518,7 +3517,7 @@ int clusterMastersHaveSlaves(void) {
     dictEntry *de;
     int slaves = 0;
     while((de = dictNext(&di)) != NULL) {
-        clusterNode* node = (clusterNode*)dictGetVal(de);
+        clusterNode* node = (clusterNode*)de->dictGetVal();
 
         if (nodeIsSlave(node)) continue;
         slaves += node->numslaves;
@@ -3669,7 +3668,7 @@ void clusterUpdateState(void) {
         server.cluster->size = 0;
         dictIterator di(server.cluster->nodes, 1);
         while((de = dictNext(&di)) != NULL) {
-            clusterNode* node = (clusterNode*)dictGetVal(de);
+            clusterNode* node = (clusterNode*)de->dictGetVal();
 
             if (nodeIsMaster(node) && node->numslots) {
                 server.cluster->size++;
@@ -3749,7 +3748,7 @@ int verifyClusterConfigWithData(void) {
 
     /* Make sure we only have keys in DB0. */
     for (j = 1; j < server.dbnum; j++) {
-        if (dictSize(server.db[j]._dict)) return C_ERR;
+        if (server.db[j]._dict->dictSize()) return C_ERR;
     }
 
     /* Check that all the slots we see populated memory have a corresponding
@@ -3928,7 +3927,7 @@ sds clusterGenNodesDescription(int filter) {
 
     dictIterator di(server.cluster->nodes, 1);
     while((de = dictNext(&di)) != NULL) {
-        clusterNode* node = (clusterNode*)dictGetVal(de);
+        clusterNode* node = (clusterNode*)de->dictGetVal();
 
         if (node->flags & filter) continue;
         ni = clusterGenNodeDescription(node);
@@ -3988,7 +3987,7 @@ void clusterReplyMultiBulkSlots(client *c) {
     dictEntry *de;
     dictIterator di(server.cluster->nodes, 1);
     while((de = dictNext(&di)) != NULL) {
-        clusterNode* node = (clusterNode*)dictGetVal(de);
+        clusterNode* node = (clusterNode*)de->dictGetVal();
         int j = 0, start = -1;
 
         /* Skip slaves (that are iterated when producing the output of their
@@ -4094,7 +4093,7 @@ void clusterCommand(client *c) {
         clusterReplyMultiBulkSlots(c);
     } else if (!strcasecmp((const char*)c->argv[1]->ptr,"flushslots") && c->argc == 2) {
         /* CLUSTER FLUSHSLOTS */
-        if (dictSize(server.db[0]._dict) != 0) {
+        if (server.db[0]._dict->dictSize() != 0) {
             addReplyError(c,"DB must be empty to perform CLUSTER FLUSHSLOTS.");
             return;
         }
@@ -4294,7 +4293,7 @@ void clusterCommand(client *c) {
             slots_ok,
             slots_pfail,
             slots_fail,
-            dictSize(server.cluster->nodes),
+            server.cluster->nodes->dictSize(),
             server.cluster->size,
             (unsigned long long) server.cluster->currentEpoch,
             (unsigned long long) myepoch
@@ -4429,7 +4428,7 @@ void clusterCommand(client *c) {
          * slots nor keys to accept to replicate some other node.
          * Slaves can switch to another master without issues. */
         if (nodeIsMaster(myself) &&
-            (myself->numslots != 0 || dictSize(server.db[0]._dict) != 0)) {
+            (myself->numslots != 0 || server.db[0]._dict->dictSize() != 0)) {
             addReplyError(c,
                 "To set a master the node must be empty and "
                 "without assigned slots.");
@@ -4545,7 +4544,7 @@ void clusterCommand(client *c) {
 
         if (epoch < 0) {
             addReplyErrorFormat(c,"Invalid config epoch specified: %lld",epoch);
-        } else if (dictSize(server.cluster->nodes) > 1) {
+        } else if (server.cluster->nodes->dictSize() > 1) {
             addReplyError(c,"The user can assign a config epoch only when the "
                             "node does not know any other node.");
         } else if (myself->configEpoch != 0) {
@@ -4585,7 +4584,7 @@ void clusterCommand(client *c) {
 
         /* Slaves can be reset while containing data, but not master nodes
          * that must be empty. */
-        if (nodeIsMaster(myself) && dictSize(c->db->_dict) != 0) {
+        if (nodeIsMaster(myself) && c->db->_dict->dictSize() != 0) {
             addReplyError(c,"CLUSTER RESET can't be called with "
                             "master nodes containing keys");
             return;
@@ -4770,7 +4769,7 @@ migrateCachedSocket* migrateGetSocket(client *c, robj *host, robj *port, long ti
     name = sdscatlen(name,host->ptr,sdslen((sds)host->ptr));
     name = sdscatlen(name,":",1);
     name = sdscatlen(name,port->ptr,sdslen((sds)port->ptr));
-    cs = (migrateCachedSocket *)dictFetchValue(server.migrate_cached_sockets,name);
+    cs = (migrateCachedSocket *)server.migrate_cached_sockets->dictFetchValue(name);
     if (cs) {
         sdsfree(name);
         cs->last_use_time = server.unixtime;
@@ -4778,13 +4777,13 @@ migrateCachedSocket* migrateGetSocket(client *c, robj *host, robj *port, long ti
     }
 
     /* No cached socket, create one. */
-    if (dictSize(server.migrate_cached_sockets) == MIGRATE_SOCKET_CACHE_ITEMS) {
+    if (server.migrate_cached_sockets->dictSize() == MIGRATE_SOCKET_CACHE_ITEMS) {
         /* Too many items, drop one at random. */
-        dictEntry *de = dictGetRandomKey(server.migrate_cached_sockets);
-        cs = (migrateCachedSocket *)dictGetVal(de);
+        dictEntry *de = server.cluster->nodes->dictGetRandomKey();
+        cs = (migrateCachedSocket *)de->dictGetVal();
         close(cs->fd);
         zfree(cs);
-        dictDelete(server.migrate_cached_sockets,dictGetKey(de));
+        server.migrate_cached_sockets->dictDelete(de->dictGetKey());
     }
 
     /* Create the socket */
@@ -4812,7 +4811,7 @@ migrateCachedSocket* migrateGetSocket(client *c, robj *host, robj *port, long ti
     cs->fd = fd;
     cs->last_dbid = -1;
     cs->last_use_time = server.unixtime;
-    dictAdd(server.migrate_cached_sockets,name,cs);
+    server.migrate_cached_sockets->dictAdd(name,cs);
     return cs;
 }
 
@@ -4824,7 +4823,7 @@ void migrateCloseSocket(robj *host, robj *port) {
     name = sdscatlen(name,host->ptr,sdslen((sds)host->ptr));
     name = sdscatlen(name,":",1);
     name = sdscatlen(name,port->ptr,sdslen((sds)port->ptr));
-    cs = (migrateCachedSocket *)dictFetchValue(server.migrate_cached_sockets,name);
+    cs = (migrateCachedSocket *)server.migrate_cached_sockets->dictFetchValue(name);
     if (!cs) {
         sdsfree(name);
         return;
@@ -4832,7 +4831,7 @@ void migrateCloseSocket(robj *host, robj *port) {
 
     close(cs->fd);
     zfree(cs);
-    dictDelete(server.migrate_cached_sockets,name);
+    server.migrate_cached_sockets->dictDelete(name);
     sdsfree(name);
 }
 
@@ -4841,12 +4840,12 @@ void migrateCloseTimedoutSockets(void) {
     dictEntry *de;
 
     while((de = dictNext(&di)) != NULL) {
-        migrateCachedSocket* cs = (migrateCachedSocket*)dictGetVal(de);
+        migrateCachedSocket* cs = (migrateCachedSocket*)de->dictGetVal();
 
         if ((server.unixtime - cs->last_use_time) > MIGRATE_SOCKET_CACHE_TTL) {
             close(cs->fd);
             zfree(cs);
-            dictDelete(server.migrate_cached_sockets,dictGetKey(de));
+            server.migrate_cached_sockets->dictDelete(de->dictGetKey());
         }
     }
 }
@@ -5416,7 +5415,7 @@ int clusterRedirectBlockedClientIfNeeded(client *c) {
         /* All keys must belong to the same slot, so check first key only. */
         dictIterator di(c->bpop.keys);
         if ((de = dictNext(&di)) != NULL) {
-            robj *key = (robj *)dictGetKey(de);
+            robj *key = (robj *)de->dictGetKey();
             int slot = keyHashSlot((char*)key->ptr, sdslen((sds)key->ptr));
             clusterNode *node = server.cluster->slots[slot];
 
@@ -5433,7 +5432,6 @@ int clusterRedirectBlockedClientIfNeeded(client *c) {
                     clusterRedirectClient(c,node,slot,
                         CLUSTER_REDIR_MOVED);
                 }
-                dictReleaseIterator(di);
                 return 1;
             }
         }

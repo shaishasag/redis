@@ -391,7 +391,7 @@ static int __redisGetSubscribeCallback(redisAsyncContext *ac, redisReply *reply,
 
             /* If this is an unsubscribe message, remove it. */
             if (strcasecmp((const char*)stype+pvariant,"unsubscribe") == 0) {
-                dictDelete(callbacks,sname);
+                callbacks->dictDelete(sname);
 
                 /* If this was the last unsubscribe message, revert to
                  * non-subscribe mode. */

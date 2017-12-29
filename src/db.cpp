@@ -51,9 +51,9 @@ void updateLFU(robj *val) {
  * implementations that should instead rely on lookupKeyRead(),
  * lookupKeyWrite() and lookupKeyReadWithFlags(). */
 robj *lookupKey(redisDb *db, robj *key, int flags) {
-    dictEntry *de = dictFind(db->_dict,key->ptr);
+    dictEntry *de = db->_dict->dictFind(key->ptr);
     if (de) {
-        robj *val = (robj *)dictGetVal(de);
+        robj *val = (robj *)de->dictGetVal();
 
         /* Update the access time for the ageing algorithm.
          * Don't do it if we have a saving child, as this will trigger
@@ -166,7 +166,7 @@ robj *lookupKeyWriteOrReply(client *c, robj *key, robj *reply) {
  * The program is aborted if the key already exists. */
 void dbAdd(redisDb *db, robj *key, robj *val) {
     sds copy = sdsdup((sds)key->ptr);
-    int retval = dictAdd(db->_dict, copy, val);
+    int retval = db->_dict->dictAdd(copy, val);
 
     serverAssertWithInfo(NULL,key,retval == DICT_OK);
     if (val->type == OBJ_LIST) signalListAsReady(db, key);
@@ -179,19 +179,19 @@ void dbAdd(redisDb *db, robj *key, robj *val) {
  *
  * The program is aborted if the key was not already present. */
 void dbOverwrite(redisDb *db, robj *key, robj *val) {
-    dictEntry *de = dictFind(db->_dict,key->ptr);
+    dictEntry *de = db->_dict->dictFind(key->ptr);
 
     serverAssertWithInfo(NULL,key,de != NULL);
     if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
-        robj* old = (robj*)dictGetVal(de);
+        robj* old = (robj*)de->dictGetVal();
         int saved_lru = old->lru;
-        dictReplace(db->_dict, key->ptr, val);
+        db->_dict->dictReplace(key->ptr, val);
         val->lru = saved_lru;
         /* LFU should be not only copied but also updated
          * when a key is overwritten. */
         updateLFU(val);
     } else {
-        dictReplace(db->_dict, key->ptr, val);
+        db->_dict->dictReplace(key->ptr, val);
     }
 }
 
@@ -215,7 +215,7 @@ void setKey(redisDb *db, robj *key, robj *val) {
 }
 
 int dbExists(redisDb *db, robj *key) {
-    return dictFind(db->_dict,key->ptr) != NULL;
+    return db->_dict->dictFind(key->ptr) != NULL;
 }
 
 /* Return a random key, in form of a Redis object.
@@ -229,12 +229,12 @@ robj *dbRandomKey(redisDb *db) {
         sds key;
         robj *keyobj;
 
-        de = dictGetRandomKey(db->_dict);
+        de = db->_dict->dictGetRandomKey();
         if (de == NULL) return NULL;
 
-        key = (sds)dictGetKey(de);
+        key = (sds)de->dictGetKey();
         keyobj = createStringObject(key,sdslen(key));
-        if (dictFind(db->expires,key)) {
+        if (db->expires->dictFind(key)) {
             if (expireIfNeeded(db,keyobj)) {
                 decrRefCount(keyobj);
                 continue; /* search for another key. This expired. */
@@ -248,8 +248,8 @@ robj *dbRandomKey(redisDb *db) {
 int dbSyncDelete(redisDb *db, robj *key) {
     /* Deleting an entry from the expires dict will not free the sds of
      * the key, because it is shared with the main dictionary. */
-    if (dictSize(db->expires) > 0) dictDelete(db->expires,key->ptr);
-    if (dictDelete(db->_dict,key->ptr) == DICT_OK) {
+    if (db->expires->dictSize() > 0) db->expires->dictDelete(key->ptr);
+    if (db->_dict->dictDelete(key->ptr) == DICT_OK) {
         if (server.cluster_enabled) slotToKeyDel(key);
         return 1;
     } else {
@@ -327,12 +327,12 @@ long long emptyDb(int dbnum, int flags, void(callback)(void*)) {
 
     for (j = 0; j < server.dbnum; j++) {
         if (dbnum != -1 && dbnum != j) continue;
-        removed += dictSize(server.db[j]._dict);
+        removed += server.db[j]._dict->dictSize();
         if (async) {
             emptyDbAsync(&server.db[j]);
         } else {
-            dictEmpty(server.db[j]._dict,callback);
-            dictEmpty(server.db[j].expires,callback);
+            server.db[j]._dict->dictEmpty(callback);
+            server.db[j].expires->dictEmpty(callback);
         }
     }
     if (server.cluster_enabled) {
@@ -514,7 +514,7 @@ void keysCommand(client *c) {
     dictIterator di(c->db->_dict, 1);
     allkeys = (pattern[0] == '*' && pattern[1] == '\0');
     while((de = dictNext(&di)) != NULL) {
-        sds key = (sds)dictGetKey(de);
+        sds key = (sds)de->dictGetKey();
         robj *keyobj;
 
         if (allkeys || stringmatchlen(pattern,plen,key,sdslen(key),0)) {
@@ -539,20 +539,20 @@ void scanCallback(void *privdata, const dictEntry *de) {
     robj *key, *val = NULL;
 
     if (o == NULL) {
-        sds sdskey = (sds)dictGetKey(de);
+        sds sdskey = (sds)de->dictGetKey();
         key = createStringObject(sdskey, sdslen(sdskey));
     } else if (o->type == OBJ_SET) {
-        sds keysds = (sds)dictGetKey(de);
+        sds keysds = (sds)de->dictGetKey();
         key = createStringObject(keysds,sdslen(keysds));
     } else if (o->type == OBJ_HASH) {
-        sds sdskey = (sds)dictGetKey(de);
-        sds sdsval = (sds)dictGetVal(de);
+        sds sdskey = (sds)de->dictGetKey();
+        sds sdsval = (sds)de->dictGetVal();
         key = createStringObject(sdskey,sdslen(sdskey));
         val = createStringObject(sdsval,sdslen(sdsval));
     } else if (o->type == OBJ_ZSET) {
-        sds sdskey = (sds)dictGetKey(de);
+        sds sdskey = (sds)de->dictGetKey();
         key = createStringObject(sdskey,sdslen(sdskey));
-        val = createStringObjectFromLongDouble(*(double*)dictGetVal(de),0);
+        val = createStringObjectFromLongDouble(*(double*)de->dictGetVal(),0);
     } else {
         serverPanic("Type not handled in SCAN callback.");
     }
@@ -676,7 +676,7 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
         privdata[0] = keys;
         privdata[1] = o;
         do {
-            cursor = dictScan(ht, cursor, scanCallback, NULL, privdata);
+            cursor = ht->dictScan(cursor, scanCallback, NULL, privdata);
         } while (cursor &&
               maxiterations-- &&
               listLength(keys) < (unsigned long)count);
@@ -776,7 +776,7 @@ void scanCommand(client *c) {
 }
 
 void dbsizeCommand(client *c) {
-    addReplyLongLong(c,dictSize(c->db->_dict));
+    addReplyLongLong(c,c->db->_dict->dictSize());
 }
 
 void lastsaveCommand(client *c) {
@@ -948,7 +948,7 @@ void scanDatabaseForReadyLists(redisDb *db) {
     dictEntry *de;
     dictIterator di(db->blocking_keys, 1);
     while((de = dictNext(&di)) != NULL) {
-        robj *key = (robj *)dictGetKey(de);
+        robj *key = (robj *)de->dictGetKey();
         robj *value = lookupKey(db,key,LOOKUP_NOTOUCH);
         if (value && value->type == OBJ_LIST)
             signalListAsReady(db, key);
@@ -1031,8 +1031,8 @@ void swapdbCommand(client *c) {
 int removeExpire(redisDb *db, robj *key) {
     /* An expire may only be removed if there is a corresponding entry in the
      * main dict. Otherwise, the key will never be freed. */
-    serverAssertWithInfo(NULL,key,dictFind(db->_dict,key->ptr) != NULL);
-    return dictDelete(db->expires,key->ptr) == DICT_OK;
+    serverAssertWithInfo(NULL,key,db->_dict->dictFind(key->ptr) != NULL);
+    return db->expires->dictDelete(key->ptr) == DICT_OK;
 }
 
 /* Set an expire to the specified key. If the expire is set in the context
@@ -1043,10 +1043,10 @@ void setExpire(client *c, redisDb *db, robj *key, long long when) {
     dictEntry *kde, *de;
 
     /* Reuse the sds from the main dict in the expire dict */
-    kde = dictFind(db->_dict,key->ptr);
+    kde = db->_dict->dictFind(key->ptr);
     serverAssertWithInfo(NULL,key,kde != NULL);
-    de = dictAddOrFind(db->expires,dictGetKey(kde));
-    dictSetSignedIntegerVal(de,when);
+    de = db->expires->dictAddOrFind(kde->dictGetKey());
+    de->dictSetSignedIntegerVal(when);
 
     int writable_slave = server.masterhost && server.repl_slave_ro == 0;
     if (c && writable_slave && !(c->flags & CLIENT_MASTER))
@@ -1059,13 +1059,13 @@ long long getExpire(redisDb *db, robj *key) {
     dictEntry *de;
 
     /* No expire? return ASAP */
-    if (dictSize(db->expires) == 0 ||
-       (de = dictFind(db->expires,key->ptr)) == NULL) return -1;
+    if (db->expires->dictSize() == 0 ||
+       (de = db->expires->dictFind(key->ptr)) == NULL) return -1;
 
     /* The entry was found in the expire dict, this means it should also
      * be present in the main dict (safety check). */
-    serverAssertWithInfo(NULL,key,dictFind(db->_dict,key->ptr) != NULL);
-    return dictGetSignedIntegerVal(de);
+    serverAssertWithInfo(NULL,key,db->_dict->dictFind(key->ptr) != NULL);
+    return de->dictGetSignedIntegerVal();
 }
 
 /* Propagate expires into slaves and the AOF file.

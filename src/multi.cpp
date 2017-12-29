@@ -228,10 +228,10 @@ void watchForKey(client *c, robj *key) {
             return; /* Key already watched */
     }
     /* This key is not already watched in this DB. Let's add it */
-    clients = (list *)dictFetchValue(c->db->watched_keys,key);
+    clients = (list *)c->db->watched_keys->dictFetchValue(key);
     if (!clients) {
         clients = listCreate();
-        dictAdd(c->db->watched_keys,key,clients);
+        c->db->watched_keys->dictAdd(key,clients);
         incrRefCount(key);
     }
     listAddNodeTail(clients,c);
@@ -255,12 +255,12 @@ void unwatchAllKeys(client *c) {
         /* Lookup the watched key -> clients list and remove the client
          * from the list */
         watchedKey *wk = (watchedKey *)listNodeValue(ln);
-        list *clients = (list *)dictFetchValue(wk->db->watched_keys, wk->key);
+        list *clients = (list *)wk->db->watched_keys->dictFetchValue(wk->key);
         serverAssertWithInfo(c,NULL,clients != NULL);
         listDelNode(clients,listSearchKey(clients,c));
         /* Kill the entry at all if this was the only client */
         if (listLength(clients) == 0)
-            dictDelete(wk->db->watched_keys, wk->key);
+            wk->db->watched_keys->dictDelete( wk->key);
         /* Remove this watched key from the client->watched list */
         listDelNode(c->watched_keys,ln);
         decrRefCount(wk->key);
@@ -275,8 +275,8 @@ void touchWatchedKey(redisDb *db, robj *key) {
     listIter li;
     listNode *ln;
 
-    if (dictSize(db->watched_keys) == 0) return;
-    clients = (list *)dictFetchValue(db->watched_keys, key);
+    if (db->watched_keys->dictSize() == 0) return;
+    clients = (list *)db->watched_keys->dictFetchValue(key);
     if (!clients) return;
 
     /* Mark all the clients watching this key as CLIENT_DIRTY_CAS */
@@ -309,7 +309,7 @@ void touchWatchedKeysOnFlush(int dbid) {
              * key exists, mark the client as dirty, as the key will be
              * removed. */
             if (dbid == -1 || wk->db->id == dbid) {
-                if (dictFind(wk->db->_dict, wk->key->ptr) != NULL)
+                if (wk->db->_dict->dictFind(wk->key->ptr) != NULL)
                     c->flags |= CLIENT_DIRTY_CAS;
             }
         }

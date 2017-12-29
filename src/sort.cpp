@@ -310,7 +310,7 @@ void sortCommand(client *c) {
     switch(sortval->type) {
     case OBJ_LIST: vectorlen = listTypeLength(sortval); break;
     case OBJ_SET: vectorlen =  setTypeSize(sortval); break;
-    case OBJ_ZSET: vectorlen = dictSize(((zset*)sortval->ptr)->_dict); break;
+    case OBJ_ZSET: vectorlen = ((zset*)sortval->ptr)->_dict->dictSize(); break;
     default: vectorlen = 0; serverPanic("Bad SORT type"); /* Avoid GCC warning */
     }
 
@@ -405,7 +405,7 @@ void sortCommand(client *c) {
 
         /* Check if starting point is trivial, before doing log(N) lookup. */
         if (desc) {
-            long zsetlen = dictSize(((zset*)sortval->ptr)->_dict);
+            long zsetlen = ((zset*)sortval->ptr)->_dict->dictSize();
 
             ln = zsl->tail;
             if (start > 0)
@@ -434,7 +434,7 @@ void sortCommand(client *c) {
         sds sdsele;
         dictIterator di(set);
         while((setele = dictNext(&di)) != NULL) {
-            sdsele =  (sds)dictGetKey(setele);
+            sdsele =  (sds)setele->dictGetKey();
             vector[j].obj = createStringObject(sdsele,sdslen(sdsele));
             vector[j].u.score = 0;
             vector[j].u.cmpobj = NULL;

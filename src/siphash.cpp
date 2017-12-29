@@ -111,7 +111,7 @@ int siptlw(int c) {
         v1 ^= v2;                                                              \
         v2 = ROTL(v2, 32);                                                     \
     } while (0)
-
+   
 uint64_t siphash(const uint8_t *in, const size_t inlen, const uint8_t *k) {
 #ifndef UNALIGNED_LE_CPU
     uint64_t hash;

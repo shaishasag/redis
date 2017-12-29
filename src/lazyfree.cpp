@@ -34,13 +34,13 @@ size_t lazyfreeGetFreeEffort(robj *obj) {
         return ql->len;
     } else if (obj->type == OBJ_SET && obj->encoding == OBJ_ENCODING_HT) {
         dict *ht = (dict *)obj->ptr;
-        return dictSize(ht);
+        return ht->dictSize();
     } else if (obj->type == OBJ_ZSET && obj->encoding == OBJ_ENCODING_SKIPLIST){
         zset *zs = (zset *)obj->ptr;
         return zs->zsl->length;
     } else if (obj->type == OBJ_HASH && obj->encoding == OBJ_ENCODING_HT) {
         dict *ht = (dict *)obj->ptr;
-        return dictSize(ht);
+        return ht->dictSize();
     } else {
         return 1; /* Everything else is a single allocation. */
     }
@@ -54,14 +54,14 @@ size_t lazyfreeGetFreeEffort(robj *obj) {
 int dbAsyncDelete(redisDb *db, robj *key) {
     /* Deleting an entry from the expires dict will not free the sds of
      * the key, because it is shared with the main dictionary. */
-    if (dictSize(db->expires) > 0) dictDelete(db->expires,key->ptr);
+    if (db->expires->dictSize() > 0) db->expires->dictDelete(key->ptr);
 
     /* If the value is composed of a few allocations, to free in a lazy way
      * is actually just slower... So under a certain limit we just free
      * the object synchronously. */
-    dictEntry *de = dictUnlink(db->_dict,key->ptr);
+    dictEntry *de = db->_dict->dictUnlink(key->ptr);
     if (de) {
-        robj* val = (robj*)dictGetVal(de);
+        robj* val = (robj*)de->dictGetVal();
         size_t free_effort = lazyfreeGetFreeEffort(val);
 
         /* If releasing the object is too much work, let's put it into the
@@ -69,14 +69,14 @@ int dbAsyncDelete(redisDb *db, robj *key) {
         if (free_effort > LAZYFREE_THRESHOLD) {
             atomicIncr(lazyfree_objects,1);
             bioCreateBackgroundJob(BIO_LAZY_FREE,val,NULL,NULL);
-            dictSetVal(db->_dict,de,NULL);
+            db->_dict->dictSetVal(de,NULL);
         }
     }
 
     /* Release the key-val pair, or just the key if we set the val
      * field to NULL in order to lazy free it later. */
     if (de) {
-        dictFreeUnlinkedEntry(db->_dict,de);
+        db->_dict->dictFreeUnlinkedEntry(de);
         if (server.cluster_enabled) slotToKeyDel(key);
         return 1;
     } else {
@@ -91,7 +91,7 @@ void emptyDbAsync(redisDb *db) {
     dict *oldht1 = db->_dict, *oldht2 = db->expires;
     db->_dict = dictCreate(&dbDictType,NULL);
     db->expires = dictCreate(&keyptrDictType,NULL);
-    atomicIncr(lazyfree_objects,dictSize(oldht1));
+    atomicIncr(lazyfree_objects,oldht1->dictSize());
     bioCreateBackgroundJob(BIO_LAZY_FREE,NULL,oldht1,oldht2);
 }
 
@@ -120,7 +120,7 @@ void lazyfreeFreeObjectFromBioThread(robj *o) {
  * Redis Cluster in order to take the hash slots -> keys mapping. This
  * may be NULL if Redis Cluster is disabled. */
 void lazyfreeFreeDatabaseFromBioThread(dict *ht1, dict *ht2) {
-    size_t numkeys = dictSize(ht1);
+    size_t numkeys = ht1->dictSize();
     dictRelease(ht1);
     dictRelease(ht2);
     atomicDecr(lazyfree_objects,numkeys);

@@ -52,9 +52,9 @@
  * The parameter 'now' is the current time in milliseconds as is passed
  * to the function to avoid too many gettimeofday() syscalls. */
 int activeExpireCycleTryExpire(redisDb *db, dictEntry *de, long long now) {
-    long long t = dictGetSignedIntegerVal(de);
+    long long t = de->dictGetSignedIntegerVal();
     if (now > t) {
-        sds key = (sds)dictGetKey(de);
+        sds key = (sds)de->dictGetKey();
         robj *keyobj = createStringObject(key,sdslen(key));
 
         propagateExpire(db,keyobj,server.lazyfree_lazy_expire);
@@ -158,11 +158,11 @@ void activeExpireCycle(int type) {
             iteration++;
 
             /* If there is nothing to expire try next DB ASAP. */
-            if ((num = dictSize(db->expires)) == 0) {
+            if ((num = db->expires->dictSize()) == 0) {
                 db->avg_ttl = 0;
                 break;
             }
-            slots = dictSlots(db->expires);
+            slots = db->expires->dictSlots();
             now = mstime();
 
             /* When there are less than 1% filled slots getting random
@@ -184,8 +184,8 @@ void activeExpireCycle(int type) {
                 dictEntry *de;
                 long long ttl;
 
-                if ((de = dictGetRandomKey(db->expires)) == NULL) break;
-                ttl = dictGetSignedIntegerVal(de)-now;
+                if ((de = db->expires->dictGetRandomKey()) == NULL) break;
+                ttl = de->dictGetSignedIntegerVal()-now;
                 if (activeExpireCycleTryExpire(db,de,now)) expired++;
                 if (ttl > 0) {
                     /* We want the average TTL of keys yet not expired. */
@@ -265,14 +265,14 @@ dict *slaveKeysWithExpire = NULL;
  * check if they should be evicted. */
 void expireSlaveKeys(void) {
     if (slaveKeysWithExpire == NULL ||
-        dictSize(slaveKeysWithExpire) == 0) return;
+        slaveKeysWithExpire->dictSize() == 0) return;
 
     int cycles = 0, noexpire = 0;
     mstime_t start = mstime();
     while(1) {
-        dictEntry *de = dictGetRandomKey(slaveKeysWithExpire);
-        sds keyname = (sds)dictGetKey(de);
-        uint64_t dbids = dictGetUnsignedIntegerVal(de);
+        dictEntry *de = slaveKeysWithExpire->dictGetRandomKey();
+        sds keyname = (sds)de->dictGetKey();
+        uint64_t dbids = de->dictGetUnsignedIntegerVal();
         uint64_t new_dbids = 0;
 
         /* Check the key against every database corresponding to the
@@ -281,7 +281,7 @@ void expireSlaveKeys(void) {
         while(dbids && dbid < server.dbnum) {
             if ((dbids & 1) != 0) {
                 redisDb *db = server.db+dbid;
-                dictEntry *expire = dictFind(db->expires,keyname);
+                dictEntry *expire = db->expires->dictFind(keyname);
                 int expired = 0;
 
                 if (expire &&
@@ -307,16 +307,16 @@ void expireSlaveKeys(void) {
          * of keys with an expire set directly in the writable slave. Otherwise
          * if the bitmap is zero, we no longer need to keep track of it. */
         if (new_dbids)
-            dictSetUnsignedIntegerVal(de,new_dbids);
+            de->dictSetUnsignedIntegerVal(new_dbids);
         else
-            dictDelete(slaveKeysWithExpire,keyname);
+            slaveKeysWithExpire->dictDelete(keyname);
 
         /* Stop conditions: found 3 keys we cna't expire in a row or
          * time limit was reached. */
         cycles++;
         if (noexpire > 3) break;
         if ((cycles % 64) == 0 && mstime()-start > 1) break;
-        if (dictSize(slaveKeysWithExpire) == 0) break;
+        if (slaveKeysWithExpire->dictSize() == 0) break;
     }
 }
 
@@ -336,25 +336,25 @@ void rememberSlaveKeyWithExpire(redisDb *db, robj *key) {
     }
     if (db->id > 63) return;
 
-    dictEntry *de = dictAddOrFind(slaveKeysWithExpire,key->ptr);
+    dictEntry *de = slaveKeysWithExpire->dictAddOrFind(key->ptr);
     /* If the entry was just created, set it to a copy of the SDS string
      * representing the key: we don't want to need to take those keys
      * in sync with the main DB. The keys will be removed by expireSlaveKeys()
      * as it scans to find keys to remove. */
     if (de->key == key->ptr) {
         de->key = sdsdup((const sds)key->ptr);
-        dictSetUnsignedIntegerVal(de,0);
+        de->dictSetUnsignedIntegerVal(0);
     }
 
-    uint64_t dbids = dictGetUnsignedIntegerVal(de);
+    uint64_t dbids = de->dictGetUnsignedIntegerVal();
     dbids |= (uint64_t)1 << db->id;
-    dictSetUnsignedIntegerVal(de,dbids);
+    de->dictSetUnsignedIntegerVal(dbids);
 }
 
 /* Return the number of keys we are tracking. */
 size_t getSlaveKeyWithExpireCount(void) {
     if (slaveKeysWithExpire == NULL) return 0;
-    return dictSize(slaveKeysWithExpire);
+    return slaveKeysWithExpire->dictSize();
 }
 
 /* Remove the keys in the hash table. We need to do that when data is

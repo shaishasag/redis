@@ -53,10 +53,10 @@ int setTypeAdd(robj *subject, sds value) {
     long long llval;
     if (subject->encoding == OBJ_ENCODING_HT) {
         dict *ht = (dict *)subject->ptr;
-        dictEntry *de = dictAddRaw(ht,value,NULL);
+        dictEntry *de = ht->dictAddRaw(value,NULL);
         if (de) {
-            dictSetKey(ht,de,sdsdup(value));
-            dictSetVal(ht,de,NULL);
+            ht->dictSetKey(de,sdsdup(value));
+            ht->dictSetVal(de,NULL);
             return 1;
         }
     } else if (subject->encoding == OBJ_ENCODING_INTSET) {
@@ -76,7 +76,7 @@ int setTypeAdd(robj *subject, sds value) {
 
             /* The set *was* an intset and this value is not integer
              * encodable, so dictAdd should always work. */
-            serverAssert(dictAdd((dict *)subject->ptr,sdsdup(value),NULL) == DICT_OK);
+            serverAssert(((dict *)subject->ptr)->dictAdd(sdsdup(value),NULL) == DICT_OK);
             return 1;
         }
     } else {
@@ -88,7 +88,7 @@ int setTypeAdd(robj *subject, sds value) {
 int setTypeRemove(robj *setobj, sds value) {
     long long llval;
     if (setobj->encoding == OBJ_ENCODING_HT) {
-        if (dictDelete((dict*)setobj->ptr,value) == DICT_OK) {
+        if (((dict*)setobj->ptr)->dictDelete(value) == DICT_OK) {
             if (htNeedsResize((dict*)setobj->ptr)) ((dict*)setobj->ptr)->dictResize();
             return 1;
         }
@@ -107,7 +107,7 @@ int setTypeRemove(robj *setobj, sds value) {
 int setTypeIsMember(robj *subject, sds value) {
     long long llval;
     if (subject->encoding == OBJ_ENCODING_HT) {
-        return dictFind((dict*)subject->ptr,value) != NULL;
+        return ((dict*)subject->ptr)->dictFind(value) != NULL;
     } else if (subject->encoding == OBJ_ENCODING_INTSET) {
         if (isSdsRepresentableAsLongLong(value,&llval) == C_OK) {
             return intsetFind((intset*)subject->ptr,llval);
@@ -155,7 +155,7 @@ int setTypeNext(setTypeIterator *si, sds *sdsele, int64_t *llele) {
     if (si->encoding == OBJ_ENCODING_HT) {
         dictEntry *de = dictNext(si->di);
         if (de == NULL) return -1;
-        *sdsele = (sds)dictGetKey(de);
+        *sdsele = (sds)de->dictGetKey();
         *llele = -123456789; /* Not needed. Defensive. */
     } else if (si->encoding == OBJ_ENCODING_INTSET) {
         if (!intsetGet((intset*)si->subject->ptr,si->ii++,llele))
@@ -207,8 +207,8 @@ sds setTypeNextObject(setTypeIterator *si) {
  * used field with values which are easy to trap if misused. */
 int setTypeRandomElement(robj *setobj, sds *sdsele, int64_t *llele) {
     if (setobj->encoding == OBJ_ENCODING_HT) {
-        dictEntry *de = dictGetRandomKey((dict*)setobj->ptr);
-        *sdsele = (sds)dictGetKey(de);
+        dictEntry *de = ((dict*)setobj->ptr)->dictGetRandomKey();
+        *sdsele = (sds)de->dictGetKey();
         *llele = -123456789; /* Not needed. Defensive. */
     } else if (setobj->encoding == OBJ_ENCODING_INTSET) {
         *llele = intsetRandom((intset *)setobj->ptr);
@@ -221,7 +221,7 @@ int setTypeRandomElement(robj *setobj, sds *sdsele, int64_t *llele) {
 
 unsigned long setTypeSize(const robj *subject) {
     if (subject->encoding == OBJ_ENCODING_HT) {
-        return dictSize((const dict*)subject->ptr);
+        return (((dict*)subject->ptr)->dictSize());
     } else if (subject->encoding == OBJ_ENCODING_INTSET) {
         return intsetLen((const intset*)subject->ptr);
     } else {
@@ -249,7 +249,7 @@ void setTypeConvert(robj *setobj, int enc) {
         si = setTypeInitIterator(setobj);
         while (setTypeNext(si,&element,&intele) != -1) {
             element = sdsfromlonglong(intele);
-            serverAssert(dictAdd(d,element,NULL) == DICT_OK);
+            serverAssert(d->dictAdd(element,NULL) == DICT_OK);
         }
         setTypeReleaseIterator(si);
 
@@ -690,21 +690,21 @@ void srandmemberWithCountCommand(client *c) {
             int retval = DICT_ERR;
 
             if (encoding == OBJ_ENCODING_INTSET) {
-                retval = dictAdd(d,createStringObjectFromLongLong(llele),NULL);
+                retval = d->dictAdd(createStringObjectFromLongLong(llele),NULL);
             } else {
-                retval = dictAdd(d,createStringObject(ele,sdslen(ele)),NULL);
+                retval = d->dictAdd(createStringObject(ele,sdslen(ele)),NULL);
             }
             serverAssert(retval == DICT_OK);
         }
         setTypeReleaseIterator(si);
-        serverAssert(dictSize(d) == size);
+        serverAssert(d->dictSize() == size);
 
         /* Remove random elements to reach the right count. */
         while(size > count) {
             dictEntry *de;
 
-            de = dictGetRandomKey(d);
-            dictDelete(d,dictGetKey(de));
+            de = d->dictGetRandomKey();
+            d->dictDelete(de->dictGetKey());
             size--;
         }
     }
@@ -727,7 +727,7 @@ void srandmemberWithCountCommand(client *c) {
             /* Try to add the object to the dictionary. If it already exists
              * free it, otherwise increment the number of objects we have
              * in the result dictionary. */
-            if (dictAdd(d,objele,NULL) == DICT_OK)
+            if (d->dictAdd(objele,NULL) == DICT_OK)
                 added++;
             else
                 decrRefCount(objele);
@@ -742,7 +742,7 @@ void srandmemberWithCountCommand(client *c) {
         {
             dictIterator di((dict*)d);
             while((de = dictNext(&di)) != NULL)
-                addReplyBulk(c,(robj *)dictGetKey(de));
+                addReplyBulk(c,(robj *)de->dictGetKey());
         }
         dictRelease(d);
     }

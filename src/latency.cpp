@@ -96,7 +96,7 @@ void latencyMonitorInit(void) {
  * is a macro that only adds the sample if the latency is higher than
  * server.latency_monitor_threshold. */
 void latencyAddSample(char *event, mstime_t latency) {
-    latencyTimeSeries *ts = (latencyTimeSeries *)dictFetchValue(server.latency_events,event);
+    latencyTimeSeries *ts = (latencyTimeSeries *)server.latency_events->dictFetchValue(event);
     time_t now = time(NULL);
     int prev;
 
@@ -106,7 +106,7 @@ void latencyAddSample(char *event, mstime_t latency) {
         ts->idx = 0;
         ts->max = 0;
         memset(ts->samples,0,sizeof(ts->samples));
-        dictAdd(server.latency_events,zstrdup(event),ts);
+        server.latency_events->dictAdd(zstrdup(event),ts);
     }
 
     /* If the previous sample is in the same second, we update our old sample
@@ -137,10 +137,10 @@ int latencyResetEvent(char *event_to_reset) {
 
     dictIterator di(server.latency_events, 1);
     while((de = dictNext(&di)) != NULL) {
-        char *event = (char *)dictGetKey(de);
+        char *event = (char *)de->dictGetKey();
 
         if (event_to_reset == NULL || strcasecmp(event,event_to_reset) == 0) {
-            dictDelete(server.latency_events, event);
+            server.latency_events->dictDelete(event);
             resets++;
         }
     }
@@ -155,7 +155,7 @@ int latencyResetEvent(char *event_to_reset) {
  * If the specified event has no elements the structure is populate with
  * zero values. */
 void analyzeLatencyForEvent(char *event, struct latencyStats *ls) {
-    latencyTimeSeries *ts = (latencyTimeSeries *)dictFetchValue(server.latency_events,event);
+    latencyTimeSeries *ts = (latencyTimeSeries *)server.latency_events->dictFetchValue(event);
     int j;
     uint64_t sum;
 
@@ -233,7 +233,7 @@ sds createLatencyReport(void) {
 
     /* Return ASAP if the latency engine is disabled and it looks like it
      * was never enabled so far. */
-    if (dictSize(server.latency_events) == 0 &&
+    if (server.latency_events->dictSize() == 0 &&
         server.latency_monitor_threshold == 0)
     {
         report = sdscat(report,"I'm sorry, Dave, I can't do that. Latency monitoring is disabled in this Redis instance. You may use \"CONFIG SET latency-monitor-threshold <milliseconds>.\" in order to enable it. If we weren't in a deep space mission I'd suggest to take a look at http://redis.io/topics/latency-monitor.\n");
@@ -247,8 +247,8 @@ sds createLatencyReport(void) {
 
     dictIterator di(server.latency_events, 1);
     while((de = dictNext(&di)) != NULL) {
-        char *event = (char *)dictGetKey(de);
-        latencyTimeSeries* ts = (latencyTimeSeries*)dictGetVal(de);
+        char *event = (char *)de->dictGetKey();
+        latencyTimeSeries* ts = (latencyTimeSeries*)de->dictGetVal();
         struct latencyStats ls;
 
         if (ts == NULL) continue;
@@ -491,11 +491,11 @@ void latencyCommandReplyWithSamples(client *c, latencyTimeSeries *ts) {
 void latencyCommandReplyWithLatestEvents(client *c) {
     dictEntry *de;
 
-    addReplyMultiBulkLen(c,dictSize(server.latency_events));
+    addReplyMultiBulkLen(c,server.latency_events->dictSize());
     dictIterator di(server.latency_events);
     while((de = dictNext(&di)) != NULL) {
-        char *event = (char *)dictGetKey(de);
-        latencyTimeSeries* ts = (latencyTimeSeries*)dictGetVal(de);
+        char *event = (char *)de->dictGetKey();
+        latencyTimeSeries* ts = (latencyTimeSeries*)de->dictGetVal();
         int last = (ts->idx + LATENCY_TS_LEN - 1) % LATENCY_TS_LEN;
 
         addReplyMultiBulkLen(c,4);
@@ -563,7 +563,7 @@ void latencyCommand(client *c) {
 
     if (!strcasecmp((const char*)c->argv[1]->ptr,"history") && c->argc == 3) {
         /* LATENCY HISTORY <event> */
-        ts = (latencyTimeSeries *)dictFetchValue(server.latency_events,c->argv[2]->ptr);
+        ts = (latencyTimeSeries *)server.latency_events->dictFetchValue(c->argv[2]->ptr);
         if (ts == NULL) {
             addReplyMultiBulkLen(c,0);
         } else {
@@ -572,10 +572,10 @@ void latencyCommand(client *c) {
     } else if (!strcasecmp((const char*)c->argv[1]->ptr,"graph") && c->argc == 3) {
         /* LATENCY GRAPH <event> */
 
-        dictEntry *de = dictFind(server.latency_events,c->argv[2]->ptr);
+        dictEntry *de = server.latency_events->dictFind(c->argv[2]->ptr);
         if (de == NULL) goto nodataerr;
-        ts = (latencyTimeSeries *)dictGetVal(de);
-        char *event = (char *)dictGetKey(de);
+        ts = (latencyTimeSeries *)de->dictGetVal();
+        char *event = (char *)de->dictGetKey();
 
         sds graph = latencyCommandGenSparkeline(event,ts);
         addReplyBulkCString(c,graph);

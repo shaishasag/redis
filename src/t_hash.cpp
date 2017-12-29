@@ -92,9 +92,9 @@ sds hashTypeGetFromHashTable(robj *o, sds field) {
 
     serverAssert(o->encoding == OBJ_ENCODING_HT);
 
-    de = dictFind((dict*)o->ptr, field);
+    de = ((dict*)o->ptr)->dictFind(field);
     if (de == NULL) return NULL;
-    return (sds)dictGetVal(de);
+    return (sds)de->dictGetVal();
 }
 
 /* Higher level function of hashTypeGet*() that returns the hash value
@@ -237,14 +237,14 @@ int hashTypeSet(robj *o, sds field, sds value, int flags) {
         if (hashTypeLength(o) > server.hash_max_ziplist_entries)
             hashTypeConvert(o, OBJ_ENCODING_HT);
     } else if (o->encoding == OBJ_ENCODING_HT) {
-        dictEntry *de = dictFind((dict*)o->ptr,field);
+        dictEntry *de = ((dict*)o->ptr)->dictFind(field);
         if (de) {
-            sdsfree((sds)dictGetVal(de));
+            sdsfree((sds)de->dictGetVal());
             if (flags & HASH_SET_TAKE_VALUE) {
-                dictGetVal(de) = value;
+                de->dictSetVal(value);
                 value = NULL;
             } else {
-                dictGetVal(de) = sdsdup(value);
+                de->dictSetVal(sdsdup(value));
             }
             update = 1;
         } else {
@@ -261,7 +261,7 @@ int hashTypeSet(robj *o, sds field, sds value, int flags) {
             } else {
                 v = sdsdup(value);
             }
-            dictAdd((dict *)o->ptr,f,v);
+            ((dict *)o->ptr)->dictAdd(f,v);
         }
     } else {
         serverPanic("Unknown hash encoding");
@@ -294,7 +294,7 @@ int hashTypeDelete(robj *o, sds field) {
             }
         }
     } else if (o->encoding == OBJ_ENCODING_HT) {
-        if (dictDelete((dict*)o->ptr, field) == C_OK) {
+        if (((dict*)o->ptr)->dictDelete(field) == C_OK) {
             deleted = 1;
 
             /* Always check if the dictionary needs a resize after a delete. */
@@ -315,7 +315,7 @@ unsigned long hashTypeLength(const robj *o) {
     if (o->encoding == OBJ_ENCODING_ZIPLIST) {
         length = ziplistLen((unsigned char*)o->ptr) / 2;
     } else if (o->encoding == OBJ_ENCODING_HT) {
-        length = dictSize((const dict*)o->ptr);
+        length = (((dict*)o->ptr)->dictSize());
     } else {
         serverPanic("Unknown hash encoding");
     }
@@ -408,9 +408,9 @@ sds hashTypeCurrentFromHashTable(hashTypeIterator *hi, int what) {
     serverAssert(hi->encoding == OBJ_ENCODING_HT);
 
     if (what & OBJ_HASH_KEY) {
-        return (sds)dictGetKey(hi->de);
+        return (sds)hi->de->dictGetKey();
     } else {
-        return (sds)dictGetVal(hi->de);
+        return (sds)hi->de->dictGetVal();
     }
 }
 
@@ -471,18 +471,18 @@ void hashTypeConvertZiplist(robj *o, int enc) {
 
     } else if (enc == OBJ_ENCODING_HT) {
         hashTypeIterator *hi;
-        dict *dict;
+        dict *_dict;
         int ret;
 
         hi = hashTypeInitIterator(o);
-        dict = dictCreate(&hashDictType, NULL);
+        _dict = dictCreate(&hashDictType, NULL);
 
         while (hashTypeNext(hi) != C_ERR) {
             sds key, value;
 
             key = hashTypeCurrentObjectNewSds(hi,OBJ_HASH_KEY);
             value = hashTypeCurrentObjectNewSds(hi,OBJ_HASH_VALUE);
-            ret = dictAdd(dict, key, value);
+            ret = _dict->dictAdd(key, value);
             if (ret != DICT_OK) {
                 serverLogHexDump(LL_WARNING,"ziplist with dup elements dump",
                     o->ptr,ziplistBlobLen((unsigned char *)o->ptr));
@@ -492,7 +492,7 @@ void hashTypeConvertZiplist(robj *o, int enc) {
         hashTypeReleaseIterator(hi);
         zfree(o->ptr);
         o->encoding = OBJ_ENCODING_HT;
-        o->ptr = dict;
+        o->ptr = _dict;
     } else {
         serverPanic("Unknown hash encoding");
     }

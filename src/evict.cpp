@@ -163,21 +163,21 @@ void evictionPoolPopulate(int dbid, dict *sampledict, dict *keydict, evictionPoo
     int j, k, count;
     dictEntry *samples[server.maxmemory_samples];
 
-    count = dictGetSomeKeys(sampledict,samples,server.maxmemory_samples);
+    count = sampledict->dictGetSomeKeys(samples,server.maxmemory_samples);
     for (j = 0; j < count; j++) {
         unsigned long long idle;
         robj *o;
         dictEntry *de;
 
         de = samples[j];
-        sds key = (sds)dictGetKey(de);
+        sds key = (sds)de->dictGetKey();
 
         /* If the dictionary we are sampling from is not the main
          * dictionary (but the expires one) we need to lookup the key
          * again in the key dictionary to obtain the value object. */
         if (server.maxmemory_policy != MAXMEMORY_VOLATILE_TTL) {
-            if (sampledict != keydict) de = dictFind(keydict, key);
-            o = (robj *)dictGetVal(de);
+            if (sampledict != keydict) de = keydict->dictFind(key);
+            o = (robj *)de->dictGetVal();
         }
 
         /* Calculate the idle time according to the policy. This is called
@@ -196,7 +196,7 @@ void evictionPoolPopulate(int dbid, dict *sampledict, dict *keydict, evictionPoo
             idle = 255-LFUDecrAndReturn(o);
         } else if (server.maxmemory_policy == MAXMEMORY_VOLATILE_TTL) {
             /* In this case the sooner the expire the better. */
-            idle = ULLONG_MAX - (long)dictGetVal(de);
+            idle = ULLONG_MAX - (long)de->dictGetVal();
         } else {
             serverPanic("Unknown eviction policy in evictionPoolPopulate()");
         }
@@ -407,7 +407,7 @@ int freeMemoryIfNeeded(void) {
         sds bestkey = NULL;
         int bestdbid;
         redisDb *db;
-        dict *dict;
+        dict *_dict;
         dictEntry *de;
 
         if (server.maxmemory_policy & (MAXMEMORY_FLAG_LRU|MAXMEMORY_FLAG_LFU) ||
@@ -423,10 +423,10 @@ int freeMemoryIfNeeded(void) {
                  * every DB. */
                 for (i = 0; i < server.dbnum; i++) {
                     db = server.db+i;
-                    dict = (server.maxmemory_policy & MAXMEMORY_FLAG_ALLKEYS) ?
+                    _dict = (server.maxmemory_policy & MAXMEMORY_FLAG_ALLKEYS) ?
                             db->_dict : db->expires;
-                    if ((keys = dictSize(dict)) != 0) {
-                        evictionPoolPopulate(i, dict, db->_dict, pool);
+                    if ((keys = _dict->dictSize()) != 0) {
+                        evictionPoolPopulate(i, _dict, db->_dict, pool);
                         total_keys += keys;
                     }
                 }
@@ -438,11 +438,9 @@ int freeMemoryIfNeeded(void) {
                     bestdbid = pool[k].dbid;
 
                     if (server.maxmemory_policy & MAXMEMORY_FLAG_ALLKEYS) {
-                        de = dictFind(server.db[pool[k].dbid]._dict,
-                            pool[k].key);
+                        de = server.db[pool[k].dbid]._dict->dictFind(pool[k].key);
                     } else {
-                        de = dictFind(server.db[pool[k].dbid].expires,
-                            pool[k].key);
+                        de = server.db[pool[k].dbid].expires->dictFind(pool[k].key);
                     }
 
                     /* Remove the entry from the pool. */
@@ -454,7 +452,7 @@ int freeMemoryIfNeeded(void) {
                     /* If the key exists, is our pick. Otherwise it is
                      * a ghost and we need to try the next element. */
                     if (de) {
-                        bestkey = (sds)dictGetKey(de);
+                        bestkey = (sds)de->dictGetKey();
                         break;
                     } else {
                         /* Ghost... Iterate again. */
@@ -473,11 +471,11 @@ int freeMemoryIfNeeded(void) {
             for (i = 0; i < server.dbnum; i++) {
                 j = (++next_db) % server.dbnum;
                 db = server.db+j;
-                dict = (server.maxmemory_policy == MAXMEMORY_ALLKEYS_RANDOM) ?
+                _dict = (server.maxmemory_policy == MAXMEMORY_ALLKEYS_RANDOM) ?
                         db->_dict : db->expires;
-                if (dictSize(dict) != 0) {
-                    de = dictGetRandomKey(dict);
-                    bestkey = (sds)dictGetKey(de);
+                if (_dict->dictSize() != 0) {
+                    de = _dict->dictGetRandomKey();
+                    bestkey = (sds)de->dictGetKey();
                     bestdbid = j;
                     break;
                 }

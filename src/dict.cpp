@@ -51,6 +51,8 @@
 #include <assert.h>
 #endif
 #include <new>
+#include <fstream>
+std::ofstream outer("/Users/shai/Desktop.redispp.out.txt", std::ios::app);
 
 /* Using dictEnableResize() / dictDisableResize() we make possible to
  * enable/disable resizing of the hash table as needed. This is very important
@@ -82,7 +84,7 @@ uint8_t *dictGetHashFunctionSeed(void) {
 }
 
 /* The default hashing function uses SipHash implementation
- * in siphash.c. */
+ * in siphash.cpp. */
 
 uint64_t siphash(const uint8_t *in, const size_t inlen, const uint8_t *k);
 uint64_t siphash_nocase(const uint8_t *in, const size_t inlen, const uint8_t *k);
@@ -239,7 +241,7 @@ int dict::dictRehash(int n)
 
             nextde = de->next;
             /* Get the index in the new hash table */
-            h = dictHashKey(this, de->key) & ht[1].sizemask;
+            h = dictHashKey(de->key) & ht[1].sizemask;
             de->next = ht[1].table[h];
             ht[1].table[h] = de;
             ht[0].used--;
@@ -296,13 +298,16 @@ void dict::_dictRehashStep()
         dictRehash(1);
 }
 
+
 /* Add an element to the target hash table */
 int dict::dictAdd(void *key, void *val)
 {
+    outer << "dictAdd(" << key << ", " << val << ") " << (char*)key << std::endl;
     dictEntry *entry = dictAddRaw(key,NULL);
-
+    outer << "entry = " << entry << std::endl;
     if (!entry) return DICT_ERR;
-    dictSetVal(this, entry, val);
+    dictSetVal(entry, val);
+    outer << "goodbye = " << std::endl;
     return DICT_OK;
 }
 
@@ -330,7 +335,7 @@ dictEntry* dict::dictAddRaw(void *key, dictEntry **existing)
     
     /* Get the index of the new element, or -1 if
      * the element already exists. */
-    int index = _dictKeyIndex(key, dictHashKey(this,key), existing);
+    int index = _dictKeyIndex(key, dictHashKey(key), existing);
     if (index == -1)
         return NULL;
 
@@ -344,7 +349,7 @@ dictEntry* dict::dictAddRaw(void *key, dictEntry **existing)
     ht->used++;
 
     /* Set the hash entry fields. */
-    dictSetKey(this, entry, key);
+    dictSetKey(entry, key);
     return entry;
 }
 
@@ -361,7 +366,7 @@ int dict::dictReplace(void *key, void *val)
      * does not exists dictAdd will suceed. */
     entry = dictAddRaw(key,&existing);
     if (entry) {
-        dictSetVal(this, entry, val);
+        dictSetVal(entry, val);
         return 1;
     }
 
@@ -371,8 +376,8 @@ int dict::dictReplace(void *key, void *val)
      * you want to increment (set), and then decrement (free), and not the
      * reverse. */
     auxentry = *existing;
-    dictSetVal(this, existing, val);
-    dictFreeVal(this, &auxentry);
+    dictSetVal(existing, val);
+    dictFreeVal(&auxentry);
     return 0;
 }
 
@@ -400,22 +405,22 @@ dictEntry* dict::dictGenericDelete(const void *key, int nofree) {
     if (ht[0].used == 0 && ht[1].used == 0) return NULL;
 
     if (dictIsRehashing()) _dictRehashStep();
-    h = dictHashKey(this, key);
+    h = dictHashKey(key);
 
     for (table = 0; table <= 1; table++) {
         idx = h & ht[table].sizemask;
         he = ht[table].table[idx];
         prevHe = NULL;
         while(he) {
-            if (key==he->key || dictCompareKeys(this, key, he->key)) {
+            if (key==he->key || dictCompareKeys(key, he->key)) {
                 /* Unlink the element from the list */
                 if (prevHe)
                     prevHe->next = he->next;
                 else
                     ht[table].table[idx] = he->next;
                 if (!nofree) {
-                    dictFreeKey(this, he);
-                    dictFreeVal(this, he);
+                    dictFreeKey(he);
+                    dictFreeVal(he);
                     dictEntryRelease(he);
                 }
                 ht[table].used--;
@@ -447,12 +452,12 @@ int dict::dictDelete(const void *key) {
  *
  *  entry = dictFind(...);
  *  // Do something with entry
- *  dictDelete(dictionary,entry);
+ *  dictionary->dictDelete(entry);
  *
  * Thanks to this function it is possible to avoid this, and use
  * instead:
  *
- * entry = dictUnlink(dictionary,entry);
+ * entry = dictionary->dictUnlink(entry);
  * // Do something with entry
  * dictFreeUnlinkedEntry(entry); // <- This does not need to lookup again.
  */
@@ -464,8 +469,8 @@ dictEntry* dict::dictUnlink(const void *key) {
  * to dictUnlink(). It's safe to call this function with 'he' = NULL. */
 void dict::dictFreeUnlinkedEntry(dictEntry *he) {
     if (he == NULL) return;
-    dictFreeKey(this, he);
-    dictFreeVal(this, he);
+    dictFreeKey(he);
+    dictFreeVal(he);
     dictEntryRelease(he);
 }
 
@@ -482,8 +487,8 @@ int dict::_dictClear(dictht *ht, void(callback)(void *)) {
         if ((he = ht->table[i]) == NULL) continue;
         while(he) {
             nextHe = he->next;
-            dictFreeKey(this, he);
-            dictFreeVal(this, he);
+            dictFreeKey(he);
+            dictFreeVal(he);
             dictEntryRelease(he);
             ht->used--;
             he = nextHe;
@@ -510,12 +515,12 @@ dictEntry* dict::dictFind(const void *key)
 
     if (ht[0].used + ht[1].used == 0) return NULL; /* dict is empty */
     if (dictIsRehashing()) _dictRehashStep();
-    h = dictHashKey(this, key);
+    h = dictHashKey(key);
     for (table = 0; table <= 1; table++) {
         idx = h & ht[table].sizemask;
         he = ht[table].table[idx];
         while(he) {
-            if (key==he->key || dictCompareKeys(this, key, he->key))
+            if (key==he->key || dictCompareKeys(key, he->key))
                 return he;
             he = he->next;
         }
@@ -528,7 +533,7 @@ void* dict::dictFetchValue(const void *key) {
     dictEntry *he;
 
     he = dictFind(key);
-    return he ? dictGetVal(he) : NULL;
+    return he ? he->dictGetVal() : NULL;
 }
 
 /* A fingerprint is a 64 bit number that represents the state of the dictionary
@@ -632,7 +637,7 @@ dictEntry* dict::dictGetRandomKey()
     unsigned long h;
     int listlen, listele;
 
-    if (dictSize(this) == 0) return NULL;
+    if (this->dictSize() == 0) return NULL;
     if (dictIsRehashing()) _dictRehashStep();
     if (dictIsRehashing()) {
         do {
@@ -695,7 +700,7 @@ unsigned int dict::dictGetSomeKeys(dictEntry **des, unsigned int count) {
     unsigned long stored = 0, maxsizemask;
     unsigned long maxsteps;
 
-    if (dictSize(this) < count) count = dictSize(this);
+    if (this->dictSize() < count) count = this->dictSize();
     maxsteps = count*10;
 
     /* Try to do a rehashing work proportional to 'count'. */
@@ -852,8 +857,7 @@ static unsigned long rev(unsigned long v) {
  * 3) The reverse cursor is somewhat hard to understand at first, but this
  *    comment is supposed to help.
  */
-unsigned long dict::dictScan(unsigned long v,
-                       dictScanFunction *fn,
+unsigned long dict::dictScan(unsigned long v, dictScanFunction *fn,
                        dictScanBucketFunction* bucketfn,
                        void *privdata)
 {
@@ -861,7 +865,7 @@ unsigned long dict::dictScan(unsigned long v,
     const dictEntry *de, *next;
     unsigned long m0, m1;
 
-    if (dictSize(this) == 0) return 0;
+    if (this->dictSize() == 0) return 0;
 
     if (!dictIsRehashing()) {
         t0 = &(ht[0]);
@@ -987,7 +991,7 @@ int dict::_dictKeyIndex(const void *key, unsigned int hash, dictEntry **existing
         /* Search if this slot does not already contain the given key */
         he = ht[table].table[idx];
         while(he) {
-            if (key==he->key || dictCompareKeys(this, key, he->key)) {
+            if (key==he->key || dictCompareKeys(key, he->key)) {
                 if (existing) *existing = he;
                 return -1;
             }
@@ -1014,7 +1018,7 @@ void dictDisableResize(void) {
 }
 
 unsigned int dict::dictGetHash(const void *key) {
-    return dictHashKey(this, key);
+    return dictHashKey(key);
 }
 
 /* Finds the dictEntry reference by using pointer and pre-calculated hash.
@@ -1186,7 +1190,7 @@ dictType BenchmarkDictType = {
 int main(int argc, char **argv) {
     long j;
     long long start, elapsed;
-    dict *dict = dictCreate(&BenchmarkDictType,NULL);
+    dict *_dict = dictCreate(&BenchmarkDictType,NULL);
     long count = 0;
 
     if (argc == 2) {
@@ -1197,21 +1201,21 @@ int main(int argc, char **argv) {
 
     start_benchmark();
     for (j = 0; j < count; j++) {
-        int retval = dictAdd(dict,sdsfromlonglong(j),(void*)j);
+        int retval = dict->dictAdd(sdsfromlonglong(j),(void*)j);
         assert(retval == DICT_OK);
     }
     end_benchmark("Inserting");
-    assert((long)dictSize(dict) == count);
+    assert((long)_dict->dictSize() == count);
 
     /* Wait for rehashing. */
     while (dict->dictIsRehashing()) {
-        dictRehashMilliseconds(dict,100);
+        dictRehashMilliseconds(_dict,100);
     }
 
     start_benchmark();
     for (j = 0; j < count; j++) {
         sds key = sdsfromlonglong(j);
-        dictEntry *de = dictFind(dict,key);
+        dictEntry *de = _dict->dictFind(key);
         assert(de != NULL);
         sdsfree(key);
     }
@@ -1220,7 +1224,7 @@ int main(int argc, char **argv) {
     start_benchmark();
     for (j = 0; j < count; j++) {
         sds key = sdsfromlonglong(j);
-        dictEntry *de = dictFind(dict,key);
+        dictEntry *de = _dict->dictFind(key);
         assert(de != NULL);
         sdsfree(key);
     }
@@ -1229,7 +1233,7 @@ int main(int argc, char **argv) {
     start_benchmark();
     for (j = 0; j < count; j++) {
         sds key = sdsfromlonglong(rand() % count);
-        dictEntry *de = dictFind(dict,key);
+        dictEntry *de = _dict->dictFind(key);
         assert(de != NULL);
         sdsfree(key);
     }
@@ -1239,7 +1243,7 @@ int main(int argc, char **argv) {
     for (j = 0; j < count; j++) {
         sds key = sdsfromlonglong(rand() % count);
         key[0] = 'X';
-        dictEntry *de = dictFind(dict,key);
+        dictEntry *de = _dict->dictFind(key);
         assert(de == NULL);
         sdsfree(key);
     }
@@ -1248,10 +1252,10 @@ int main(int argc, char **argv) {
     start_benchmark();
     for (j = 0; j < count; j++) {
         sds key = sdsfromlonglong(j);
-        int retval = dictDelete(dict,key);
+        int retval = _dict->dictDelete(key);
         assert(retval == DICT_OK);
         key[0] += 17; /* Change first number to letter. */
-        retval = dictAdd(dict,key,(void*)j);
+        retval = _dict->dictAdd(key,(void*)j);
         assert(retval == DICT_OK);
     }
     end_benchmark("Removing and adding");

@@ -652,7 +652,7 @@ void georadiusGeneric(client *c, int flags) {
 
             if (maxelelen < elelen) maxelelen = elelen;
             znode = zslInsert(zs->zsl,score,gp->member);
-            serverAssert(dictAdd(zs->_dict,gp->member,&znode->score) == DICT_OK);
+            serverAssert(zs->_dict->dictAdd(gp->member,&znode->score) == DICT_OK);
             gp->member = NULL;
         }
 

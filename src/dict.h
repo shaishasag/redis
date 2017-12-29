@@ -66,6 +66,19 @@
 class dictEntry {
 public:
     dictEntry(dictEntry *next_entry=NULL);
+
+// previously macros
+    inline void*    dictGetKey() const { return key; }
+    inline void*    dictGetVal() const { return v.val; }
+    inline int64_t  dictGetSignedIntegerVal() const { return v.s64; }
+    inline uint64_t dictGetUnsignedIntegerVal() const { return v.u64; }
+    inline double   dictGetDoubleVal() const { return v.d; }
+
+    inline void dictSetVal(void* _val_) { v.val = _val_; }
+    inline void dictSetSignedIntegerVal(long long _val_) { v.s64 = _val_; }
+    inline void dictSetUnsignedIntegerVal(unsigned long long _val_) { v.u64 = _val_; }
+    inline void dictSetDoubleVal(double _val_) { v.d = _val_; }
+
     void *key;
     union {
         void *val;
@@ -118,25 +131,64 @@ public:
     void _dictRehashStep(); // should be private?
     int dictAdd(void *key, void *val);
     dictEntry* dictAddRaw(void *key, dictEntry **existing);
-    int dictReplace(void *key, void *val);
     dictEntry* dictAddOrFind(void *key);
-    int dictDelete(const void *key);
     dictEntry* dictUnlink(const void *key);
-    void dictFreeUnlinkedEntry(dictEntry *he);
     dictEntry* dictFind(const void *key);
+    dictEntry* dictGetRandomKey();
+    int dictReplace(void *key, void *val);
+    int dictDelete(const void *key);
+    void dictFreeUnlinkedEntry(dictEntry *he);
     void* dictFetchValue(const void *key);
     long long dictFingerprint();
-    dictEntry* dictGetRandomKey();
     unsigned int dictGetSomeKeys(dictEntry **des, unsigned int count);
-    unsigned long dictScan(unsigned long v,
-                       dictScanFunction *fn,
+    unsigned long dictScan(unsigned long v, dictScanFunction *fn,
                        dictScanBucketFunction* bucketfn,
                        void *privdata);
     void dictEmpty(void(callback)(void*));
     unsigned int dictGetHash(const void *key);
     dictEntry** dictFindEntryRefByPtrAndHash(const void *oldptr, unsigned int hash);
 
-//private:    
+// previously macros
+    inline void dictFreeVal(dictEntry *entry)
+    {
+        if (type->valDestructor)
+            type->valDestructor(privdata, entry->v.val);
+    }
+
+    inline void dictSetVal(dictEntry *entry, void* _val_)
+    {
+        if (type->valDup)
+            entry->v.val = type->valDup(privdata, _val_);
+        else
+            entry->v.val = _val_;
+    }
+
+    inline void dictFreeKey(dictEntry *entry)
+    {
+        if (type->keyDestructor)
+            type->keyDestructor(privdata, entry->key);
+    }
+
+    inline void dictSetKey(dictEntry *entry, void* _key_)
+    {
+        if (type->keyDup)
+            entry->key = type->keyDup(privdata, _key_);
+        else
+            entry->key = _key_;
+    }
+
+    inline bool dictCompareKeys(const void* key1, const void* key2)
+    {
+        bool retVal = type->keyCompare ?
+                        type->keyCompare(privdata, key1, key2) :
+                        key1 == key2;
+        return retVal;
+    }
+
+    inline uint64_t dictHashKey(const void* key) { return type->hashFunction(key);}
+    inline unsigned long dictSlots() { return ht[0].size+ht[1].size; }
+    inline unsigned long dictSize() { return ht[0].used+ht[1].used; }
+//private:
     int _dictKeyIndex(const void *key, unsigned int hash, dictEntry **existing);
     int _dictExpandIfNeeded();
     dictEntry *dictGenericDelete(const void *key, int nofree);
@@ -172,82 +224,23 @@ public:
 #define DICT_HT_INITIAL_SIZE     4
 
 /* ------------------------------- Macros ------------------------------------*/
-#define dictFreeVal(d, entry) \
-    if ((d)->type->valDestructor) \
-        (d)->type->valDestructor((d)->privdata, (entry)->v.val)
-
-#define dictSetVal(d, entry, _val_) do { \
-    if ((d)->type->valDup) \
-        (entry)->v.val = (d)->type->valDup((d)->privdata, _val_); \
-    else \
-        (entry)->v.val = (_val_); \
-} while(0)
-
-#define dictSetSignedIntegerVal(entry, _val_) \
-    do { (entry)->v.s64 = _val_; } while(0)
-
-#define dictSetUnsignedIntegerVal(entry, _val_) \
-    do { (entry)->v.u64 = _val_; } while(0)
-
-#define dictSetDoubleVal(entry, _val_) \
-    do { (entry)->v.d = _val_; } while(0)
-
-#define dictFreeKey(d, entry) \
-    if ((d)->type->keyDestructor) \
-        (d)->type->keyDestructor((d)->privdata, (entry)->key)
-
-#define dictSetKey(d, entry, _key_) do { \
-    if ((d)->type->keyDup) \
-        (entry)->key = (d)->type->keyDup((d)->privdata, _key_); \
-    else \
-        (entry)->key = (_key_); \
-} while(0)
-
-#define dictCompareKeys(d, key1, key2) \
-    (((d)->type->keyCompare) ? \
-        (d)->type->keyCompare((d)->privdata, key1, key2) : \
-        (key1) == (key2))
-
-#define dictHashKey(d, key) (d)->type->hashFunction(key)
-#define dictGetKey(he) ((he)->key)
-#define dictGetVal(he) ((he)->v.val)
-#define dictGetSignedIntegerVal(he) ((he)->v.s64)
-#define dictGetUnsignedIntegerVal(he) ((he)->v.u64)
-#define dictGetDoubleVal(he) ((he)->v.d)
-#define dictSlots(d) ((d)->ht[0].size+(d)->ht[1].size)
-#define dictSize(d) ((d)->ht[0].used+(d)->ht[1].used)
 
 /* API */
 dict *dictCreate(dictType *type, void *privDataPtr);
-int dictAdd(dict *d, void *key, void *val);
-dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing);
-dictEntry *dictAddOrFind(dict *d, void *key);
-int dictReplace(dict *d, void *key, void *val);
-int dictDelete(dict *d, const void *key);
-dictEntry *dictUnlink(dict *ht, const void *key);
-void dictFreeUnlinkedEntry(dict *d, dictEntry *he);
 void dictRelease(dict *d);
-dictEntry * dictFind(dict *d, const void *key);
-void *dictFetchValue(dict *d, const void *key);
 dictIterator *dictGetIterator(dict *d);
 dictIterator *dictGetSafeIterator(dict *d);
 dictEntry *dictNext(dictIterator *iter);
 void dictReleaseIterator(dictIterator *iter);
-dictEntry *dictGetRandomKey(dict *d);
-unsigned int dictGetSomeKeys(dict *d, dictEntry **des, unsigned int count);
 void dictGetStats(char *buf, size_t bufsize, dict *d);
 uint64_t dictGenHashFunction(const void *key, int len);
 uint64_t dictGenCaseHashFunction(const unsigned char *buf, int len);
-void dictEmpty(dict *d, void(callback)(void*));
 void dictEnableResize(void);
 void dictDisableResize(void);
 
 int dictRehashMilliseconds(dict *d, int ms);
 void dictSetHashFunctionSeed(uint8_t *seed);
 uint8_t *dictGetHashFunctionSeed(void);
-unsigned long dictScan(dict *d, unsigned long v, dictScanFunction *fn, dictScanBucketFunction *bucketfn, void *privdata);
-unsigned int dictGetHash(dict *d, const void *key);
-dictEntry **dictFindEntryRefByPtrAndHash(dict *d, const void *oldptr, unsigned int hash);
 
 /* Hash table types */
 extern dictType dictTypeHeapStringCopyKey;

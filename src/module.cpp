@@ -413,9 +413,9 @@ int moduleDelKeyIfEmpty(RedisModuleKey *key) {
  * This function is not meant to be used by modules developer, it is only
  * used implicitly by including redismodule.h. */
 int RM_GetApi(const char *funcname, void **targetPtrPtr) {
-    dictEntry *he = dictFind(server.moduleapi, funcname);
+    dictEntry *he = server.moduleapi->dictFind(funcname);
     if (!he) return REDISMODULE_ERR;
-    *targetPtrPtr = dictGetVal(he);
+    *targetPtrPtr = he->dictGetVal();
     return REDISMODULE_OK;
 }
 
@@ -638,8 +638,8 @@ int RM_CreateCommand(RedisModuleCtx *ctx, const char *name, RedisModuleCmdFunc c
     cp->rediscmd->keystep = keystep;
     cp->rediscmd->microseconds = 0;
     cp->rediscmd->calls = 0;
-    dictAdd(server.commands,sdsdup(cmdname),cp->rediscmd);
-    dictAdd(server.orig_commands,sdsdup(cmdname),cp->rediscmd);
+    server.commands->dictAdd(sdsdup(cmdname),cp->rediscmd);
+    server.orig_commands->dictAdd(sdsdup(cmdname),cp->rediscmd);
     return REDISMODULE_OK;
 }
 
@@ -663,7 +663,7 @@ void RM_SetModuleAttribs(RedisModuleCtx *ctx, const char *name, int ver, int api
  * Otherwise zero is returned. */
 int RM_IsModuleNameBusy(const char *name) {
     sds modulename = sdsnew(name);
-    dictEntry *de = dictFind(modules,modulename);
+    dictEntry *de = modules->dictFind(modulename);
     sdsfree(modulename);
     return de != NULL;
 }
@@ -1306,77 +1306,9 @@ int RM_GetContextFlags(RedisModuleCtx *ctx) {
     int flags = 0;
     /* Client specific flags */
     if (ctx->_client) {
-        if (ctx->_client->flags & CLIENT_LUA) 
+        if (ctx->_client->flags & CLIENT_LUA)
          flags |= REDISMODULE_CTX_FLAGS_LUA;
-        if (ctx->_client->flags & CLIENT_MULTI) 
-         flags |= REDISMODULE_CTX_FLAGS_MULTI;
-    }
-
-    if (server.cluster_enabled)
-        flags |= REDISMODULE_CTX_FLAGS_CLUSTER;
-    
-    /* Maxmemory and eviction policy */
-    if (server.maxmemory > 0) {
-        flags |= REDISMODULE_CTX_FLAGS_MAXMEMORY;
-        
-        if (server.maxmemory_policy != MAXMEMORY_NO_EVICTION)
-            flags |= REDISMODULE_CTX_FLAGS_EVICT;
-    }
-
-    /* Persistence flags */
-    if (server.aof_state != AOF_OFF)
-        flags |= REDISMODULE_CTX_FLAGS_AOF;
-    if (server.saveparamslen > 0)
-        flags |= REDISMODULE_CTX_FLAGS_RDB;
-
-    /* Replication flags */
-    if (server.masterhost == NULL) {
-        flags |= REDISMODULE_CTX_FLAGS_MASTER;
-    } else {
-        flags |= REDISMODULE_CTX_FLAGS_SLAVE;
-        if (server.repl_slave_ro)
-            flags |= REDISMODULE_CTX_FLAGS_READONLY;
-    }
-    
-    return flags;
-}
-
-
-/* Return the current context's flags. The flags provide information on the 
- * current request context (whether the client is a Lua script or in a MULTI),
- * and about the Redis instance in general, i.e replication and persistence. 
- * 
- * The available flags are:
- * 
- *  * REDISMODULE_CTX_FLAGS_LUA: The command is running in a Lua script
- * 
- *  * REDISMODULE_CTX_FLAGS_MULTI: The command is running inside a transaction
- * 
- *  * REDISMODULE_CTX_FLAGS_MASTER: The Redis instance is a master
- * 
- *  * REDISMODULE_CTX_FLAGS_SLAVE: The Redis instance is a slave
- * 
- *  * REDISMODULE_CTX_FLAGS_READONLY: The Redis instance is read-only
- * 
- *  * REDISMODULE_CTX_FLAGS_CLUSTER: The Redis instance is in cluster mode
- * 
- *  * REDISMODULE_CTX_FLAGS_AOF: The Redis instance has AOF enabled
- * 
- *  * REDISMODULE_CTX_FLAGS_RDB: The instance has RDB enabled
- * 
- *  * REDISMODULE_CTX_FLAGS_MAXMEMORY:  The instance has Maxmemory set
- * 
- *  * REDISMODULE_CTX_FLAGS_EVICT:  Maxmemory is set and has an eviction
- *    policy that may delete keys
- */
-int RM_GetContextFlags(RedisModuleCtx *ctx) {
-    
-    int flags = 0;
-    /* Client specific flags */
-    if (ctx->client) {
-        if (ctx->client->flags & CLIENT_LUA) 
-         flags |= REDISMODULE_CTX_FLAGS_LUA;
-        if (ctx->client->flags & CLIENT_MULTI) 
+        if (ctx->_client->flags & CLIENT_MULTI)
          flags |= REDISMODULE_CTX_FLAGS_MULTI;
     }
 
@@ -2801,7 +2733,7 @@ moduleType *moduleTypeLookupModuleByName(const char *name) {
 
     dictIterator di(modules);
     while ((de = dictNext(&di)) != NULL) {
-        struct RedisModule* module = (RedisModule*)dictGetVal(de);
+        struct RedisModule* module = (RedisModule*)de->dictGetVal();
         listIter li;
         listNode *ln;
 
@@ -2838,7 +2770,7 @@ moduleType *moduleTypeLookupModuleByID(uint64_t id) {
     dictEntry *de;
 
     while ((de = dictNext(&di)) != NULL && mt == NULL) {
-        struct RedisModule* module = (RedisModule*)dictGetVal(de);
+        struct RedisModule* module = (RedisModule*)de->dictGetVal();
         listIter li;
         listNode *ln;
 
@@ -3754,7 +3686,7 @@ dictType moduleAPIDictType = {
 };
 
 int moduleRegisterApi(const char *funcname, void *funcptr) {
-    return dictAdd(server.moduleapi, (char*)funcname, funcptr);
+    return server.moduleapi->dictAdd((char*)funcname, funcptr);
 }
 
 #define REGISTER_API(name) \
@@ -3823,14 +3755,14 @@ void moduleUnregisterCommands(RedisModule *module) {
     dictIterator di(server.commands, 1);
     dictEntry *de;
     while ((de = dictNext(&di)) != NULL) {
-        struct redisCommand* cmd = (redisCommand*)dictGetVal(de);
+        struct redisCommand* cmd = (redisCommand*)de->dictGetVal();
         if (cmd->proc == RedisModuleCommandDispatcher) {
             RedisModuleCommandProxy *cp =
                 (RedisModuleCommandProxy *)(unsigned long)cmd->getkeys_proc;
             sds cmdname = cp->rediscmd->name;
             if (cp->module == module) {
-                dictDelete(server.commands,cmdname);
-                dictDelete(server.orig_commands,cmdname);
+                server.commands->dictDelete(cmdname);
+                server.orig_commands->dictDelete(cmdname);
                 sdsfree(cmdname);
                 zfree(cp->rediscmd);
                 zfree(cp);
@@ -3870,7 +3802,7 @@ int moduleLoad(const char *path, void **module_argv, int module_argc) {
     }
 
     /* Redis module loaded! Register it. */
-    dictAdd(modules,ctx.module->name,ctx.module);
+    modules->dictAdd(ctx.module->name,ctx.module);
     ctx.module->handle = handle;
     serverLog(LL_NOTICE,"Module '%s' loaded from %s",ctx.module->name,path);
     moduleFreeContext(&ctx);
@@ -3884,7 +3816,7 @@ int moduleLoad(const char *path, void **module_argv, int module_argc) {
  * * ENONET: No such module having the specified name.
  * * EBUSY: The module exports a new data type and can only be reloaded. */
 int moduleUnload(sds name) {
-    RedisModule *module = (RedisModule *)dictFetchValue(modules,name);
+    RedisModule *module = (RedisModule *)modules->dictFetchValue(name);
 
     if (module == NULL) {
         errno = ENOENT;
@@ -3910,7 +3842,7 @@ int moduleUnload(sds name) {
 
     /* Remove from list of modules. */
     serverLog(LL_NOTICE,"Module %s unloaded",module->name);
-    dictDelete(modules,module->name);
+    modules->dictDelete(module->name);
     module->name = NULL; /* The name was already freed by dictDelete(). */
     moduleFreeModuleStructure(module);
 
@@ -3959,10 +3891,10 @@ void moduleCommand(client *c) {
         dictIterator di(modules);
         dictEntry *de;
 
-        addReplyMultiBulkLen(c,dictSize(modules));
+        addReplyMultiBulkLen(c,modules->dictSize());
         while ((de = dictNext(&di)) != NULL) {
-            sds name = (sds)dictGetKey(de);
-            struct RedisModule* module = (RedisModule*)dictGetVal(de);
+            sds name = (sds)de->dictGetKey();
+            struct RedisModule* module = (RedisModule*)de->dictGetVal();
             addReplyMultiBulkLen(c,4);
             addReplyBulkCString(c,"name");
             addReplyBulkCBuffer(c,name,sdslen(name));
@@ -3976,7 +3908,7 @@ void moduleCommand(client *c) {
 
 /* Return the number of registered modules. */
 size_t moduleCount(void) {
-    return dictSize(modules);
+    return modules->dictSize();
 }
 
 /* Register all the APIs we export. Keep this function at the end of the

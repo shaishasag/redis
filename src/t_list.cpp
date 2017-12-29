@@ -634,21 +634,21 @@ void blockForKeys(client *c, robj **keys, int numkeys, mstime_t timeout, robj *t
 
     for (j = 0; j < numkeys; j++) {
         /* If the key already exists in the dict ignore it. */
-        if (dictAdd(c->bpop.keys,keys[j],NULL) != DICT_OK) continue;
+        if (c->bpop.keys->dictAdd(keys[j],NULL) != DICT_OK) continue;
         incrRefCount(keys[j]);
 
         /* And in the other "side", to map keys -> clients */
-        de = dictFind(c->db->blocking_keys,keys[j]);
+        de = c->db->blocking_keys->dictFind(keys[j]);
         if (de == NULL) {
             int retval;
 
             /* For every key we take a list of clients blocked for it */
             l = listCreate();
-            retval = dictAdd(c->db->blocking_keys,keys[j],l);
+            retval = c->db->blocking_keys->dictAdd(keys[j],l);
             incrRefCount(keys[j]);
             serverAssertWithInfo(c,keys[j],retval == DICT_OK);
         } else {
-            l = (list *)dictGetVal(de);
+            l = (list *)de->dictGetVal();
         }
         listAddNodeTail(l,c);
     }
@@ -659,27 +659,26 @@ void blockForKeys(client *c, robj **keys, int numkeys, mstime_t timeout, robj *t
  * You should never call this function directly, but unblockClient() instead. */
 void unblockClientWaitingData(client *c) {
     dictEntry *de;
-    list *l;
 
-    serverAssertWithInfo(c,NULL,dictSize(c->bpop.keys) != 0);
+    serverAssertWithInfo(c,NULL,c->bpop.keys->dictSize() != 0);
     {
         dictIterator di(c->bpop.keys);
         /* The client may wait for multiple keys, so unblock it for every key. */
         while((de = dictNext(&di)) != NULL) {
-            robj *key = (robj *)dictGetKey(de);
+            robj *key = (robj *)de->dictGetKey();
 
             /* Remove this client from the list of clients waiting for this key. */
-            l = (list *)dictFetchValue(c->db->blocking_keys,key);
+            list *l = (list *)(c->db->blocking_keys)->dictFetchValue(key);
             serverAssertWithInfo(c,key,l != NULL);
             listDelNode(l,listSearchKey(l,c));
             /* If the list is empty we need to remove it to avoid wasting memory */
             if (listLength(l) == 0)
-                dictDelete(c->db->blocking_keys,key);
+                c->db->blocking_keys->dictDelete(key);
         }
     }
     
     /* Cleanup the client structure */
-    dictEmpty(c->bpop.keys,NULL);
+    c->bpop.keys->dictEmpty(NULL);
     if (c->bpop.target) {
         decrRefCount(c->bpop.target);
         c->bpop.target = NULL;
@@ -697,10 +696,10 @@ void signalListAsReady(redisDb *db, robj *key) {
     readyList *rl;
 
     /* No clients blocking for this key? No need to queue it. */
-    if (dictFind(db->blocking_keys,key) == NULL) return;
+    if (db->blocking_keys->dictFind(key) == NULL) return;
 
     /* Key was already signaled? No need to queue it again. */
-    if (dictFind(db->ready_keys,key) != NULL) return;
+    if (db->ready_keys->dictFind(key) != NULL) return;
 
     /* Ok, we need to queue this key into server.ready_keys. */
     rl = (readyList *)zmalloc(sizeof(*rl));
@@ -713,7 +712,7 @@ void signalListAsReady(redisDb *db, robj *key) {
      * to avoid adding it multiple times into a list with a simple O(1)
      * check. */
     incrRefCount(key);
-    serverAssert(dictAdd(db->ready_keys,key,NULL) == DICT_OK);
+    serverAssert(db->ready_keys->dictAdd(key,NULL) == DICT_OK);
 }
 
 /* This is a helper function for handleClientsBlockedOnLists(). It's work
@@ -812,7 +811,7 @@ void handleClientsBlockedOnLists(void) {
 
             /* First of all remove this key from db->ready_keys so that
              * we can safely call signalListAsReady() against this key. */
-            dictDelete(rl->db->ready_keys,rl->key);
+            rl->db->ready_keys->dictDelete(rl->key);
 
             /* If the key exists and it's a list, serve blocked clients
              * with data. */
@@ -822,9 +821,9 @@ void handleClientsBlockedOnLists(void) {
 
                 /* We serve clients in the same order they blocked for
                  * this key, from the first blocked to the last. */
-                de = dictFind(rl->db->blocking_keys,rl->key);
+                de = rl->db->blocking_keys->dictFind(rl->key);
                 if (de) {
-                    list* clients = (list*)dictGetVal(de);
+                    list* clients = (list*)de->dictGetVal();
                     int numclients = listLength(clients);
 
                     while(numclients--) {

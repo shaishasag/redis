@@ -125,7 +125,7 @@ void computeDatasetDigest(unsigned char *final) {
     for (j = 0; j < server.dbnum; j++) {
         redisDb *db = server.db+j;
 
-        if (dictSize(db->_dict) == 0) continue;
+        if (db->_dict->dictSize() == 0) continue;
         
         dictIterator di(db->_dict, 1);
 
@@ -141,12 +141,12 @@ void computeDatasetDigest(unsigned char *final) {
             long long expiretime;
 
             memset(digest,0,20); /* This key-val digest */
-            key = (sds)dictGetKey(de);
+            key = (sds)de->dictGetKey();
             keyobj = createStringObject(key,sdslen(key));
 
             mixDigest(digest,key,sdslen(key));
 
-            o = (robj *)dictGetVal(de);
+            o = (robj *)de->dictGetVal();
 
             aux = htonl(o->type);
             mixDigest(digest,&aux,sizeof(aux));
@@ -211,8 +211,8 @@ void computeDatasetDigest(unsigned char *final) {
                     dictEntry *de;
 
                     while((de = dictNext(&di)) != NULL) {
-                        sds sdsele = (sds)dictGetKey(de);
-                        double* score = (double*)dictGetVal(de);
+                        sds sdsele = (sds)de->dictGetKey();
+                        double* score = (double*)de->dictGetVal();
 
                         snprintf(buf,sizeof(buf),"%.17g",*score);
                         memset(eledigest,0,20);
@@ -365,11 +365,11 @@ void debugCommand(client *c) {
         robj *val;
         char *strenc;
 
-        if ((de = dictFind(c->db->_dict,c->argv[2]->ptr)) == NULL) {
+        if ((de = c->db->_dict->dictFind(c->argv[2]->ptr)) == NULL) {
             addReply(c,shared.nokeyerr);
             return;
         }
-        val = (robj *)dictGetVal(de);
+        val = (robj *)de->dictGetVal();
         strenc = strEncoding(val->encoding);
 
         char extra[138] = {0};
@@ -417,12 +417,12 @@ void debugCommand(client *c) {
         robj *val;
         sds key;
 
-        if ((de = dictFind(c->db->_dict,c->argv[2]->ptr)) == NULL) {
+        if ((de = c->db->_dict->dictFind(c->argv[2]->ptr)) == NULL) {
             addReply(c,shared.nokeyerr);
             return;
         }
-        val = (robj *)dictGetVal(de);
-        key = (sds)dictGetKey(de);
+        val = (robj *)de->dictGetVal();
+        key = (sds)de->dictGetKey();
 
         if (val->type != OBJ_STRING || !sdsEncodedObject(val)) {
             addReplyError(c,"Not an sds encoded string.");
@@ -915,9 +915,9 @@ void logCurrentClient(void) {
         dictEntry *de;
 
         key = getDecodedObject(cc->argv[1]);
-        de = dictFind(cc->db->_dict, key->ptr);
+        de = cc->db->_dict->dictFind(key->ptr);
         if (de) {
-            val = (robj *)dictGetVal(de);
+            val = (robj *)de->dictGetVal();
             serverLog(LL_WARNING,"key '%s' found in DB containing the following object:", (char*)key->ptr);
             serverLogObjectDebugInfo(val);
         }

@@ -71,9 +71,9 @@ int sortPointers(const void *a, const void *b) {
 void stressGetKeys(dict *d, int times, int *perfect_run, int *approx_run) {
     int j;
 
-    dictEntry **des = (dictEntry **)zmalloc(sizeof(dictEntry*)*dictSize(d));
+    dictEntry **des = (dictEntry **)zmalloc(sizeof(dictEntry*)*d->dictSize());
     for (j = 0; j < times; j++) {
-        int requested = rand() % (dictSize(d)+1);
+        int requested = rand() % (d->dictSize()+1);
         int returned = dictGetSomeKeys(d, des, requested);
         int dup = 0;
 
@@ -107,10 +107,10 @@ int main(void) {
         dictAdd(d,(void*)i,NULL);
         show(d);
     }
-    printf("Size: %d\n", (int)dictSize(d));
+    printf("Size: %d\n", (int)d->dictSize());
 
     for (i = 0; i < MAX1; i++) {
-        dictDelete(d,(void*)i);
+        d->dictDelete((void*)i);
         dictResize(d);
         show(d);
     }
@@ -127,7 +127,7 @@ int main(void) {
     }
 
     for (i = 0; i < MAX2; i++) {
-        dictDelete(d,(void*)i);
+        d->dictDelete((void*)i);
         dictResize(d);
         stressGetKeys(d,100,&perfect_run,&approx_run);
     }

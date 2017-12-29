@@ -564,14 +564,14 @@ void loadServerConfigFromString(char *config) {
 
             /* If the target command name is the empty string we just
              * remove it from the command table. */
-            retval = dictDelete(server.commands, argv[1]);
+            retval = server.commands->dictDelete( argv[1]);
             serverAssert(retval == DICT_OK);
 
             /* Otherwise we re-add the command under a different name. */
             if (sdslen(argv[2]) != 0) {
                 sds copy = sdsdup(argv[2]);
 
-                retval = dictAdd(server.commands, copy, cmd);
+                retval = server.commands->dictAdd(copy, cmd);
                 if (retval != DICT_OK) {
                     sdsfree(copy);
                     err = "Target command name already exists"; goto loaderr;
@@ -1470,11 +1470,11 @@ void rewriteConfigAppendLine(struct rewriteConfigState *state, sds line) {
 
 /* Populate the option -> list of line numbers map. */
 void rewriteConfigAddLineNumberToOption(struct rewriteConfigState *state, sds option, int linenum) {
-    list *l = (list *)dictFetchValue(state->option_to_line,option);
+    list *l = (list *)state->option_to_line->dictFetchValue(option);
 
     if (l == NULL) {
         l = listCreate();
-        dictAdd(state->option_to_line,sdsdup(option),l);
+        state->option_to_line->dictAdd(sdsdup(option),l);
     }
     listAddNodeTail(l,(void*)(long)linenum);
 }
@@ -1486,7 +1486,7 @@ void rewriteConfigAddLineNumberToOption(struct rewriteConfigState *state, sds op
 void rewriteConfigMarkAsProcessed(struct rewriteConfigState *state, const char *option) {
     sds opt = sdsnew(option);
 
-    if (dictAdd(state->rewritten,opt,NULL) != DICT_OK) sdsfree(opt);
+    if (state->rewritten->dictAdd(opt,NULL) != DICT_OK) sdsfree(opt);
 }
 
 /* Read the old file, split it into lines to populate a newly created
@@ -1569,7 +1569,7 @@ struct rewriteConfigState *rewriteConfigReadOldFile(char *path) {
  * in any way. */
 void rewriteConfigRewriteLine(struct rewriteConfigState *state, const char *option, sds line, int force) {
     sds o = sdsnew(option);
-    list *l = (list *)dictFetchValue(state->option_to_line,o);
+    list *l = (list *)state->option_to_line->dictFetchValue(o);
 
     rewriteConfigMarkAsProcessed(state,option);
 
@@ -1587,7 +1587,7 @@ void rewriteConfigRewriteLine(struct rewriteConfigState *state, const char *opti
         /* There are still lines in the old configuration file we can reuse
          * for this option. Replace the line with the new one. */
         listDelNode(l,ln);
-        if (listLength(l) == 0) dictDelete(state->option_to_line,o);
+        if (listLength(l) == 0) state->option_to_line->dictDelete(o);
         sdsfree(state->lines[linenum]);
         state->lines[linenum] = line;
     } else {
@@ -1851,12 +1851,12 @@ void rewriteConfigRemoveOrphaned(struct rewriteConfigState *state) {
     dictEntry *de;
 
     while((de = dictNext(&di)) != NULL) {
-        list* l = (list*)dictGetVal(de);
-        sds option = (sds)dictGetKey(de);
+        list* l = (list*)de->dictGetVal();
+        sds option = (sds)de->dictGetKey();
 
         /* Don't blank lines about options the rewrite process
          * don't understand. */
-        if (dictFind(state->rewritten,option) == NULL) {
+        if (state->rewritten->dictFind(option) == NULL) {
             serverLog(LL_DEBUG,"Not rewritten option: %s", option);
             continue;
         }
