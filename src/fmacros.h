@@ -59,3 +59,5 @@
 #define _FILE_OFFSET_BITS 64
 
 #endif
+#include <fstream>
+extern std::ofstream outer;

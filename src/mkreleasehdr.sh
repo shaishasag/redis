@@ -8,4 +8,4 @@ test -f release.h || touch release.h
 echo "#define REDIS_GIT_SHA1 \"$GIT_SHA1\"" > release.h
 echo "#define REDIS_GIT_DIRTY \"$GIT_DIRTY\"" >> release.h
 echo "#define REDIS_BUILD_ID \"$BUILD_ID\"" >> release.h
-touch release.c # Force recompile of release.c
+touch release.cpp # Force recompile of release.cpp

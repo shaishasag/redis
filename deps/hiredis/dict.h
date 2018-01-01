@@ -108,7 +108,7 @@ typedef struct dictIterator {
 #define dictGetEntryKey(he) ((he)->key)
 #define dictGetEntryVal(he) ((he)->val)
 #define dictSlots(ht) ((ht)->size)
-#define ht->dictSize() ((ht)->used)
+#define dictSize(ht) ((ht)->used)
 
 /* API */
 static unsigned int dictGenHashFunction(const unsigned char *buf, int len);

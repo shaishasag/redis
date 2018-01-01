@@ -53,6 +53,7 @@
  */
 
 #include <stdint.h>
+#include <assert.h>
 
 #ifndef __DICT_H
 #define __DICT_H
@@ -102,16 +103,39 @@ struct dictType {
  * implement incremental rehashing, for the old to the new table. */
 class dictht {
 public:
-    dictht();
+    dictht(const unsigned long new_size = 0);
+    dictht(dictht&& in_move_me);
+    dictht& operator=(dictht&& in_move_me);
     ~dictht();
-    void reset();
 
-//private:     
-    dictEntry **table;
-    unsigned long size;
-    unsigned long sizemask;
-    unsigned long used;
-} ;
+    void reset();
+    void free_table();
+
+    inline bool empty() const {return m_table == NULL;}
+    inline dictEntry*& operator[](const size_t ind)
+    {
+        return m_table[ind];
+    }
+    inline unsigned long  size() const {return m_size;}
+    inline unsigned long  sizemask() const {return m_sizemask;}
+    inline unsigned long& used() {return m_used;}
+
+    inline void* peek_table() {return (void*)m_table;} // for dict::dictFingerprint
+private:
+    dictEntry **  m_table;
+    unsigned long m_size;
+    unsigned long m_sizemask;
+    unsigned long m_used;
+
+    dictht(const dictht& in_move_me);
+    dictht& operator=(const dictht& in_move_me);
+};
+
+std::ostream& operator<<(std::ostream& os, dictht& out_me)
+{
+    os << "m_size: " << out_me.size() << ", m_sizemask: " << out_me.sizemask() << ", m_used: " << out_me.used() << ", m_table: " << out_me.peek_table();
+    return os;
+}
 
 typedef void (dictScanFunction)(void *privdata, const dictEntry *de);
 typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
@@ -123,7 +147,7 @@ public:
     dict();
     dict(dictType *in_type, void *in_privDataPtr);
     ~dict();
-    
+
     inline bool dictIsRehashing() { return rehashidx != -1;}
     int dictResize();
     int dictExpand(unsigned long size);
@@ -186,8 +210,8 @@ public:
     }
 
     inline uint64_t dictHashKey(const void* key) { return type->hashFunction(key);}
-    inline unsigned long dictSlots() { return ht[0].size+ht[1].size; }
-    inline unsigned long dictSize() { return ht[0].used+ht[1].used; }
+    inline unsigned long dictSlots() { return ht[0].size()+ht[1].size(); }
+    inline unsigned long dictSize() { return ht[0].used()+ht[1].used(); }
 //private:
     int _dictKeyIndex(const void *key, unsigned int hash, dictEntry **existing);
     int _dictExpandIfNeeded();
@@ -200,6 +224,13 @@ public:
     long rehashidx; /* rehashing not in progress if rehashidx == -1 */
     unsigned long iterators; /* number of iterators currently running */
 } ;
+
+std::ostream& operator<<(std::ostream& os, dict& out_me)
+{
+    os << "ht[0]: (" << out_me.ht[0] << "), ht[1]: (" << out_me.ht[1] << "), ";
+    os << "rehashidx: " << out_me.rehashidx << ", iterators: " << out_me.iterators;
+    return os;
+}
 
 /* If safe is set to 1 this is a safe iterator, that means, you can call
  * dictAdd, dictFind, and other functions against the dictionary even while
