@@ -1539,7 +1539,6 @@ sds catClientInfoString(sds s, client *client) {
 sds getAllClientsInfoString(void) {
     listNode *ln;
     listIter li;
-    client;
     sds o = sdsnewlen(NULL,200*listLength(server.clients));
     sdsclear(o);
     listRewind(server.clients,&li);

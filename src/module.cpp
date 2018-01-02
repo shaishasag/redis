@@ -3629,7 +3629,7 @@ RedisModuleCtx *RM_GetThreadSafeContext(RedisModuleBlockedClient *bc) {
      * things. */
     ctx->_client = createClient(-1);
     if (bc) selectDb(ctx->_client,bc->dbid);
-
+    return ctx;
 }
 
 /* Release a thread safe context. */

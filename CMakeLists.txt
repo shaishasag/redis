@@ -3,7 +3,7 @@ project(redispp)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_executable(redispp
+set (HIREDIS_SOURCES
         deps/hiredis/adapters/ae.h
         deps/hiredis/adapters/glib.h
         deps/hiredis/adapters/ivykis.h
@@ -38,6 +38,8 @@ add_executable(redispp
         deps/hiredis/sdsalloc.h
         deps/hiredis/test.c
         deps/hiredis/win32.h
+)
+SET(JEMALLOC_SOURCES
         deps/jemalloc/include/jemalloc/internal/arena.h
         deps/jemalloc/include/jemalloc/internal/atomic.h
         deps/jemalloc/include/jemalloc/internal/base.h
@@ -96,6 +98,8 @@ add_executable(redispp
         deps/jemalloc/src/util.c
         deps/jemalloc/src/valgrind.c
         deps/jemalloc/src/zone.c
+)
+SET(JEMALLOC_TEST_SOURCES
         deps/jemalloc/test/include/test/btalloc.h
         deps/jemalloc/test/include/test/math.h
         deps/jemalloc/test/include/test/mq.h
@@ -169,9 +173,13 @@ add_executable(redispp
         deps/jemalloc/test/unit/tsd.c
         deps/jemalloc/test/unit/util.c
         deps/jemalloc/test/unit/zero.c
+)
+SET(LINENOISE_SOURCES
         deps/linenoise/example.c
         deps/linenoise/linenoise.c
         deps/linenoise/linenoise.h
+)
+SET(LUA_SOURCES
         deps/lua/etc/all.c
         deps/lua/etc/lua.hpp
         deps/lua/etc/min.c
@@ -239,10 +247,24 @@ add_executable(redispp
         deps/lua/src/print.c
         deps/lua/src/strbuf.c
         deps/lua/src/strbuf.h
+)
+SET(HELLO_MODULES_SOURCES
         src/modules/helloblock.c
         src/modules/hellotype.c
         src/modules/helloworld.c
         src/modules/testmodule.c
+)
+SET(WEIRD_SOURCES
+        src/redis-benchmark.cpp
+        src/redis-check-aof.cpp
+        src/redis-check-rdb.cpp
+        src/redis-cli.cpp
+        utils/hashtable/rehashing.c
+        utils/lru/lfu-simulation.c
+        utils/corrupt_rdb.c
+)
+
+SET(REDIS_SERVER_SOURCES_EX
         src/adlist.cpp
         src/adlist.h
         src/ae.cpp
@@ -317,10 +339,6 @@ add_executable(redispp
         src/rax_malloc.h
         src/rdb.cpp
         src/rdb.h
-        src/redis-benchmark.cpp
-        src/redis-check-aof.cpp
-        src/redis-check-rdb.cpp
-        src/redis-cli.cpp
         src/redisassert.h
         src/redismodule.h
         src/release.cpp
@@ -362,6 +380,98 @@ add_executable(redispp
         src/zipmap.h
         src/zmalloc.cpp
         src/zmalloc.h
-        utils/hashtable/rehashing.c
-        utils/lru/lfu-simulation.c
-        utils/corrupt_rdb.c)
+)
+
+SET(REDIS_SERVER_SOURCES
+    src/adlist.cpp
+    src/ae.cpp
+    src/anet.cpp
+    src/aof.cpp
+    src/bio.cpp
+    src/bitops.cpp
+    src/blocked.cpp
+    src/childinfo.cpp
+    src/cluster.cpp
+    src/config.cpp
+    src/crc16.cpp
+    src/crc64.cpp
+    src/db.cpp
+    src/debug.cpp
+    src/defrag.cpp
+    src/dict.cpp
+    src/endianconv.cpp
+    src/evict.cpp
+    src/expire.cpp
+    src/geo.cpp
+    src/geohash_helper.cpp
+    src/geohash.cpp
+    src/hyperloglog.cpp
+    src/intset.cpp
+    src/latency.cpp
+    src/lazyfree.cpp
+    src/lzf_c.cpp
+    src/lzf_d.cpp
+    src/memtest.cpp
+    src/module.cpp
+    src/multi.cpp
+    src/networking.cpp
+    src/notify.cpp
+    src/object.cpp
+    src/pqsort.cpp
+    src/pubsub.cpp
+    src/quicklist.cpp
+    src/rand.cpp
+    src/rax.cpp
+    src/rdb.cpp
+    src/redis-check-aof.cpp
+    src/redis-check-rdb.cpp
+    src/release.cpp
+    src/replication.cpp
+    src/rio.cpp
+    src/scripting.cpp
+    src/sds.cpp
+    src/sentinel.cpp
+    src/server.cpp
+    src/setproctitle.cpp
+    src/sha1.cpp
+    src/siphash.cpp
+    src/slowlog.cpp
+    src/sort.cpp
+    src/sparkline.cpp
+    src/syncio.cpp
+    src/t_hash.cpp
+    src/t_list.cpp
+    src/t_set.cpp
+    src/t_string.cpp
+    src/t_zset.cpp
+    src/util.cpp
+    src/ziplist.cpp
+    src/zipmap.cpp
+    src/zmalloc.cpp
+)
+
+
+SET(CMAKE_OSX_SYSROOT /Applications/Xcode7.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk)
+SET(CMAKE_OSX_DEPLOYMENT_TARGET 10.10)
+
+include_directories(SYSTEM
+    /Applications/Xcode7.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk/usr/include/mach)
+include_directories(
+        deps/hiredis
+        deps/linenoise
+        deps/lua/src
+        deps/jemalloc/include
+)
+add_definitions(
+        -DMALLOC=jemalloc
+)
+set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} -DREDIS_STATIC='')
+
+add_library(lua STATIC ${LUA_SOURCES})
+add_library(jemalloc STATIC ${JEMALLOC_SOURCES})
+
+add_executable(redispp
+        ${REDIS_SERVER_SOURCES})
+target_compile_options(redispp PRIVATE -Wno-comment -Wno-writable-strings -Wno-empty-body)
+target_link_libraries(redispp lua)
+target_link_libraries(redispp jemalloc)
