@@ -391,7 +391,7 @@ sds createLatencyReport(void) {
         /* Better VM. */
         report = sdscat(report,"\nI have a few advices for you:\n\n");
         if (advise_better_vm) {
-            report = sdscat(report,"- If you are using a virtual machine, consider upgrading it with a faster one using an hypervisior that provides less latency during fork() calls. Xen is known to have poor fork() performance. Even in the context of the same VM provider, certain kinds of instances can execute fork faster than others.\n");
+            report = sdscat(report,"- If you are using a virtual machine, consi§r upgrading it with a faster one using an hypervisior that provides less latency during fork() calls. Xen is known to have poor fork() performance. Even in the context of the same VM provider, certain kinds of instances can execute fork faster than others.\n");
         }
 
         /* Slow log. */

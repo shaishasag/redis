@@ -63,31 +63,45 @@
 
 /* Unused arguments generate annoying warnings... */
 #define DICT_NOTUSED(V) ((void) V)
-
+class dict;
 class dictEntry {
 public:
+    friend class dict;
+
     dictEntry(dictEntry *next_entry=NULL);
 
+    inline void*      key()  {return m_key;};
+    inline dictEntry* next() {return m_next;}
+
 // previously macros
-    inline void*    dictGetKey() const { return key; }
+    inline void*    dictGetKey() const { return m_key; }
     inline void*    dictGetVal() const { return v.val; }
     inline int64_t  dictGetSignedIntegerVal() const { return v.s64; }
     inline uint64_t dictGetUnsignedIntegerVal() const { return v.u64; }
     inline double   dictGetDoubleVal() const { return v.d; }
 
+    inline void dictSetKey(void* new_key) {m_key = new_key;}
     inline void dictSetVal(void* _val_) { v.val = _val_; }
     inline void dictSetSignedIntegerVal(long long _val_) { v.s64 = _val_; }
     inline void dictSetUnsignedIntegerVal(unsigned long long _val_) { v.u64 = _val_; }
     inline void dictSetDoubleVal(double _val_) { v.d = _val_; }
 
-    void *key;
+    dictEntry& operator=(const dictEntry& in_to_copy)
+    {
+        m_key = in_to_copy.m_key;
+        v = in_to_copy.v;
+        m_next = in_to_copy.m_next;
+    }
+
+private:
+    void *m_key;
     union {
         void *val;
         uint64_t u64;
         int64_t s64;
         double d;
     } v;
-    dictEntry *next;
+    dictEntry *m_next;
 } ;
 
 struct dictType {
@@ -120,7 +134,7 @@ public:
     inline unsigned long  sizemask() const {return m_sizemask;}
     inline unsigned long& used() {return m_used;}
 
-    inline void* peek_table() {return (void*)m_table;} // for dict::dictFingerprint
+    inline void* peek_table() {return (void*)m_table;} // for dict::dictFingerprint & debugging
 private:
     dictEntry **  m_table;
     unsigned long m_size;
@@ -131,11 +145,7 @@ private:
     dictht& operator=(const dictht& in_move_me);
 };
 
-std::ostream& operator<<(std::ostream& os, dictht& out_me)
-{
-    os << "m_size: " << out_me.size() << ", m_sizemask: " << out_me.sizemask() << ", m_used: " << out_me.used() << ", m_table: " << out_me.peek_table();
-    return os;
-}
+std::ostream& operator<<(std::ostream& os, dictht& out_me);
 
 typedef void (dictScanFunction)(void *privdata, const dictEntry *de);
 typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
@@ -176,29 +186,29 @@ public:
     inline void dictFreeVal(dictEntry *entry)
     {
         if (type->valDestructor)
-            type->valDestructor(privdata, entry->v.val);
+            type->valDestructor(privdata, entry->dictGetVal());
     }
 
     inline void dictSetVal(dictEntry *entry, void* _val_)
     {
         if (type->valDup)
-            entry->v.val = type->valDup(privdata, _val_);
+            entry->dictSetVal(type->valDup(privdata, _val_));
         else
-            entry->v.val = _val_;
+            entry->dictSetVal(_val_);
     }
 
     inline void dictFreeKey(dictEntry *entry)
     {
         if (type->keyDestructor)
-            type->keyDestructor(privdata, entry->key);
+            type->keyDestructor(privdata, entry->key());
     }
 
     inline void dictSetKey(dictEntry *entry, void* _key_)
     {
         if (type->keyDup)
-            entry->key = type->keyDup(privdata, _key_);
+            entry->dictSetKey(type->keyDup(privdata, _key_));
         else
-            entry->key = _key_;
+            entry->dictSetKey(_key_);
     }
 
     inline bool dictCompareKeys(const void* key1, const void* key2)
@@ -225,12 +235,7 @@ public:
     unsigned long iterators; /* number of iterators currently running */
 } ;
 
-std::ostream& operator<<(std::ostream& os, dict& out_me)
-{
-    os << "ht[0]: (" << out_me.ht[0] << "), ht[1]: (" << out_me.ht[1] << "), ";
-    os << "rehashidx: " << out_me.rehashidx << ", iterators: " << out_me.iterators;
-    return os;
-}
+std::ostream& operator<<(std::ostream& os, dict& out_me);
 
 /* If safe is set to 1 this is a safe iterator, that means, you can call
  * dictAdd, dictFind, and other functions against the dictionary even while

@@ -52,7 +52,7 @@
 #endif
 #include <new>
 
-std::ofstream outer("/Users/shai/Desktop/redispp.out.txt", std::ios::app);
+//std::ofstream outer("/Users/shai/Desktop/redispp.out.txt", std::ios::app);
 
 /* Using dictEnableResize() / dictDisableResize() we make possible to
  * enable/disable resizing of the hash table as needed. This is very important
@@ -110,8 +110,8 @@ static void dictEntryRelease(dictEntry* in_to_release)
 }
 
 dictEntry::dictEntry(dictEntry *next_entry)
-: key(NULL)
-, next(next_entry)
+: m_key(NULL)
+, m_next(next_entry)
 {
     v.val = NULL;
 }
@@ -203,10 +203,8 @@ dict::~dict()
  * but with the invariant of a USED/BUCKETS ratio near to <= 1 */
 int dict::dictResize()
 {
-    int minimal;
-
     if (!dict_can_resize || dictIsRehashing()) return DICT_ERR;
-    minimal = ht[0].used();
+    int minimal = ht[0].used();
     if (minimal < DICT_HT_INITIAL_SIZE)
         minimal = DICT_HT_INITIAL_SIZE;
     return dictExpand(minimal);
@@ -256,8 +254,6 @@ int dict::dictRehash(int n)
     if (!dictIsRehashing()) return 0;
 
     while(n-- && ht[0].used() != 0) {
-        dictEntry *de, *nextde;
-
         /* Note that rehashidx can't overflow as we are sure there are more
          * elements because ht[0].used != 0 */
         assert(ht[0].size() > (unsigned long)rehashidx);
@@ -265,15 +261,15 @@ int dict::dictRehash(int n)
             rehashidx++;
             if (--empty_visits == 0) return 1;
         }
-        de = ht[0][rehashidx];
+        dictEntry *de = ht[0][rehashidx];
         /* Move all the keys in this bucket from the old to the new hash HT */
         while(de) {
             uint64_t h;
 
-            nextde = de->next;
+            dictEntry *nextde = de->m_next;
             /* Get the index in the new hash table */
-            h = dictHashKey(de->key) & ht[1].sizemask();
-            de->next = ht[1][h];
+            h = dictHashKey(de->m_key) & ht[1].sizemask();
+            de->m_next = ht[1][h];
             ht[1][h] = de;
             ht[0].used()--;
             ht[1].used()++;
@@ -387,11 +383,11 @@ dictEntry* dict::dictAddRaw(void *key, dictEntry **existing)
  * operation. */
 int dict::dictReplace(void *key, void *val)
 {
-    dictEntry *entry, *existing, auxentry;
 
     /* Try to add the element. If the key
      * does not exists dictAdd will succeed. */
-    entry = dictAddRaw(key,&existing);
+    dictEntry *existing;
+    dictEntry *entry = dictAddRaw(key,&existing);
     if (entry) {
         dictSetVal(entry, val);
         return 1;
@@ -402,7 +398,7 @@ int dict::dictReplace(void *key, void *val)
      * as the previous one. In this context, think to reference counting,
      * you want to increment (set), and then decrement (free), and not the
      * reverse. */
-    auxentry = *existing;
+    dictEntry auxentry = *existing;
     dictSetVal(existing, val);
     dictFreeVal(&auxentry);
     return 0;
@@ -425,36 +421,33 @@ dictEntry* dict::dictAddOrFind(void *key) {
  * dictDelete() and dictUnlink(), please check the top comment
  * of those functions. */
 dictEntry* dict::dictGenericDelete(const void *key, int nofree) {
-    unsigned int h, idx;
-    dictEntry *he, *prevHe;
-    int table;
 
     if (ht[0].used() == 0 && ht[1].used() == 0) return NULL;
 
     if (dictIsRehashing()) _dictRehashStep();
-    h = dictHashKey(key);
+    unsigned int h = dictHashKey(key);
 
-    for (table = 0; table <= 1; table++) {
-        idx = h & ht[table].sizemask();
-        he = ht[table][idx];
-        prevHe = NULL;
+    for (int itable = 0; itable <= 1; itable++) {
+        unsigned int idx = h & ht[itable].sizemask();
+        dictEntry *he = ht[itable][idx];
+        dictEntry *prevHe = NULL;
         while(he) {
-            if (key==he->key || dictCompareKeys(key, he->key)) {
+            if (key==he->m_key || dictCompareKeys(key, he->m_key)) {
                 /* Unlink the element from the list */
                 if (prevHe)
-                    prevHe->next = he->next;
+                    prevHe->m_next = he->m_next;
                 else
-                    ht[table][idx] = he->next;
+                    ht[itable][idx] = he->m_next;
                 if (!nofree) {
                     dictFreeKey(he);
                     dictFreeVal(he);
                     dictEntryRelease(he);
                 }
-                ht[table].used()--;
+                ht[itable].used()--;
                 return he;
             }
             prevHe = he;
-            he = he->next;
+            he = he->m_next;
         }
         if (!dictIsRehashing()) break;
     }
@@ -507,13 +500,13 @@ int dict::_dictClear(dictht *ht, void(callback)(void *)) {
 
     /* Free all the elements */
     for (i = 0; i < ht->size() && ht->used() > 0; i++) {
-        dictEntry *he, *nextHe;
 
         if (callback && (i & 65535) == 0) callback(privdata);
+        dictEntry *he = (*ht)[i];
 
-        if ((he = (*ht)[i]) == NULL) continue;
+        if ((he) == NULL) continue;
         while(he) {
-            nextHe = he->next;
+            dictEntry *nextHe = he->m_next;
             dictFreeKey(he);
             dictFreeVal(he);
             dictEntryRelease(he);
@@ -537,19 +530,16 @@ void dictRelease(dict *d)
 
 dictEntry* dict::dictFind(const void *key)
 {
-    dictEntry *he;
-    uint64_t h, idx, table;
-
     if (ht[0].used() + ht[1].used() == 0) return NULL; /* dict is empty */
     if (dictIsRehashing()) _dictRehashStep();
-    h = dictHashKey(key);
-    for (table = 0; table <= 1; table++) {
-        idx = h & ht[table].sizemask();
-        he = ht[table][idx];
+    uint64_t h = dictHashKey(key);
+    for (uint64_t itable = 0; itable <= 1; itable++) {
+        uint64_t idx = h & ht[itable].sizemask();
+        dictEntry *he = ht[itable][idx];
         while(he) {
-            if (key==he->key || dictCompareKeys(key, he->key))
+            if (key==he->m_key || dictCompareKeys(key, he->m_key))
                 return he;
-            he = he->next;
+            he = he->m_next;
         }
         if (!dictIsRehashing()) return NULL;
     }
@@ -557,9 +547,7 @@ dictEntry* dict::dictFind(const void *key)
 }
 
 void* dict::dictFetchValue(const void *key) {
-    dictEntry *he;
-
-    he = dictFind(key);
+    dictEntry *he = dictFind(key);
     return he ? he->dictGetVal() : NULL;
 }
 
@@ -643,7 +631,7 @@ dictEntry *dictNext(dictIterator *iter)
         if (iter->entry) {
             /* We need to save the 'next' here, the iterator user
              * may delete the entry we are returning. */
-            iter->nextEntry = iter->entry->next;
+            iter->nextEntry = iter->entry->next();
             return iter->entry;
         }
     }
@@ -660,9 +648,8 @@ void dictReleaseIterator(dictIterator *iter)
  * implement randomized algorithms */
 dictEntry* dict::dictGetRandomKey()
 {
-    dictEntry *he, *orighe;
+    dictEntry *he;
     unsigned long h;
-    int listlen, listele;
 
     if (this->dictSize() == 0) return NULL;
     if (dictIsRehashing()) _dictRehashStep();
@@ -687,15 +674,15 @@ dictEntry* dict::dictGetRandomKey()
      * list and we need to get a random element from the list.
      * The only sane way to do so is counting the elements and
      * select a random index. */
-    listlen = 0;
-    orighe = he;
+    int listlen = 0;
+    dictEntry *orighe = he;
     while(he) {
-        he = he->next;
+        he = he->m_next;
         listlen++;
     }
-    listele = random() % listlen;
+    int listele = random() % listlen;
     he = orighe;
-    while(listele--) he = he->next;
+    while(listele--) he = he->m_next;
     return he;
 }
 
@@ -777,7 +764,7 @@ unsigned int dict::dictGetSomeKeys(dictEntry **des, unsigned int count) {
                      * empty while iterating. */
                     *des = he;
                     des++;
-                    he = he->next;
+                    he = he->m_next;
                     stored++;
                     if (stored == count) return stored;
                 }
@@ -889,7 +876,7 @@ unsigned long dict::dictScan(unsigned long v, dictScanFunction *fn,
                        void *privdata)
 {
     dictht *t0, *t1;
-    const dictEntry *de, *next;
+    const dictEntry *de;
     unsigned long m0, m1;
 
     if (this->dictSize() == 0) return 0;
@@ -902,7 +889,7 @@ unsigned long dict::dictScan(unsigned long v, dictScanFunction *fn,
         if (bucketfn) bucketfn(privdata, &(*t0)[v & m0]);
         de = (*t0)[v & m0];
         while (de) {
-            next = de->next;
+            const dictEntry *next = de->m_next;
             fn(privdata, de);
             de = next;
         }
@@ -924,7 +911,7 @@ unsigned long dict::dictScan(unsigned long v, dictScanFunction *fn,
         if (bucketfn) bucketfn(privdata, &(*t0)[v & m0]);
         de = (*t0)[v & m0];
         while (de) {
-            next = de->next;
+            const dictEntry *next = de->m_next;
             fn(privdata, de);
             de = next;
         }
@@ -936,7 +923,7 @@ unsigned long dict::dictScan(unsigned long v, dictScanFunction *fn,
             if (bucketfn) bucketfn(privdata, &(*t1)[v & m1]);
             de = (*t1)[v & m1];
             while (de) {
-                next = de->next;
+                const dictEntry *next = de->m_next;
                 fn(privdata, de);
                 de = next;
             }
@@ -1017,11 +1004,11 @@ int dict::_dictKeyIndex(const void *key, unsigned int hash, dictEntry **existing
         /* Search if this slot does not already contain the given key */
         dictEntry *he = ht[itable][idx];
         while(he) {
-            if (key==he->key || dictCompareKeys(key, he->key)) {
+            if (key==he->m_key || dictCompareKeys(key, he->m_key)) {
                 if (existing) *existing = he;
                 return -1;
             }
-            he = he->next;
+            he = he->m_next;
         }
         if (!dictIsRehashing()) break;
     }
@@ -1053,17 +1040,16 @@ unsigned int dict::dictGetHash(const void *key) {
  * no string / key comparison is performed.
  * return value is the reference to the dictEntry if found, or NULL if not found. */
 dictEntry** dict::dictFindEntryRefByPtrAndHash(const void *oldptr, unsigned int hash) {
-    dictEntry *he, **heref;
 
     if (ht[0].used() + ht[1].used() == 0) return NULL; /* dict is empty */
     for (unsigned int itable = 0; itable <= 1; itable++) {
         unsigned int idx = hash & ht[itable].sizemask();
-        heref = &ht[itable][idx];
-        he = *heref;
+        dictEntry **heref = &ht[itable][idx];
+        dictEntry *he = *heref;
         while(he) {
-            if (oldptr==he->key)
+            if (oldptr==he->m_key)
                 return heref;
-            heref = &he->next;
+            heref = &he->m_next;
             he = *heref;
         }
         if (!dictIsRehashing()) return NULL;
@@ -1088,7 +1074,6 @@ size_t _dictGetStatsHt(char *buf, size_t bufsize, dictht *ht, int tableid) {
     /* Compute stats. */
     for (i = 0; i < DICT_STATS_VECTLEN; i++) clvector[i] = 0;
     for (i = 0; i < ht->size(); i++) {
-        dictEntry *he;
 
         if ((*ht)[i] == NULL) {
             clvector[0]++;
@@ -1097,10 +1082,10 @@ size_t _dictGetStatsHt(char *buf, size_t bufsize, dictht *ht, int tableid) {
         slots++;
         /* For each hash entry on this slot... */
         chainlen = 0;
-        he = (*ht)[i];
+        dictEntry *he = (*ht)[i];
         while(he) {
             chainlen++;
-            he = he->next;
+            he = he->next();
         }
         clvector[(chainlen < DICT_STATS_VECTLEN) ? chainlen : (DICT_STATS_VECTLEN-1)]++;
         if (chainlen > maxchainlen) maxchainlen = chainlen;
@@ -1168,6 +1153,20 @@ dictIterator::~dictIterator()
         else
             assert(fingerprint == d->dictFingerprint());
     }
+}
+
+
+std::ostream& operator<<(std::ostream& os, dict& out_me)
+{
+    os << "ht[0]: (" << out_me.ht[0] << "), ht[1]: (" << out_me.ht[1] << "), ";
+    os << "rehashidx: " << out_me.rehashidx << ", iterators: " << out_me.iterators;
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, dictht& out_me)
+{
+    os << "m_size: " << out_me.size() << ", m_sizemask: " << out_me.sizemask() << ", m_used: " << out_me.used() << ", m_table: " << out_me.peek_table();
+    return os;
 }
 
 /* ------------------------------- Benchmark ---------------------------------*/

@@ -39,141 +39,6 @@ set (HIREDIS_SOURCES
         deps/hiredis/test.c
         deps/hiredis/win32.h
 )
-SET(JEMALLOC_SOURCES
-        deps/jemalloc/include/jemalloc/internal/arena.h
-        deps/jemalloc/include/jemalloc/internal/atomic.h
-        deps/jemalloc/include/jemalloc/internal/base.h
-        deps/jemalloc/include/jemalloc/internal/bitmap.h
-        deps/jemalloc/include/jemalloc/internal/chunk.h
-        deps/jemalloc/include/jemalloc/internal/chunk_dss.h
-        deps/jemalloc/include/jemalloc/internal/chunk_mmap.h
-        deps/jemalloc/include/jemalloc/internal/ckh.h
-        deps/jemalloc/include/jemalloc/internal/ctl.h
-        deps/jemalloc/include/jemalloc/internal/extent.h
-        deps/jemalloc/include/jemalloc/internal/hash.h
-        deps/jemalloc/include/jemalloc/internal/huge.h
-        deps/jemalloc/include/jemalloc/internal/jemalloc_internal_decls.h
-        deps/jemalloc/include/jemalloc/internal/jemalloc_internal_macros.h
-        deps/jemalloc/include/jemalloc/internal/mb.h
-        deps/jemalloc/include/jemalloc/internal/mutex.h
-        deps/jemalloc/include/jemalloc/internal/pages.h
-        deps/jemalloc/include/jemalloc/internal/prng.h
-        deps/jemalloc/include/jemalloc/internal/prof.h
-        deps/jemalloc/include/jemalloc/internal/ql.h
-        deps/jemalloc/include/jemalloc/internal/qr.h
-        deps/jemalloc/include/jemalloc/internal/quarantine.h
-        deps/jemalloc/include/jemalloc/internal/rb.h
-        deps/jemalloc/include/jemalloc/internal/rtree.h
-        deps/jemalloc/include/jemalloc/internal/stats.h
-        deps/jemalloc/include/jemalloc/internal/tcache.h
-        deps/jemalloc/include/jemalloc/internal/tsd.h
-        deps/jemalloc/include/jemalloc/internal/util.h
-        deps/jemalloc/include/jemalloc/internal/valgrind.h
-        deps/jemalloc/include/msvc_compat/C99/stdbool.h
-        deps/jemalloc/include/msvc_compat/C99/stdint.h
-        deps/jemalloc/include/msvc_compat/strings.h
-        deps/jemalloc/include/msvc_compat/windows_extra.h
-        deps/jemalloc/src/arena.c
-        deps/jemalloc/src/atomic.c
-        deps/jemalloc/src/base.c
-        deps/jemalloc/src/bitmap.c
-        deps/jemalloc/src/chunk.c
-        deps/jemalloc/src/chunk_dss.c
-        deps/jemalloc/src/chunk_mmap.c
-        deps/jemalloc/src/ckh.c
-        deps/jemalloc/src/ctl.c
-        deps/jemalloc/src/extent.c
-        deps/jemalloc/src/hash.c
-        deps/jemalloc/src/huge.c
-        deps/jemalloc/src/jemalloc.c
-        deps/jemalloc/src/mb.c
-        deps/jemalloc/src/mutex.c
-        deps/jemalloc/src/pages.c
-        deps/jemalloc/src/prof.c
-        deps/jemalloc/src/quarantine.c
-        deps/jemalloc/src/rtree.c
-        deps/jemalloc/src/stats.c
-        deps/jemalloc/src/tcache.c
-        deps/jemalloc/src/tsd.c
-        deps/jemalloc/src/util.c
-        deps/jemalloc/src/valgrind.c
-        deps/jemalloc/src/zone.c
-)
-SET(JEMALLOC_TEST_SOURCES
-        deps/jemalloc/test/include/test/btalloc.h
-        deps/jemalloc/test/include/test/math.h
-        deps/jemalloc/test/include/test/mq.h
-        deps/jemalloc/test/include/test/mtx.h
-        deps/jemalloc/test/include/test/SFMT-alti.h
-        deps/jemalloc/test/include/test/SFMT-params.h
-        deps/jemalloc/test/include/test/SFMT-params11213.h
-        deps/jemalloc/test/include/test/SFMT-params1279.h
-        deps/jemalloc/test/include/test/SFMT-params132049.h
-        deps/jemalloc/test/include/test/SFMT-params19937.h
-        deps/jemalloc/test/include/test/SFMT-params216091.h
-        deps/jemalloc/test/include/test/SFMT-params2281.h
-        deps/jemalloc/test/include/test/SFMT-params4253.h
-        deps/jemalloc/test/include/test/SFMT-params44497.h
-        deps/jemalloc/test/include/test/SFMT-params607.h
-        deps/jemalloc/test/include/test/SFMT-params86243.h
-        deps/jemalloc/test/include/test/SFMT-sse2.h
-        deps/jemalloc/test/include/test/SFMT.h
-        deps/jemalloc/test/include/test/test.h
-        deps/jemalloc/test/include/test/thd.h
-        deps/jemalloc/test/include/test/timer.h
-        deps/jemalloc/test/integration/aligned_alloc.c
-        deps/jemalloc/test/integration/allocated.c
-        deps/jemalloc/test/integration/chunk.c
-        deps/jemalloc/test/integration/mallocx.c
-        deps/jemalloc/test/integration/MALLOCX_ARENA.c
-        deps/jemalloc/test/integration/overflow.c
-        deps/jemalloc/test/integration/posix_memalign.c
-        deps/jemalloc/test/integration/rallocx.c
-        deps/jemalloc/test/integration/sdallocx.c
-        deps/jemalloc/test/integration/thread_arena.c
-        deps/jemalloc/test/integration/thread_tcache_enabled.c
-        deps/jemalloc/test/integration/xallocx.c
-        deps/jemalloc/test/src/btalloc.c
-        deps/jemalloc/test/src/btalloc_0.c
-        deps/jemalloc/test/src/btalloc_1.c
-        deps/jemalloc/test/src/math.c
-        deps/jemalloc/test/src/mq.c
-        deps/jemalloc/test/src/mtx.c
-        deps/jemalloc/test/src/SFMT.c
-        deps/jemalloc/test/src/test.c
-        deps/jemalloc/test/src/thd.c
-        deps/jemalloc/test/src/timer.c
-        deps/jemalloc/test/stress/microbench.c
-        deps/jemalloc/test/unit/atomic.c
-        deps/jemalloc/test/unit/bitmap.c
-        deps/jemalloc/test/unit/ckh.c
-        deps/jemalloc/test/unit/hash.c
-        deps/jemalloc/test/unit/junk.c
-        deps/jemalloc/test/unit/junk_alloc.c
-        deps/jemalloc/test/unit/junk_free.c
-        deps/jemalloc/test/unit/lg_chunk.c
-        deps/jemalloc/test/unit/mallctl.c
-        deps/jemalloc/test/unit/math.c
-        deps/jemalloc/test/unit/mq.c
-        deps/jemalloc/test/unit/mtx.c
-        deps/jemalloc/test/unit/prof_accum.c
-        deps/jemalloc/test/unit/prof_active.c
-        deps/jemalloc/test/unit/prof_gdump.c
-        deps/jemalloc/test/unit/prof_idump.c
-        deps/jemalloc/test/unit/prof_reset.c
-        deps/jemalloc/test/unit/prof_thread_name.c
-        deps/jemalloc/test/unit/ql.c
-        deps/jemalloc/test/unit/qr.c
-        deps/jemalloc/test/unit/quarantine.c
-        deps/jemalloc/test/unit/rb.c
-        deps/jemalloc/test/unit/rtree.c
-        deps/jemalloc/test/unit/SFMT.c
-        deps/jemalloc/test/unit/size_classes.c
-        deps/jemalloc/test/unit/stats.c
-        deps/jemalloc/test/unit/tsd.c
-        deps/jemalloc/test/unit/util.c
-        deps/jemalloc/test/unit/zero.c
-)
 SET(LINENOISE_SOURCES
         deps/linenoise/example.c
         deps/linenoise/linenoise.c
@@ -467,11 +332,14 @@ add_definitions(
 )
 set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} -DREDIS_STATIC='')
 
-add_library(lua STATIC ${LUA_SOURCES})
-add_library(jemalloc STATIC ${JEMALLOC_SOURCES})
+include(deps/jemalloc/CMakeLists.txt)
+#add_library(lua STATIC ${LUA_SOURCES})
+#target_include_directories(jemalloc
+#        PUBLIC deps/jemalloc/include
+#        )
 
 add_executable(redispp
         ${REDIS_SERVER_SOURCES})
 target_compile_options(redispp PRIVATE -Wno-comment -Wno-writable-strings -Wno-empty-body)
-target_link_libraries(redispp lua)
+#target_link_libraries(redispp lua)
 target_link_libraries(redispp jemalloc)
