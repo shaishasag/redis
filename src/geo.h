@@ -9,11 +9,20 @@ struct GeoHashRadius;
 /* Structures used inside geo.c in order to represent points and array of
  * points on the earth. */
 struct geoPoint {
-    double longitude;
-    double latitude;
-    double dist;
-    double score;
-    char *member;
+    ~geoPoint();
+
+    char* pop_member()
+    {
+        char* retVal = m_member;
+        m_member = NULL;
+        return retVal;
+    }
+
+    double m_longitude;
+    double m_latitude;
+    double m_dist;
+    double m_score;
+    char*  m_member;
 };
 
 class geoArray

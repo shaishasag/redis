@@ -48,6 +48,10 @@ int zslValueLteMax(double value, zrangespec *spec);
 /* ====================================================================
  * geoArray implementation
  * ==================================================================== */
+geoPoint::~geoPoint()
+{
+    sdsfree(m_member);
+}
 
 geoArray::geoArray()
 : m_array(NULL)
@@ -59,7 +63,7 @@ geoArray::geoArray()
 geoArray::~geoArray()
 {
     for (size_t i = 0; i < m_used; i++)
-        sdsfree(m_array[i].member);
+        m_array[i].~geoPoint();
     zfree(m_array);
 }
 
@@ -100,8 +104,7 @@ int decodeGeohash(double bits, double *xy) {
 /* Take a pointer to the latitude arg then use the next arg for longitude.
  * On parse error C_ERR is returned, otherwise C_OK. */
 int extractLongLatOrReply(client *c, robj **argv, double *xy) {
-    int i;
-    for (i = 0; i < 2; i++) {
+    for (int i = 0; i < 2; i++) {
         if (getDoubleFromObjectOrReply(c, argv[i], xy + i, NULL) !=
             C_OK) {
             return C_ERR;
@@ -211,11 +214,11 @@ int geoArray::geoAppendIfWithinRadius(double lon, double lat, double radius, dou
 
     /* Append the new element. */
     geoPoint& gp = geoArrayAppend();
-    gp.longitude = xy[0];
-    gp.latitude = xy[1];
-    gp.dist = distance;
-    gp.member = member;
-    gp.score = score;
+    gp.m_longitude = xy[0];
+    gp.m_latitude = xy[1];
+    gp.m_dist = distance;
+    gp.m_member = member;
+    gp.m_score = score;
     return C_OK;
 }
 
@@ -395,9 +398,9 @@ static int sort_gp_asc(const void *a, const void *b) {
     const geoPoint *gpb = (const geoPoint *)b;
     /* We can't do adist - bdist because they are doubles and
      * the comparator returns an int. */
-    if (gpa->dist > gpb->dist)
+    if (gpa->m_dist > gpb->m_dist)
         return 1;
-    else if (gpa->dist == gpb->dist)
+    else if (gpa->m_dist == gpb->m_dist)
         return 0;
     else
         return -1;
@@ -619,7 +622,7 @@ void georadiusGeneric(client *c, int flags) {
         int i;
         for (i = 0; i < returned_items; i++) {
             geoPoint& gp = ga[i];
-            gp.dist /= conversion; /* Fix according to unit. */
+            gp.m_dist /= conversion; /* Fix according to unit. */
 
             /* If we have options in option_length, return each sub-result
              * as a nested multi-bulk.  Add 1 to account for result value
@@ -627,26 +630,24 @@ void georadiusGeneric(client *c, int flags) {
             if (option_length)
                 addReplyMultiBulkLen(c, option_length + 1);
 
-            addReplyBulkSds(c,gp.member);
-            gp.member = NULL;
+            addReplyBulkSds(c,gp.pop_member());
 
             if (withdist)
-                addReplyDoubleDistance(c, gp.dist);
+                addReplyDoubleDistance(c, gp.m_dist);
 
             if (withhash)
-                addReplyLongLong(c, gp.score);
+                addReplyLongLong(c, gp.m_score);
 
             if (withcoords) {
                 addReplyMultiBulkLen(c, 2);
-                addReplyHumanLongDouble(c, gp.longitude);
-                addReplyHumanLongDouble(c, gp.latitude);
+                addReplyHumanLongDouble(c, gp.m_longitude);
+                addReplyHumanLongDouble(c, gp.m_latitude);
             }
         }
     } else {
         /* Target key, create a sorted set with the results. */
         robj *zobj;
         zset *zs;
-        int i;
         size_t maxelelen = 0;
 
         if (returned_items) {
@@ -654,17 +655,16 @@ void georadiusGeneric(client *c, int flags) {
             zs = (zset *)zobj->ptr;
         }
 
-        for (i = 0; i < returned_items; i++) {
-            zskiplistNode *znode;
+        for (int i = 0; i < returned_items; i++) {
             geoPoint& gp = ga[i];
-            gp.dist /= conversion; /* Fix according to unit. */
-            double score = storedist ? gp.dist : gp.score;
-            size_t elelen = sdslen(gp.member);
+            gp.m_dist /= conversion; /* Fix according to unit. */
+            double score = storedist ? gp.m_dist : gp.m_score;
+            size_t elelen = sdslen(gp.m_member);
 
             if (maxelelen < elelen) maxelelen = elelen;
-            znode = zslInsert(zs->zsl,score,gp.member);
-            serverAssert(zs->_dict->dictAdd(gp.member,&znode->score) == DICT_OK);
-            gp.member = NULL;
+            zskiplistNode *znode = zslInsert(zs->zsl,score,gp.m_member);
+            serverAssert(zs->_dict->dictAdd(gp.m_member,&znode->score) == DICT_OK);
+            gp.pop_member();
         }
 
         if (returned_items) {
