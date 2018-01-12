@@ -250,8 +250,7 @@ void setTypeConvert(robj *setobj, int enc) {
         while (setTypeNext(si,&element,&intele) != -1) {
             element = sdsfromlonglong(intele);
             int ret = d->dictAdd(element,NULL);
-            outer << "setTypeConvert " << intele << " -> " << sds_c_str(element) << "; ret = " << ret << std::endl;
-            //serverAssert(ret == DICT_OK);
+            serverAssert(ret == DICT_OK);
         }
         setTypeReleaseIterator(si);
 

@@ -9040,3 +9040,241 @@ ziplist.o: ziplist.cpp zmalloc.h util.h sds.h ziplist.h endianconv.h \
   config.h redisassert.h
 zipmap.o: zipmap.cpp zmalloc.h endianconv.h config.h
 zmalloc.o: zmalloc.cpp config.h zmalloc.h atomicvar.h
+adlist.o: adlist.cpp adlist.h zmalloc.h
+ae.o: ae.cpp ae.h zmalloc.h config.h ae_kqueue.cpp
+ae_kqueue.o: ae_kqueue.cpp
+ae_select.o: ae_select.cpp
+anet.o: anet.cpp fmacros.h anet.h
+aof.o: aof.cpp server.h fmacros.h config.h solarisfixes.h rio.h sds.h \
+  ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h adlist.h \
+  zmalloc.h anet.h ziplist.h intset.h version.h util.h latency.h \
+  sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h crc64.h \
+  rdb.h bio.h
+bio.o: bio.cpp server.h fmacros.h config.h solarisfixes.h rio.h sds.h \
+  ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h adlist.h \
+  zmalloc.h anet.h ziplist.h intset.h version.h util.h latency.h \
+  sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h crc64.h \
+  rdb.h bio.h
+bitops.o: bitops.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+blocked.o: blocked.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+childinfo.o: childinfo.cpp server.h fmacros.h config.h solarisfixes.h \
+  rio.h sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h \
+  dict.h adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+cluster.o: cluster.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h cluster.h
+config.o: config.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h cluster.h
+crc16.o: crc16.cpp server.h fmacros.h config.h solarisfixes.h rio.h sds.h \
+  ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h adlist.h \
+  zmalloc.h anet.h ziplist.h intset.h version.h util.h latency.h \
+  sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h crc64.h \
+  rdb.h
+crc64.o: crc64.cpp
+db.o: db.cpp server.h fmacros.h config.h solarisfixes.h rio.h sds.h \
+  ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h adlist.h \
+  zmalloc.h anet.h ziplist.h intset.h version.h util.h latency.h \
+  sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h crc64.h \
+  rdb.h cluster.h atomicvar.h
+debug.o: debug.cpp server.h fmacros.h config.h solarisfixes.h rio.h sds.h \
+  ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h adlist.h \
+  zmalloc.h anet.h ziplist.h intset.h version.h util.h latency.h \
+  sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h crc64.h \
+  rdb.h bio.h
+defrag.o: defrag.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+dict.o: dict.cpp fmacros.h dict.h zmalloc.h redisassert.h
+endianconv.o: endianconv.cpp
+evict.o: evict.cpp server.h fmacros.h config.h solarisfixes.h rio.h sds.h \
+  ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h adlist.h \
+  zmalloc.h anet.h ziplist.h intset.h version.h util.h latency.h \
+  sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h crc64.h \
+  rdb.h bio.h atomicvar.h
+expire.o: expire.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+geo.o: geo.cpp geo.h server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h geohash_helper.h geohash.h debugmacro.h
+geohash.o: geohash.cpp geohash.h
+geohash_helper.o: geohash_helper.cpp fmacros.h geohash_helper.h geohash.h \
+  debugmacro.h
+hyperloglog.o: hyperloglog.cpp server.h fmacros.h config.h solarisfixes.h \
+  rio.h sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h \
+  dict.h adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+intset.o: intset.cpp intset.h zmalloc.h endianconv.h config.h
+latency.o: latency.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+lazyfree.o: lazyfree.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h bio.h atomicvar.h cluster.h
+lzf_c.o: lzf_c.cpp lzfP.h
+lzf_d.o: lzf_d.cpp lzfP.h
+memtest.o: memtest.cpp config.h
+module.o: module.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h cluster.h redismodule.h
+multi.o: multi.cpp server.h fmacros.h config.h solarisfixes.h rio.h sds.h \
+  ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h adlist.h \
+  zmalloc.h anet.h ziplist.h intset.h version.h util.h latency.h \
+  sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h crc64.h \
+  rdb.h
+networking.o: networking.cpp server.h fmacros.h config.h solarisfixes.h \
+  rio.h sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h \
+  dict.h adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h atomicvar.h
+notify.o: notify.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+object.o: object.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+pqsort.o: pqsort.cpp
+pubsub.o: pubsub.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+quicklist.o: quicklist.cpp quicklist.h zmalloc.h ziplist.h util.h sds.h \
+  lzf.h
+rand.o: rand.cpp
+rax.o: rax.cpp rax.h rax_malloc.h zmalloc.h
+rdb.o: rdb.cpp server.h fmacros.h config.h solarisfixes.h rio.h sds.h \
+  ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h adlist.h \
+  zmalloc.h anet.h ziplist.h intset.h version.h util.h latency.h \
+  sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h crc64.h \
+  rdb.h lzf.h
+redis-benchmark.o: redis-benchmark.cpp fmacros.h ../deps/hiredis/sds.h \
+  ae.h ../deps/hiredis/hiredis.h ../deps/hiredis/read.h adlist.h \
+  zmalloc.h
+redis-check-aof.o: redis-check-aof.cpp server.h fmacros.h config.h \
+  solarisfixes.h rio.h sds.h ../deps/lua/src/lua.h \
+  ../deps/lua/src/luaconf.h ae.h dict.h adlist.h zmalloc.h anet.h \
+  ziplist.h intset.h version.h util.h latency.h sparkline.h quicklist.h \
+  rax.h zipmap.h sha1.h endianconv.h crc64.h rdb.h
+redis-check-rdb.o: redis-check-rdb.cpp server.h fmacros.h config.h \
+  solarisfixes.h rio.h sds.h ../deps/lua/src/lua.h \
+  ../deps/lua/src/luaconf.h ae.h dict.h adlist.h zmalloc.h anet.h \
+  ziplist.h intset.h version.h util.h latency.h sparkline.h quicklist.h \
+  rax.h zipmap.h sha1.h endianconv.h crc64.h rdb.h
+redis-cli.o: redis-cli.cpp fmacros.h version.h ../deps/hiredis/hiredis.h \
+  ../deps/hiredis/read.h ../deps/hiredis/sds.h zmalloc.h \
+  ../deps/linenoise/linenoise.h help.h anet.h ae.h
+release.o: release.cpp release.h version.h crc64.h
+replication.o: replication.cpp server.h fmacros.h config.h solarisfixes.h \
+  rio.h sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h \
+  dict.h adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+rio.o: rio.cpp fmacros.h rio.h sds.h util.h crc64.h config.h server.h \
+  solarisfixes.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h \
+  dict.h adlist.h zmalloc.h anet.h ziplist.h intset.h version.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  rdb.h
+scripting.o: scripting.cpp server.h fmacros.h config.h solarisfixes.h \
+  rio.h sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h \
+  dict.h adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h rand.h cluster.h ../deps/lua/src/lauxlib.h \
+  ../deps/lua/src/lualib.h
+sds.o: sds.cpp sds.h sdsalloc.h zmalloc.h
+sentinel.o: sentinel.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h ../deps/hiredis/hiredis.h ../deps/hiredis/read.h \
+  ../deps/hiredis/sds.h ../deps/hiredis/async.h
+server.o: server.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h cluster.h slowlog.h bio.h atomicvar.h asciilogo.h
+setproctitle.o: setproctitle.cpp
+sha1.o: sha1.cpp solarisfixes.h sha1.h config.h
+siphash.o: siphash.cpp
+slowlog.o: slowlog.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h slowlog.h
+sort.o: sort.cpp server.h fmacros.h config.h solarisfixes.h rio.h sds.h \
+  ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h adlist.h \
+  zmalloc.h anet.h ziplist.h intset.h version.h util.h latency.h \
+  sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h crc64.h \
+  rdb.h pqsort.h
+sparkline.o: sparkline.cpp server.h fmacros.h config.h solarisfixes.h \
+  rio.h sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h \
+  dict.h adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+syncio.o: syncio.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+t_hash.o: t_hash.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+t_list.o: t_list.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+t_set.o: t_set.cpp fmacros.h server.h config.h solarisfixes.h rio.h sds.h \
+  ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h adlist.h \
+  zmalloc.h anet.h ziplist.h intset.h version.h util.h latency.h \
+  sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h crc64.h \
+  rdb.h
+t_string.o: t_string.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+t_zset.o: t_zset.cpp server.h fmacros.h config.h solarisfixes.h rio.h \
+  sds.h ../deps/lua/src/lua.h ../deps/lua/src/luaconf.h ae.h dict.h \
+  adlist.h zmalloc.h anet.h ziplist.h intset.h version.h util.h \
+  latency.h sparkline.h quicklist.h rax.h zipmap.h sha1.h endianconv.h \
+  crc64.h rdb.h
+util.o: util.cpp fmacros.h util.h sds.h sha1.h
+ziplist.o: ziplist.cpp zmalloc.h util.h sds.h ziplist.h endianconv.h \
+  config.h redisassert.h
+zipmap.o: zipmap.cpp zmalloc.h endianconv.h config.h
+zmalloc.o: zmalloc.cpp config.h zmalloc.h atomicvar.h
