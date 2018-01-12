@@ -45,45 +45,61 @@ static int label_margin_top = 1;
  * Sequences are arrays of samples we use to represent data to turn
  * into sparklines. This is the API in order to generate a sparkline:
  *
- * struct sequence *seq = createSparklineSequence();
+ * sequence *seq = createSparklineSequence();
  * sparklineSequenceAddSample(seq, 10, NULL);
  * sparklineSequenceAddSample(seq, 20, NULL);
  * sparklineSequenceAddSample(seq, 30, "last sample label");
  * sds output = sparklineRender(sdsempty(), seq, 80, 4, SPARKLINE_FILL);
  * freeSparklineSequence(seq);
  * ------------------------------------------------------------------------- */
+sequence::sequence()
+: m_length(0)
+, m_labels(0)
+, m_samples(NULL)
+, m_min(0.0)
+, m_max(0.0)
+{
+
+}
+
+sequence::~sequence()
+{
+    for (int j = 0; j < m_length; j++)
+        m_samples[j].~sample();
+    zfree(m_samples);
+}
 
 /* Create a new sequence. */
-struct sequence *createSparklineSequence(void) {
-    struct sequence* seq = (sequence*)zmalloc(sizeof(*seq));
-    seq->length = 0;
-    seq->samples = NULL;
+sequence *createSparklineSequence(void) {
+    void* seq_mem = zmalloc(sizeof(sequence));
+    sequence* seq = new (seq_mem) sequence;
     return seq;
 }
 
 /* Add a new sample into a sequence. */
-void sparklineSequenceAddSample(struct sequence *seq, double value, char *label) {
+void sequence::sparklineSequenceAddSample(double value, char *label) {
     label = (label == NULL || label[0] == '\0') ? NULL : zstrdup(label);
-    if (seq->length == 0) {
-        seq->min = seq->max = value;
+    if (m_length == 0) {
+        m_min = m_max = value;
     } else {
-        if (value < seq->min) seq->min = value;
-        else if (value > seq->max) seq->max = value;
+        if (value < m_min) m_min = value;
+        else if (value > m_max) m_max = value;
     }
-    seq->samples = (sample *)zrealloc(seq->samples,sizeof(sample)*(seq->length+1));
-    seq->samples[seq->length].value = value;
-    seq->samples[seq->length].label = label;
-    seq->length++;
-    if (label) seq->labels++;
+    m_samples = (sample *)zrealloc(m_samples,sizeof(sample)*(m_length+1));
+    m_samples[m_length].m_value = value;
+    m_samples[m_length].m_label = label;
+    m_length++;
+    if (label) m_labels++;
+}
+
+sample::~sample()
+{
+    zfree(m_label);
 }
 
 /* Free a sequence. */
-void freeSparklineSequence(struct sequence *seq) {
-    int j;
-
-    for (j = 0; j < seq->length; j++)
-        zfree(seq->samples[j].label);
-    zfree(seq->samples);
+void freeSparklineSequence(sequence *seq) {
+    seq->~sequence();
     zfree(seq);
 }
 
@@ -92,11 +108,11 @@ void freeSparklineSequence(struct sequence *seq) {
  * ------------------------------------------------------------------------- */
 
 /* Render part of a sequence, so that render_sequence() call call this function
- * with differnent parts in order to create the full output without overflowing
+ * with different parts in order to create the full output without overflowing
  * the current terminal columns. */
-sds sparklineRenderRange(sds output, struct sequence *seq, int rows, int offset, int len, int flags) {
+sds sequence::sparklineRenderRange(sds output, int rows, int offset, int len, int flags) {
     int j;
-    double relmax = seq->max - seq->min;
+    double relmax = m_max - m_min;
     int steps = charset_len*rows;
     int row = 0;
     char* chars = (char*)zmalloc(len);
@@ -114,8 +130,8 @@ sds sparklineRenderRange(sds output, struct sequence *seq, int rows, int offset,
         loop = 0;
         memset(chars,' ',len);
         for (j = 0; j < len; j++) {
-            sample *s = &seq->samples[j+offset];
-            double relval = s->value - seq->min;
+            sample *s = &m_samples[j+offset];
+            double relval = s->m_value - m_min;
             int step;
 
             if (opt_log) relval = log(relval+1);
@@ -135,18 +151,18 @@ sds sparklineRenderRange(sds output, struct sequence *seq, int rows, int offset,
                 }
             } else {
                 /* Labels spacing */
-                if (seq->labels && row-rows < label_margin_top) {
+                if (m_labels && row-rows < label_margin_top) {
                     loop = 1;
                     break;
                 }
                 /* Print the label if needed. */
-                if (s->label) {
-                    int label_len = strlen(s->label);
+                if (s->m_label) {
+                    int label_len = strlen(s->m_label);
                     int label_char = row - rows - label_margin_top;
 
                     if (label_len > label_char) {
                         loop = 1;
-                        chars[j] = s->label[label_char];
+                        chars[j] = s->m_label[label_char];
                     }
                 }
             }
@@ -162,14 +178,14 @@ sds sparklineRenderRange(sds output, struct sequence *seq, int rows, int offset,
 }
 
 /* Turn a sequence into its ASCII representation */
-sds sparklineRender(sds output, struct sequence *seq, int columns, int rows, int flags) {
+sds sequence::sparklineRender(sds output, int columns, int rows, int flags) {
     int j;
 
-    for (j = 0; j < seq->length; j += columns) {
-        int sublen = (seq->length-j) < columns ? (seq->length-j) : columns;
+    for (j = 0; j < m_length; j += columns) {
+        int sublen = (m_length-j) < columns ? (m_length-j) : columns;
 
         if (j != 0) output = sdscatlen(output,"\n",1);
-        output = sparklineRenderRange(output, seq, rows, j, sublen, flags);
+        output = sparklineRenderRange(output, rows, j, sublen, flags);
     }
     return output;
 }

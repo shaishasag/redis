@@ -509,7 +509,7 @@ void latencyCommandReplyWithLatestEvents(client *c) {
 #define LATENCY_GRAPH_COLS 80
 sds latencyCommandGenSparkeline(char *event, latencyTimeSeries *ts) {
     int j;
-    struct sequence *seq = createSparklineSequence();
+    sequence seq;
     sds graph = sdsempty();
     uint32_t min = 0, max = 0;
 
@@ -520,7 +520,7 @@ sds latencyCommandGenSparkeline(char *event, latencyTimeSeries *ts) {
 
         if (ts->samples[i].time == 0) continue;
         /* Update min and max. */
-        if (seq->length == 0) {
+        if (seq.length() == 0) {
             min = max = ts->samples[i].latency;
         } else {
             if (ts->samples[i].latency > max) max = ts->samples[i].latency;
@@ -537,7 +537,7 @@ sds latencyCommandGenSparkeline(char *event, latencyTimeSeries *ts) {
             snprintf(buf,sizeof(buf),"%dh",elapsed/3600);
         else
             snprintf(buf,sizeof(buf),"%dd",elapsed/(3600*24));
-        sparklineSequenceAddSample(seq,ts->samples[i].latency,buf);
+        seq.sparklineSequenceAddSample(ts->samples[i].latency,buf);
     }
 
     graph = sdscatprintf(graph,
@@ -546,8 +546,8 @@ sds latencyCommandGenSparkeline(char *event, latencyTimeSeries *ts) {
     for (j = 0; j < LATENCY_GRAPH_COLS; j++)
         graph = sdscatlen(graph,"-",1);
     graph = sdscatlen(graph,"\n",1);
-    graph = sparklineRender(graph,seq,LATENCY_GRAPH_COLS,4,SPARKLINE_FILL);
-    freeSparklineSequence(seq);
+    graph = seq.sparklineRender(graph,LATENCY_GRAPH_COLS,4,SPARKLINE_FILL);
+
     return graph;
 }
 

@@ -646,8 +646,8 @@ void georadiusGeneric(client *c, int flags) {
         }
     } else {
         /* Target key, create a sorted set with the results. */
-        robj *zobj;
-        zset *zs;
+        robj *zobj = NULL;
+        zset *zs = NULL;
         size_t maxelelen = 0;
 
         if (returned_items) {
@@ -708,7 +708,7 @@ void georadiusbymemberroCommand(client *c) {
  * Returns an array with an 11 characters geohash representation of the
  * position of the specified elements. */
 void geohashCommand(client *c) {
-    char *geoalphabet= "0123456789bcdefghjkmnpqrstuvwxyz";
+    const char *geoalphabet= "0123456789bcdefghjkmnpqrstuvwxyz";
     int j;
 
     /* Look up the requested zset */

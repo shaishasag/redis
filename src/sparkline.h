@@ -31,26 +31,37 @@
 #define __SPARKLINE_H
 
 /* A sequence is represented of many "samples" */
-struct sample {
-    double value;
-    char *label;
+struct sample
+{
+    ~sample();
+    double m_value;
+    char * m_label;
 };
 
-struct sequence {
-    int length;
-    int labels;
-    sample *samples;
-    double min, max;
+class sequence
+{
+public:
+    sequence();
+    ~sequence();
+    void sparklineSequenceAddSample(double value, char *label);
+    sds sparklineRender(sds output, int columns, int rows, int flags);
+    inline int length() {return m_length;}
+
+private:
+    sds sparklineRenderRange(sds output, int rows, int offset, int len, int flags);
+
+    int m_length;
+    int m_labels;
+    sample *m_samples;
+    double m_min;
+    double m_max;
 };
 
 #define SPARKLINE_NO_FLAGS 0
 #define SPARKLINE_FILL 1      /* Fill the area under the curve. */
 #define SPARKLINE_LOG_SCALE 2 /* Use logarithmic scale. */
 
-struct sequence *createSparklineSequence(void);
-void sparklineSequenceAddSample(struct sequence *seq, double value, char *label);
-void freeSparklineSequence(struct sequence *seq);
-sds sparklineRenderRange(sds output, struct sequence *seq, int rows, int offset, int len, int flags);
-sds sparklineRender(sds output, struct sequence *seq, int columns, int rows, int flags);
+sequence *createSparklineSequence(void);
+void freeSparklineSequence(sequence *seq);
 
 #endif /* __SPARKLINE_H */
