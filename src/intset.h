@@ -30,22 +30,39 @@
 
 #ifndef __INTSET_H
 #define __INTSET_H
-#include <stdint.h>
+#include <cstdint>
 
-struct intset {
+class intset
+{
+public:
+    intset();
+
+    uint8_t intsetFind(int64_t value);
+    int64_t intsetRandom();
+    uint8_t intsetGet(uint32_t pos, int64_t *value);
+    uint32_t intsetLen() const;
+    size_t intsetBlobLen();
+
+    static intset *intsetUpgradeAndAdd(intset *is, int64_t value);
+    static intset *intsetNew();
+    static intset *intsetAdd(intset *is, int64_t value, uint8_t *success);
+    static intset *intsetRemove(intset *is, int64_t value, int *success);
+    static intset *intsetResize(intset *is, uint32_t len);
+
+private:
+    int64_t _intsetGetEncoded(int pos, uint8_t enc);
+    int64_t _intsetGet(int pos);
+    void _intsetSet(int pos, int64_t value);
+    void intsetMoveTail(uint32_t from, uint32_t to);
+
+
+    uint8_t intsetSearch(int64_t value, uint32_t *pos);
+
     uint32_t encoding;
     uint32_t length;
     int8_t contents[];
 };
 
-intset *intsetNew(void);
-intset *intsetAdd(intset *is, int64_t value, uint8_t *success);
-intset *intsetRemove(intset *is, int64_t value, int *success);
-uint8_t intsetFind(intset *is, int64_t value);
-int64_t intsetRandom(intset *is);
-uint8_t intsetGet(intset *is, uint32_t pos, int64_t *value);
-uint32_t intsetLen(const intset *is);
-size_t intsetBlobLen(intset *is);
 
 #ifdef REDIS_TEST
 int intsetTest(int argc, char *argv[]);

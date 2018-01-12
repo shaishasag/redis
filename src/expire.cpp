@@ -341,8 +341,8 @@ void rememberSlaveKeyWithExpire(redisDb *db, robj *key) {
      * representing the key: we don't want to need to take those keys
      * in sync with the main DB. The keys will be removed by expireSlaveKeys()
      * as it scans to find keys to remove. */
-    if (de->key == key->ptr) {
-        de->key = sdsdup((const sds)key->ptr);
+    if (de->dictGetKey() == key->ptr) {
+        de->dictSetKey(sdsdup((const sds)key->ptr));
         de->dictSetUnsignedIntegerVal(0);
     }
 

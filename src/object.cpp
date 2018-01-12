@@ -201,7 +201,7 @@ robj *createSetObject(void) {
 }
 
 robj *createIntsetObject(void) {
-    intset *is = intsetNew();
+    intset *is = intset::intsetNew();
     robj *o = createObject(OBJ_SET,is);
     o->encoding = OBJ_ENCODING_INTSET;
     return o;
@@ -745,7 +745,7 @@ size_t objectComputeSize(robj *o, size_t sample_size) {
             if (samples) asize += (double)elesize/samples*d->dictSize();
         } else if (o->encoding == OBJ_ENCODING_INTSET) {
             intset *is = (intset *)o->ptr;
-            asize = sizeof(*o)+sizeof(*is)+is->encoding*is->length;
+            asize = sizeof(*o)+is->intsetBlobLen();
         } else {
             serverPanic("Unknown set encoding");
         }

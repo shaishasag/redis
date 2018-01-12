@@ -689,7 +689,7 @@ ssize_t rdbSaveObject(rio *rdb, robj *o) {
             }
 
         } else if (o->encoding == OBJ_ENCODING_INTSET) {
-            size_t l = intsetBlobLen((intset*)o->ptr);
+            size_t l = ((intset*)o->ptr)->intsetBlobLen();
 
             if ((n = rdbSaveRawString(rdb,(unsigned char *)o->ptr,l)) == -1) return -1;
             nwritten += n;
@@ -1221,7 +1221,7 @@ robj *rdbLoadObject(int rdbtype, rio *rdb) {
             if (o->encoding == OBJ_ENCODING_INTSET) {
                 /* Fetch integer value from element. */
                 if (isSdsRepresentableAsLongLong(sdsele,&llval) == C_OK) {
-                    o->ptr = intsetAdd((intset *)o->ptr,llval,NULL);
+                    o->ptr = intset::intsetAdd((intset *)o->ptr,llval,NULL);
                 } else {
                     setTypeConvert(o,OBJ_ENCODING_HT);
                     ((dict *)o->ptr)->dictExpand(len);
@@ -1399,7 +1399,7 @@ robj *rdbLoadObject(int rdbtype, rio *rdb) {
             case RDB_TYPE_SET_INTSET:
                 o->type = OBJ_SET;
                 o->encoding = OBJ_ENCODING_INTSET;
-                if (intsetLen((intset *)o->ptr) > server.set_max_intset_entries)
+                if (((intset *)o->ptr)->intsetLen() > server.set_max_intset_entries)
                     setTypeConvert(o,OBJ_ENCODING_HT);
                 break;
             case RDB_TYPE_ZSET_ZIPLIST:

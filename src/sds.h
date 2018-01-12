@@ -83,7 +83,24 @@ struct __attribute__ ((__packed__)) sdshdr64 {
 #define SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))
 #define SDS_TYPE_5_LEN(f) ((f)>>SDS_TYPE_BITS)
 
-static inline size_t sdslen(const sds s) {
+inline char* sds_c_str(const sds s) {
+    unsigned char flags = s[-1];
+    switch(flags&SDS_TYPE_MASK) {
+        case SDS_TYPE_5:
+            return SDS_HDR(5,s)->buf;
+        case SDS_TYPE_8:
+            return SDS_HDR(8,s)->buf;
+        case SDS_TYPE_16:
+            return SDS_HDR(16,s)->buf;
+        case SDS_TYPE_32:
+            return SDS_HDR(32,s)->buf;
+        case SDS_TYPE_64:
+            return SDS_HDR(64,s)->buf;
+    }
+    return 0;
+}
+
+inline size_t sdslen(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
@@ -100,7 +117,7 @@ static inline size_t sdslen(const sds s) {
     return 0;
 }
 
-static inline size_t sdsavail(const sds s) {
+inline size_t sdsavail(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5: {
@@ -126,7 +143,7 @@ static inline size_t sdsavail(const sds s) {
     return 0;
 }
 
-static inline void sdssetlen(sds s, size_t newlen) {
+inline void sdssetlen(sds s, size_t newlen) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
@@ -150,7 +167,7 @@ static inline void sdssetlen(sds s, size_t newlen) {
     }
 }
 
-static inline void sdsinclen(sds s, size_t inc) {
+inline void sdsinclen(sds s, size_t inc) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
@@ -176,7 +193,7 @@ static inline void sdsinclen(sds s, size_t inc) {
 }
 
 /* sdsalloc() = sdsavail() + sdslen() */
-static inline size_t sdsalloc(const sds s) {
+inline size_t sdsalloc(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
@@ -193,7 +210,7 @@ static inline size_t sdsalloc(const sds s) {
     return 0;
 }
 
-static inline void sdssetalloc(sds s, size_t newlen) {
+inline void sdssetalloc(sds s, size_t newlen) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5:

@@ -65,11 +65,11 @@ endif
 # Override default settings if possible
 -include .make-settings
 
+DEBUG=-g -ggdb
 FINAL_CFLAGS=$(OPT) $(DEBUG) $(CFLAGS) $(REDIS_CFLAGS) $(WARN)
 FINAL_CPPFLAGS=$(OPT) $(DEBUG) $(CXXFLAGS) $(REDIS_CFLAGS) $(WARN)
 FINAL_LDFLAGS=$(LDFLAGS) $(REDIS_LDFLAGS) $(DEBUG) -lc++
 FINAL_LIBS=-lm
-DEBUG=-g -ggdb
 
 ifeq ($(uname_S),SunOS)
 	# SunOS

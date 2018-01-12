@@ -684,7 +684,7 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
         int pos = 0;
         int64_t ll;
 
-        while(intsetGet((intset *)o->ptr,pos++,&ll))
+        while(((intset *)o->ptr)->intsetGet(pos++,&ll))
             listAddNodeTail(keys,createStringObjectFromLongLong(ll));
         cursor = 0;
     } else if (o->type == OBJ_HASH || o->type == OBJ_ZSET) {

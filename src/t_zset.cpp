@@ -1893,7 +1893,7 @@ int zuiLength(zsetopsrc *op) {
 
     if (op->type == OBJ_SET) {
         if (op->encoding == OBJ_ENCODING_INTSET) {
-            return intsetLen((intset *)op->subject->ptr);
+            return ((intset *)op->subject->ptr)->intsetLen();
         } else if (op->encoding == OBJ_ENCODING_HT) {
             dict *ht = (dict *)op->subject->ptr;
             return ht->dictSize();
@@ -1931,7 +1931,7 @@ int zuiNext(zsetopsrc *op, zsetopval *val) {
         if (op->encoding == OBJ_ENCODING_INTSET) {
             int64_t ell;
 
-            if (!intsetGet(it->is.is,it->is.ii,&ell))
+            if (!it->is.is->intsetGet(it->is.ii,&ell))
                 return 0;
             val->ell = ell;
             val->score = 1.0;
@@ -2047,7 +2047,7 @@ int zuiFind(zsetopsrc *op, zsetopval *val, double *score) {
     if (op->type == OBJ_SET) {
         if (op->encoding == OBJ_ENCODING_INTSET) {
             if (zuiLongLongFromValue(val) &&
-                intsetFind((intset*)op->subject->ptr,val->ell))
+                ((intset*)op->subject->ptr)->intsetFind(val->ell))
             {
                 *score = 1.0;
                 return 1;
@@ -2102,21 +2102,24 @@ int zuiCompareByCardinality(const void *s1, const void *s2) {
 #define REDIS_AGGR_MAX 3
 #define zunionInterDictValue(_e) (_e->dictGetVal() == NULL ? 1.0 : *(double*)_e->dictGetVal())
 
-inline static void zunionInterAggregate(double *target, double val, int aggregate) {
+inline static double zunionInterAggregate(double target, double val, int aggregate) {
+    double retVal = target;
     if (aggregate == REDIS_AGGR_SUM) {
-        *target = *target + val;
+        retVal = retVal + val;
         /* The result of adding two doubles is NaN when one variable
          * is +inf and the other is -inf. When these numbers are added,
          * we maintain the convention of the result being 0.0. */
-        if (isnan(*target)) *target = 0.0;
+        if (isnan(retVal)) retVal = 0.0;
     } else if (aggregate == REDIS_AGGR_MIN) {
-        *target = val < *target ? val : *target;
+        retVal = val < retVal ? val : retVal;
     } else if (aggregate == REDIS_AGGR_MAX) {
-        *target = val > *target ? val : *target;
+        retVal = val > retVal ? val : retVal;
     } else {
         /* safety net */
         serverPanic("Unknown ZUNION/INTER aggregate type");
     }
+
+    return retVal;
 }
 
 uint64_t dictSdsHash(const void *key);
@@ -2248,10 +2251,10 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
                      * iterating, so explicitly check for equal object. */
                     if (src[j].subject == src[0].subject) {
                         value = zval.score*src[j].weight;
-                        zunionInterAggregate(&score,value,aggregate);
+                        score = zunionInterAggregate(score,value,aggregate);
                     } else if (zuiFind(&src[j],&zval,&value)) {
                         value *= src[j].weight;
-                        zunionInterAggregate(&score,value,aggregate);
+                        score = zunionInterAggregate(score,value,aggregate);
                     } else {
                         break;
                     }
@@ -2307,8 +2310,11 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
                      *
                      * Here we access directly the dictEntry double
                      * value inside the union as it is a big speedup
-                     * compared to using the getDouble/setDouble API. */
-                    zunionInterAggregate(&existing->v.d,score,aggregate);
+                     * compared to using the getDouble/setDouble API.
+                     * C++ed: using getDouble/setDouble these are inline
+                     * so performance degregation is not expected.
+                     * */
+                    existing->dictSetDoubleVal(zunionInterAggregate(existing->dictGetDoubleVal(), score, aggregate));
                 }
             }
             zuiClearIterator(&src[i]);

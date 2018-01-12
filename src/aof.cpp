@@ -870,7 +870,7 @@ int rewriteSetObject(rio *r, robj *key, robj *o) {
         int ii = 0;
         int64_t llval;
 
-        while(intsetGet((intset *)o->ptr,ii++,&llval)) {
+        while(((intset *)o->ptr)->intsetGet(ii++,&llval)) {
             if (count == 0) {
                 int cmd_items = (items > AOF_REWRITE_ITEMS_PER_CMD) ?
                     AOF_REWRITE_ITEMS_PER_CMD : items;

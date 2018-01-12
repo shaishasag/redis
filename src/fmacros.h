@@ -60,4 +60,4 @@
 
 #endif
 #include <fstream>
-//extern std::ofstream outer;
+extern std::ofstream outer;

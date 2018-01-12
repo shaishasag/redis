@@ -27,7 +27,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "fmacros.h"
 #include "server.h"
+#include "sds.h"
 
 /*-----------------------------------------------------------------------------
  * Set Commands
@@ -62,11 +64,11 @@ int setTypeAdd(robj *subject, sds value) {
     } else if (subject->encoding == OBJ_ENCODING_INTSET) {
         if (isSdsRepresentableAsLongLong(value,&llval) == C_OK) {
             uint8_t success = 0;
-            subject->ptr = intsetAdd((intset *)subject->ptr,llval,&success);
+            subject->ptr = intset::intsetAdd((intset *)subject->ptr,llval,&success);
             if (success) {
                 /* Convert to regular set when the intset contains
                  * too many entries. */
-                if (intsetLen((intset *)subject->ptr) > server.set_max_intset_entries)
+                if (((intset *)subject->ptr)->intsetLen() > server.set_max_intset_entries)
                     setTypeConvert(subject,OBJ_ENCODING_HT);
                 return 1;
             }
@@ -95,7 +97,7 @@ int setTypeRemove(robj *setobj, sds value) {
     } else if (setobj->encoding == OBJ_ENCODING_INTSET) {
         if (isSdsRepresentableAsLongLong(value,&llval) == C_OK) {
             int success;
-            setobj->ptr = intsetRemove((intset *)setobj->ptr,llval,&success);
+            setobj->ptr = intset::intsetRemove((intset *)setobj->ptr,llval,&success);
             if (success) return 1;
         }
     } else {
@@ -110,7 +112,7 @@ int setTypeIsMember(robj *subject, sds value) {
         return ((dict*)subject->ptr)->dictFind(value) != NULL;
     } else if (subject->encoding == OBJ_ENCODING_INTSET) {
         if (isSdsRepresentableAsLongLong(value,&llval) == C_OK) {
-            return intsetFind((intset*)subject->ptr,llval);
+            return ((intset*)subject->ptr)->intsetFind(llval);
         }
     } else {
         serverPanic("Unknown set encoding");
@@ -158,7 +160,7 @@ int setTypeNext(setTypeIterator *si, sds *sdsele, int64_t *llele) {
         *sdsele = (sds)de->dictGetKey();
         *llele = -123456789; /* Not needed. Defensive. */
     } else if (si->encoding == OBJ_ENCODING_INTSET) {
-        if (!intsetGet((intset*)si->subject->ptr,si->ii++,llele))
+        if (!((intset*)si->subject->ptr)->intsetGet(si->ii++,llele))
             return -1;
         *sdsele = NULL; /* Not needed. Defensive. */
     } else {
@@ -211,7 +213,7 @@ int setTypeRandomElement(robj *setobj, sds *sdsele, int64_t *llele) {
         *sdsele = (sds)de->dictGetKey();
         *llele = -123456789; /* Not needed. Defensive. */
     } else if (setobj->encoding == OBJ_ENCODING_INTSET) {
-        *llele = intsetRandom((intset *)setobj->ptr);
+        *llele = ((intset *)setobj->ptr)->intsetRandom();
         *sdsele = NULL; /* Not needed. Defensive. */
     } else {
         serverPanic("Unknown set encoding");
@@ -223,7 +225,7 @@ unsigned long setTypeSize(const robj *subject) {
     if (subject->encoding == OBJ_ENCODING_HT) {
         return (((dict*)subject->ptr)->dictSize());
     } else if (subject->encoding == OBJ_ENCODING_INTSET) {
-        return intsetLen((const intset*)subject->ptr);
+        return ((const intset*)subject->ptr)->intsetLen();
     } else {
         serverPanic("Unknown set encoding");
     }
@@ -236,20 +238,20 @@ void setTypeConvert(robj *setobj, int enc) {
     setTypeIterator *si;
     serverAssertWithInfo(NULL,setobj,setobj->type == OBJ_SET &&
                              setobj->encoding == OBJ_ENCODING_INTSET);
-
     if (enc == OBJ_ENCODING_HT) {
         int64_t intele;
         dict *d = dictCreate(&setDictType,NULL);
         sds element;
 
         /* Presize the dict to avoid rehashing */
-        d->dictExpand(intsetLen((intset *)setobj->ptr));
 
         /* To add the elements we extract integers and create redis objects */
         si = setTypeInitIterator(setobj);
         while (setTypeNext(si,&element,&intele) != -1) {
             element = sdsfromlonglong(intele);
-            serverAssert(d->dictAdd(element,NULL) == DICT_OK);
+            int ret = d->dictAdd(element,NULL);
+            outer << "setTypeConvert " << intele << " -> " << sds_c_str(element) << "; ret = " << ret << std::endl;
+            //serverAssert(ret == DICT_OK);
         }
         setTypeReleaseIterator(si);
 
@@ -262,22 +264,21 @@ void setTypeConvert(robj *setobj, int enc) {
 }
 
 void saddCommand(client *c) {
-    robj *set;
     int j, added = 0;
 
-    set = lookupKeyWrite(c->db,c->argv[1]);
-    if (set == NULL) {
-        set = setTypeCreate((sds)c->argv[2]->ptr);
-        dbAdd(c->db,c->argv[1],set);
+    robj *_set = lookupKeyWrite(c->db,c->argv[1]);
+    if (_set == NULL) {
+        _set = setTypeCreate((sds)c->argv[2]->ptr);
+        dbAdd(c->db,c->argv[1],_set);
     } else {
-        if (set->type != OBJ_SET) {
+        if (_set->type != OBJ_SET) {
             addReply(c,shared.wrongtypeerr);
             return;
         }
     }
 
     for (j = 2; j < c->argc; j++) {
-        if (setTypeAdd(set,(sds)c->argv[j]->ptr)) added++;
+        if (setTypeAdd(_set,(sds)c->argv[j]->ptr)) added++;
     }
     if (added) {
         signalModifiedKey(c->db,c->argv[1]);
@@ -478,7 +479,7 @@ void spopWithCountCommand(client *c) {
             if (encoding == OBJ_ENCODING_INTSET) {
                 addReplyBulkLongLong(c,llele);
                 objele = createStringObjectFromLongLong(llele);
-                set->ptr = intsetRemove((intset *)set->ptr,llele,NULL);
+                set->ptr = intset::intsetRemove((intset *)set->ptr,llele,NULL);
             } else {
                 addReplyBulkCBuffer(c,sdsele,sdslen(sdsele));
                 objele = createStringObject(sdsele,sdslen(sdsele));
@@ -577,7 +578,7 @@ void spopCommand(client *c) {
     /* Remove the element from the set */
     if (encoding == OBJ_ENCODING_INTSET) {
         ele = createStringObjectFromLongLong(llele);
-        set->ptr = intsetRemove((intset *)set->ptr,llele,NULL);
+        set->ptr = intset::intsetRemove((intset *)set->ptr,llele,NULL);
     } else {
         ele = createStringObject(sdsele,sdslen(sdsele));
         setTypeRemove(set,(sds)ele->ptr);
@@ -852,7 +853,7 @@ void sinterGenericCommand(client *c, robj **setkeys,
             if (encoding == OBJ_ENCODING_INTSET) {
                 /* intset with intset is simple... and fast */
                 if (sets[j]->encoding == OBJ_ENCODING_INTSET &&
-                    !intsetFind((intset*)sets[j]->ptr,intobj))
+                    !((intset*)sets[j]->ptr)->intsetFind(intobj))
                 {
                     break;
                 /* in order to compare an integer with an object we

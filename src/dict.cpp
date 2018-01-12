@@ -52,7 +52,7 @@
 #endif
 #include <new>
 
-//std::ofstream outer("/Users/shai/Desktop/redispp.out.txt", std::ios::app);
+std::ofstream outer("/Users/shai/Desktop/redispp.out.txt", std::ios::app);
 
 /* Using dictEnableResize() / dictDisableResize() we make possible to
  * enable/disable resizing of the hash table as needed. This is very important
