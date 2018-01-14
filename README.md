@@ -21,7 +21,8 @@ becomes:
 
     (I Never understood the need to "typedef" each and every struct declaration and the double naming both before and after the curly braces.) 
 
-* Converted the structs is dict.h to classes. Many global functions became member functions. Some members are private and accessed through accessor methods.
+* Converted the structs to classes. Many global functions became member functions. Some members are private and accessed through accessor methods.
+* When converting a struct to class I rename the members with the convention of starting a member name with m_. This requires many changes across the code so why is this important? Redis code if full of variables that have the same name as members of structs. Once such a function becomes a member function the compiler (and the human reader) gets confused resulting in hard to find bugs.
 
 What is Redis?
 --------------

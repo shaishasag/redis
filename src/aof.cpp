@@ -67,23 +67,22 @@ typedef struct aofrwblock {
 /* This function free the old AOF rewrite buffer if needed, and initialize
  * a fresh new one. It tests for server.aof_rewrite_buf_blocks equal to NULL
  * so can be used for the first initialization as well. */
-void aofRewriteBufferReset(void) {
+void aofRewriteBufferReset() {
     if (server.aof_rewrite_buf_blocks)
         listRelease(server.aof_rewrite_buf_blocks);
 
     server.aof_rewrite_buf_blocks = listCreate();
-    listSetFreeMethod(server.aof_rewrite_buf_blocks,zfree);
+    server.aof_rewrite_buf_blocks->listSetFreeMethod(zfree);
 }
 
 /* Return the current size of the AOF rewrite buffer. */
 unsigned long aofRewriteBufferSize(void) {
     listNode *ln;
-    listIter li;
     unsigned long size = 0;
 
-    listRewind(server.aof_rewrite_buf_blocks,&li);
-    while((ln = listNext(&li))) {
-        aofrwblock *block = (aofrwblock *)listNodeValue(ln);
+    listIter li(server.aof_rewrite_buf_blocks);
+    while((ln = li.listNext())) {
+        aofrwblock *block = (aofrwblock *)ln->listNodeValue();
         size += block->used;
     }
     return size;
@@ -102,8 +101,8 @@ void aofChildWriteDiffData(aeEventLoop *el, int fd, void *privdata, int mask) {
     UNUSED(mask);
 
     while(1) {
-        ln = listFirst(server.aof_rewrite_buf_blocks);
-        block = ln ? (aofrwblock *)ln->value : NULL;
+        ln = server.aof_rewrite_buf_blocks->listFirst();
+        block = ln ? (aofrwblock *)ln->listNodeValue() : NULL;
         if (server.aof_stop_sending_diff || !block) {
             aeDeleteFileEvent(server.el,server.aof_pipe_write_data_to_child,
                               AE_WRITABLE);
@@ -117,14 +116,14 @@ void aofChildWriteDiffData(aeEventLoop *el, int fd, void *privdata, int mask) {
             block->used -= nwritten;
             block->free += nwritten;
         }
-        if (block->used == 0) listDelNode(server.aof_rewrite_buf_blocks,ln);
+        if (block->used == 0) server.aof_rewrite_buf_blocks->listDelNode(ln);
     }
 }
 
 /* Append data to the AOF rewrite buffer, allocating new blocks if needed. */
 void aofRewriteBufferAppend(unsigned char *s, unsigned long len) {
-    listNode *ln = listLast(server.aof_rewrite_buf_blocks);
-    aofrwblock *block = ln ? (aofrwblock *)ln->value : NULL;
+    listNode *ln = server.aof_rewrite_buf_blocks->listLast();
+    aofrwblock *block = ln ? (aofrwblock *)ln->listNodeValue() : NULL;
 
     while(len) {
         /* If we already got at least an allocated block, try appending
@@ -146,11 +145,11 @@ void aofRewriteBufferAppend(unsigned char *s, unsigned long len) {
             block = (aofrwblock *)zmalloc(sizeof(*block));
             block->free = AOF_RW_BUF_BLOCK_SIZE;
             block->used = 0;
-            listAddNodeTail(server.aof_rewrite_buf_blocks,block);
+            server.aof_rewrite_buf_blocks->listAddNodeTail(block);
 
             /* Log every time we cross more 10 or 100 blocks, respectively
              * as a notice or warning. */
-            numblocks = listLength(server.aof_rewrite_buf_blocks);
+            numblocks = server.aof_rewrite_buf_blocks->listLength();
             if (((numblocks+1) % 10) == 0) {
                 int level = ((numblocks+1) % 100) == 0 ? LL_WARNING :
                                                          LL_NOTICE;
@@ -173,12 +172,11 @@ void aofRewriteBufferAppend(unsigned char *s, unsigned long len) {
  * otherwise the number of bytes written is returned. */
 ssize_t aofRewriteBufferWrite(int fd) {
     listNode *ln;
-    listIter li;
     ssize_t count = 0;
 
-    listRewind(server.aof_rewrite_buf_blocks,&li);
-    while((ln = listNext(&li))) {
-        aofrwblock *block = (aofrwblock *)listNodeValue(ln);
+    listIter li(server.aof_rewrite_buf_blocks);
+    while((ln = li.listNext())) {
+        aofrwblock *block = (aofrwblock *)ln->listNodeValue();
         ssize_t nwritten;
 
         if (block->used) {
@@ -602,8 +600,8 @@ struct client *createFakeClient(void) {
     c->obuf_soft_limit_reached_time = 0;
     c->watched_keys = listCreate();
     c->peerid = NULL;
-    listSetFreeMethod(c->reply,decrRefCountVoid);
-    listSetDupMethod(c->reply,dupClientReplyValue);
+    c->reply->listSetFreeMethod(decrRefCountVoid);
+    c->reply->listSetDupMethod(dupClientReplyValue);
     initClientMultiState(c);
     return c;
 }
@@ -743,7 +741,7 @@ int loadAppendOnlyFile(char *filename) {
         cmd->proc(fakeClient);
 
         /* The fake client should not have a reply */
-        serverAssert(fakeClient->bufpos == 0 && listLength(fakeClient->reply) == 0);
+        serverAssert(fakeClient->bufpos == 0 && fakeClient->reply->listLength() == 0);
         /* The fake client should never get blocked */
         serverAssert((fakeClient->flags & CLIENT_BLOCKED) == 0);
 

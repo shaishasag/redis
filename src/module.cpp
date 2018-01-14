@@ -2648,11 +2648,11 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
      * output buffers. */
     proto = sdsnewlen(c->buf,c->bufpos);
     c->bufpos = 0;
-    while(listLength(c->reply)) {
-        sds o = (sds)listNodeValue(listFirst(c->reply));
+    while(c->reply->listLength()) {
+        sds o = (sds)c->reply->listFirst()->listNodeValue();
 
         proto = sdscatsds(proto,o);
-        listDelNode(c->reply,listFirst(c->reply));
+        c->reply->listDelNode(c->reply->listFirst());
     }
     reply = moduleCreateCallReplyFromProto(ctx,proto);
     autoMemoryAdd(ctx,REDISMODULE_AM_REPLY,reply);
@@ -2734,12 +2734,11 @@ moduleType *moduleTypeLookupModuleByName(const char *name) {
     dictIterator di(modules);
     while ((de = dictNext(&di)) != NULL) {
         struct RedisModule* module = (RedisModule*)de->dictGetVal();
-        listIter li;
         listNode *ln;
 
-        listRewind(module->types,&li);
-        while((ln = listNext(&li))) {
-            moduleType *mt = (moduleType *)ln->value;
+        listIter li(module->types);
+        while((ln = li.listNext())) {
+            moduleType *mt = (moduleType *)ln->listNodeValue();
             if (memcmp(name,mt->name,sizeof(mt->name)) == 0) {
                 return mt;
             }
@@ -2771,12 +2770,11 @@ moduleType *moduleTypeLookupModuleByID(uint64_t id) {
 
     while ((de = dictNext(&di)) != NULL && mt == NULL) {
         struct RedisModule* module = (RedisModule*)de->dictGetVal();
-        listIter li;
         listNode *ln;
 
-        listRewind(module->types,&li);
-        while((ln = listNext(&li))) {
-            moduleType *this_mt = (moduleType *)ln->value;
+        listIter li(module->types);
+        while((ln = li.listNext())) {
+            moduleType *this_mt = (moduleType *)ln->listNodeValue();
             /* Compare only the 54 bit module identifier and not the
              * encoding version. */
             if (this_mt->id >> 10 == id >> 10) {
@@ -2902,7 +2900,7 @@ moduleType *RM_CreateDataType(RedisModuleCtx *ctx, const char *name, int encver,
     mt->digest = tms->digest;
     mt->free = tms->free;
     memcpy(mt->name,name,sizeof(mt->name));
-    listAddNodeTail(ctx->module->types,mt);
+    ctx->module->types->listAddNodeTail(mt);
     return mt;
 }
 
@@ -3463,7 +3461,7 @@ RedisModuleBlockedClient *RM_BlockClient(RedisModuleCtx *ctx, RedisModuleCmdFunc
 int RM_UnblockClient(RedisModuleBlockedClient *bc, void *privdata) {
     pthread_mutex_lock(&moduleUnblockedClientsMutex);
     bc->privdata = privdata;
-    listAddNodeTail(moduleUnblockedClients,bc);
+    moduleUnblockedClients->listAddNodeTail(bc);
     if (write(server.module_blocked_pipe[1],"A",1) != 1) {
         /* Ignore the error, this is best-effort. */
     }
@@ -3495,11 +3493,11 @@ void moduleHandleBlockedClients(void) {
      * so we can read every pending "awake byte" in the pipe. */
     char buf[1];
     while (read(server.module_blocked_pipe[0],buf,1) == 1);
-    while (listLength(moduleUnblockedClients)) {
-        ln = listFirst(moduleUnblockedClients);
-        bc = (RedisModuleBlockedClient *)ln->value;
+    while (moduleUnblockedClients->listLength()) {
+        ln = moduleUnblockedClients->listFirst();
+        bc = (RedisModuleBlockedClient *)ln->listNodeValue();
         client *c = bc->_client;
-        listDelNode(moduleUnblockedClients,ln);
+        moduleUnblockedClients->listDelNode(ln);
         pthread_mutex_unlock(&moduleUnblockedClientsMutex);
 
         /* Release the lock during the loop, as long as we don't
@@ -3530,8 +3528,8 @@ void moduleHandleBlockedClients(void) {
             if (bc->reply_client->bufpos)
                 addReplyString(c,bc->reply_client->buf,
                                  bc->reply_client->bufpos);
-            if (listLength(bc->reply_client->reply))
-                listJoin(c->reply,bc->reply_client->reply);
+            if (bc->reply_client->reply->listLength())
+                c->reply->listJoin(bc->reply_client->reply);
             c->reply_bytes += bc->reply_client->reply_bytes;
         }
         freeClient(bc->reply_client);
@@ -3545,7 +3543,7 @@ void moduleHandleBlockedClients(void) {
                 !(c->flags & CLIENT_PENDING_WRITE))
             {
                 c->flags |= CLIENT_PENDING_WRITE;
-                listAddNodeHead(server.clients_pending_write,c);
+                server.clients_pending_write->listAddNodeHead(c);
             }
         }
 
@@ -3727,12 +3725,11 @@ void moduleInitModulesSystem(void) {
  * given commands, loading AOF also may need some modules to exist, and
  * if this instance is a slave, it must understand commands from master. */
 void moduleLoadFromQueue(void) {
-    listIter li;
     listNode *ln;
 
-    listRewind(server.loadmodule_queue,&li);
-    while((ln = listNext(&li))) {
-        moduleLoadQueueEntry *loadmod = (moduleLoadQueueEntry *)ln->value;
+    listIter li(server.loadmodule_queue);
+    while((ln = li.listNext())) {
+        moduleLoadQueueEntry *loadmod = (moduleLoadQueueEntry *)ln->listNodeValue();
         if (moduleLoad(loadmod->path,(void **)loadmod->argv,loadmod->argc)
             == C_ERR)
         {
@@ -3823,7 +3820,7 @@ int moduleUnload(sds name) {
         return REDISMODULE_ERR;
     }
 
-    if (listLength(module->types)) {
+    if (module->types->listLength()) {
         errno = EBUSY;
         return REDISMODULE_ERR;
     }

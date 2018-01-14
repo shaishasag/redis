@@ -212,7 +212,7 @@ void sortCommand(client *c) {
     /* Create a list of operations to perform for every sorted element.
      * Operations can be GET */
     operations = listCreate();
-    listSetFreeMethod(operations,zfree);
+    operations->listSetFreeMethod(zfree);
     j = 2; /* options start at argv[2] */
 
     /* Now we need to protect sortval incrementing its count, in the future
@@ -267,7 +267,7 @@ void sortCommand(client *c) {
                 syntax_error++;
                 break;
             }
-            listAddNodeTail(operations,createSortOperation(
+            operations->listAddNodeTail(createSortOperation(
                 SORT_OP_GET,c->argv[j+1]));
             getop++;
             j++;
@@ -509,12 +509,11 @@ void sortCommand(client *c) {
         addReplyMultiBulkLen(c,outputlen);
         for (j = start; j <= end; j++) {
             listNode *ln;
-            listIter li;
 
             if (!getop) addReplyBulk(c,vector[j].obj);
-            listRewind(operations,&li);
-            while((ln = listNext(&li))) {
-                redisSortOperation *sop = (redisSortOperation *)ln->value;
+            listIter li(operations);
+            while((ln = li.listNext())) {
+                redisSortOperation *sop = (redisSortOperation *)ln->listNodeValue();
                 robj *val = lookupKeyByPattern(c->db,sop->pattern,
                     vector[j].obj);
 
@@ -537,14 +536,13 @@ void sortCommand(client *c) {
         /* STORE option specified, set the sorting result as a List object */
         for (j = start; j <= end; j++) {
             listNode *ln;
-            listIter li;
 
             if (!getop) {
                 listTypePush(sobj,vector[j].obj,LIST_TAIL);
             } else {
-                listRewind(operations,&li);
-                while((ln = listNext(&li))) {
-                    redisSortOperation *sop = (redisSortOperation *)ln->value;
+                listIter li(operations);
+                while((ln = li.listNext())) {
+                    redisSortOperation *sop = (redisSortOperation *)ln->listNodeValue();
                     robj *val = lookupKeyByPattern(c->db,sop->pattern,
                         vector[j].obj);
 

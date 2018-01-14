@@ -557,8 +557,8 @@ void scanCallback(void *privdata, const dictEntry *de) {
         serverPanic("Type not handled in SCAN callback.");
     }
 
-    listAddNodeTail(keys, key);
-    if (val) listAddNodeTail(keys, val);
+    keys->listAddNodeTail( key);
+    if (val) keys->listAddNodeTail( val);
 }
 
 /* Try to parse a SCAN cursor stored at object 'o':
@@ -679,13 +679,13 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
             cursor = ht->dictScan(cursor, scanCallback, NULL, privdata);
         } while (cursor &&
               maxiterations-- &&
-              listLength(keys) < (unsigned long)count);
+              keys->listLength() < (unsigned long)count);
     } else if (o->type == OBJ_SET) {
         int pos = 0;
         int64_t ll;
 
         while(((intset *)o->ptr)->intsetGet(pos++,&ll))
-            listAddNodeTail(keys,createStringObjectFromLongLong(ll));
+            keys->listAddNodeTail(createStringObjectFromLongLong(ll));
         cursor = 0;
     } else if (o->type == OBJ_HASH || o->type == OBJ_ZSET) {
         unsigned char *p = (unsigned char *)ziplistIndex((unsigned char *)o->ptr,0);
@@ -695,7 +695,7 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
 
         while(p) {
             ziplistGet(p,&vstr,&vlen,&vll);
-            listAddNodeTail(keys,
+            keys->listAddNodeTail(
                 (vstr != NULL) ? createStringObject((char*)vstr,vlen) :
                                  createStringObjectFromLongLong(vll));
             p = ziplistNext((unsigned char *)o->ptr,p);
@@ -706,10 +706,10 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
     }
 
     /* Step 3: Filter elements. */
-    node = listFirst(keys);
+    node = keys->listFirst();
     while (node) {
-        robj *kobj = (robj *)listNodeValue(node);
-        nextnode = listNextNode(node);
+        robj *kobj = (robj *)node->listNodeValue();
+        nextnode = node->listNextNode();
         int filter = 0;
 
         /* Filter element if it does not match the pattern. */
@@ -733,7 +733,7 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
         /* Remove the element and its associted value if needed. */
         if (filter) {
             decrRefCount(kobj);
-            listDelNode(keys, node);
+            keys->listDelNode( node);
         }
 
         /* If this is a hash or a sorted set, we have a flat list of
@@ -741,11 +741,11 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
          * value, or skip it if it was not filtered: we only match keys. */
         if (o && (o->type == OBJ_ZSET || o->type == OBJ_HASH)) {
             node = nextnode;
-            nextnode = listNextNode(node);
+            nextnode = node->listNextNode();
             if (filter) {
-                kobj = (robj *)listNodeValue(node);
+                kobj = (robj *)node->listNodeValue();
                 decrRefCount(kobj);
-                listDelNode(keys, node);
+                keys->listDelNode( node);
             }
         }
         node = nextnode;
@@ -755,16 +755,16 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
     addReplyMultiBulkLen(c, 2);
     addReplyBulkLongLong(c,cursor);
 
-    addReplyMultiBulkLen(c, listLength(keys));
-    while ((node = listFirst(keys)) != NULL) {
-        robj *kobj = (robj *)listNodeValue(node);
+    addReplyMultiBulkLen(c, keys->listLength());
+    while ((node = keys->listFirst()) != NULL) {
+        robj *kobj = (robj *)node->listNodeValue();
         addReplyBulk(c, kobj);
         decrRefCount(kobj);
-        listDelNode(keys, node);
+        keys->listDelNode( node);
     }
 
 cleanup:
-    listSetFreeMethod(keys,decrRefCountVoid);
+    keys->listSetFreeMethod(decrRefCountVoid);
     listRelease(keys);
 }
 

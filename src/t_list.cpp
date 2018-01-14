@@ -650,7 +650,7 @@ void blockForKeys(client *c, robj **keys, int numkeys, mstime_t timeout, robj *t
         } else {
             l = (list *)de->dictGetVal();
         }
-        listAddNodeTail(l,c);
+        l->listAddNodeTail(c);
     }
     blockClient(c,BLOCKED_LIST);
 }
@@ -670,9 +670,9 @@ void unblockClientWaitingData(client *c) {
             /* Remove this client from the list of clients waiting for this key. */
             list *l = (list *)(c->db->blocking_keys)->dictFetchValue(key);
             serverAssertWithInfo(c,key,l != NULL);
-            listDelNode(l,listSearchKey(l,c));
+            l->listDelNode(l->listSearchKey(c));
             /* If the list is empty we need to remove it to avoid wasting memory */
-            if (listLength(l) == 0)
+            if (l->listLength() == 0)
                 c->db->blocking_keys->dictDelete(key);
         }
     }
@@ -706,7 +706,7 @@ void signalListAsReady(redisDb *db, robj *key) {
     rl->key = key;
     rl->db = db;
     incrRefCount(key);
-    listAddNodeTail(server.ready_keys,rl);
+    server.ready_keys->listAddNodeTail(rl);
 
     /* We also add the key in the db->ready_keys dictionary in order
      * to avoid adding it multiple times into a list with a simple O(1)
@@ -795,19 +795,18 @@ int serveClientBlockedOnList(client *receiver, robj *key, robj *dstkey, redisDb 
  * again as a result of serving BRPOPLPUSH we can have new blocking clients
  * to serve because of the PUSH side of BRPOPLPUSH. */
 void handleClientsBlockedOnLists(void) {
-    while(listLength(server.ready_keys) != 0) {
-        list *l;
+    while(server.ready_keys->listLength() != 0) {
 
         /* Point server.ready_keys to a fresh list and save the current one
          * locally. This way as we run the old list we are free to call
          * signalListAsReady() that may push new elements in server.ready_keys
          * when handling clients blocked into BRPOPLPUSH. */
-        l = server.ready_keys;
+        list *l = server.ready_keys;
         server.ready_keys = listCreate();
 
-        while(listLength(l) != 0) {
-            listNode *ln = listFirst(l);
-            readyList *rl = (readyList *)ln->value;
+        while(l->listLength() != 0) {
+            listNode *ln = l->listFirst();
+            readyList *rl = (readyList *)ln->listNodeValue();
 
             /* First of all remove this key from db->ready_keys so that
              * we can safely call signalListAsReady() against this key. */
@@ -824,11 +823,11 @@ void handleClientsBlockedOnLists(void) {
                 de = rl->db->blocking_keys->dictFind(rl->key);
                 if (de) {
                     list* clients = (list*)de->dictGetVal();
-                    int numclients = listLength(clients);
+                    int numclients = clients->listLength();
 
                     while(numclients--) {
-                        listNode *clientnode = listFirst(clients);
-                        client *receiver = (client *)clientnode->value;
+                        listNode *clientnode = clients->listFirst();
+                        client *receiver = (client *)clientnode->listNodeValue();
                         robj *dstkey = receiver->bpop.target;
                         int where = (receiver->lastcmd &&
                                      receiver->lastcmd->proc == blpopCommand) ?
@@ -869,7 +868,7 @@ void handleClientsBlockedOnLists(void) {
             /* Free this item. */
             decrRefCount(rl->key);
             zfree(rl);
-            listDelNode(l,ln);
+            l->listDelNode(ln);
         }
         listRelease(l); /* We have the new list on place at this point. */
     }

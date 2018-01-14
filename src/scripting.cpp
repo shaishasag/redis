@@ -572,7 +572,7 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
     /* Convert the result of the Redis command into a suitable Lua type.
      * The first thing we need is to create a single string from the client
      * output buffers. */
-    if (listLength(c->reply) == 0 && c->bufpos < PROTO_REPLY_CHUNK_BYTES) {
+    if (c->reply->listLength() == 0 && c->bufpos < PROTO_REPLY_CHUNK_BYTES) {
         /* This is a fast path for the common case of a reply inside the
          * client static buffer. Don't create an SDS string but just use
          * the client buffer directly. */
@@ -582,11 +582,11 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
     } else {
         reply = sdsnewlen(c->buf,c->bufpos);
         c->bufpos = 0;
-        while(listLength(c->reply)) {
-            sds o = (sds)listNodeValue(listFirst(c->reply));
+        while(c->reply->listLength()) {
+            sds o = (sds)c->reply->listFirst()->listNodeValue();
 
             reply = sdscatsds(reply,o);
-            listDelNode(c->reply,listFirst(c->reply));
+            c->reply->listDelNode(c->reply->listFirst());
         }
     }
     if (raise_error && reply[0] != '-') raise_error = 0;
@@ -1525,11 +1525,11 @@ void scriptCommand(client *c) {
  * ------------------------------------------------------------------------- */
 
 /* Initialize Lua debugger data structures. */
-void ldbInit(void) {
+void ldbInit() {
     ldb.fd = -1;
     ldb.active = 0;
     ldb.logs = listCreate();
-    listSetFreeMethod(ldb.logs,(void (*)(void*))sdsfree);
+    ldb.logs->listSetFreeMethod((void (*)(void*))sdsfree);
     ldb.children = listCreate();
     ldb.src = NULL;
     ldb.lines = 0;
@@ -1540,8 +1540,8 @@ void ldbInit(void) {
 void ldbFlushLog(list *log) {
     listNode *ln;
 
-    while((ln = listFirst(log)) != NULL)
-        listDelNode(log,ln);
+    while((ln = log->listFirst()) != NULL)
+        log->listDelNode(ln);
 }
 
 /* Enable debug mode of Lua scripts for this client. */
@@ -1567,7 +1567,7 @@ void ldbDisable(client *c) {
 
 /* Append a log entry to the specified LDB log. */
 void ldbLog(sds entry) {
-    listAddNodeTail(ldb.logs,entry);
+    ldb.logs->listAddNodeTail(entry);
 }
 
 /* A version of ldbLog() which prevents producing logs greater than
@@ -1594,14 +1594,14 @@ void ldbLogWithMaxLen(sds entry) {
  * replaced with spaces. The entries sent are also consumed. */
 void ldbSendLogs(void) {
     sds proto = sdsempty();
-    proto = sdscatfmt(proto,"*%i\r\n", (int)listLength(ldb.logs));
-    while(listLength(ldb.logs)) {
-        listNode *ln = listFirst(ldb.logs);
+    proto = sdscatfmt(proto,"*%i\r\n", (int)ldb.logs->listLength());
+    while(ldb.logs->listLength()) {
+        listNode *ln = ldb.logs->listFirst();
         proto = sdscatlen(proto,"+",1);
-        sdsmapchars((sds)ln->value,"\r\n","  ",2);
-        proto = sdscatsds(proto, (sds)ln->value);
+        sdsmapchars((sds)ln->listNodeValue(),"\r\n","  ",2);
+        proto = sdscatsds(proto, (sds)ln->listNodeValue());
         proto = sdscatlen(proto,"\r\n",2);
-        listDelNode(ldb.logs,ln);
+        ldb.logs->listDelNode(ln);
     }
     if (write(ldb.fd,proto,sdslen(proto)) == -1) {
         /* Avoid warning. We don't check the return value of write()
@@ -1646,7 +1646,7 @@ int ldbStartSession(client *c) {
             closeListeningSockets(0);
         } else {
             /* Parent */
-            listAddNodeTail(ldb.children,(void*)(unsigned long)cp);
+            ldb.children->listAddNodeTail((void*)(unsigned long)cp);
             freeClientAsync(c); /* Close the client in the parent side. */
             return 0;
         }
@@ -1710,9 +1710,9 @@ void ldbEndSession(client *c) {
  * forked debugging sessions, it is removed from the children list.
  * If the pid was found non-zero is returned. */
 int ldbRemoveChild(pid_t pid) {
-    listNode *ln = listSearchKey(ldb.children,(void*)(unsigned long)pid);
+    listNode *ln = ldb.children->listSearchKey((void*)(unsigned long)pid);
     if (ln) {
-        listDelNode(ldb.children,ln);
+        ldb.children->listDelNode(ln);
         return 1;
     }
     return 0;
@@ -1721,17 +1721,16 @@ int ldbRemoveChild(pid_t pid) {
 /* Return the number of children we still did not received termination
  * acknowledge via wait() in the parent process. */
 int ldbPendingChildren(void) {
-    return listLength(ldb.children);
+    return ldb.children->listLength();
 }
 
 /* Kill all the forked sessions. */
 void ldbKillForkedSessions(void) {
-    listIter li;
     listNode *ln;
 
-    listRewind(ldb.children,&li);
-    while((ln = listNext(&li))) {
-        pid_t pid = (unsigned long) ln->value;
+    listIter li(ldb.children);
+    while((ln = li.listNext())) {
+        pid_t pid = (unsigned long) ln->listNodeValue();
         serverLog(LL_WARNING,"Killing debugging session %ld",(long)pid);
         kill(pid,SIGKILL);
     }

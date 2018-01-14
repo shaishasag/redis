@@ -192,7 +192,7 @@ handle_monitor:
      * MUTLI, EXEC, ... commands inside transaction ...
      * Instead EXEC is flagged as CMD_SKIP_MONITOR in the command
      * table, and we do it here with correct ordering. */
-    if (listLength(server.monitors) && !server.loading)
+    if (server.monitors->listLength() && !server.loading)
         replicationFeedMonitors(c,server.monitors,c->db->id,c->argv,c->argc);
 }
 
@@ -216,14 +216,13 @@ struct watchedKey {
 /* Watch for the specified key */
 void watchForKey(client *c, robj *key) {
     list *clients = NULL;
-    listIter li;
     listNode *ln;
     watchedKey *wk;
 
     /* Check if we are already watching for this key */
-    listRewind(c->watched_keys,&li);
-    while((ln = listNext(&li))) {
-        wk = (watchedKey *)listNodeValue(ln);
+    listIter li(c->watched_keys);
+    while((ln = li.listNext())) {
+        wk = (watchedKey *)ln->listNodeValue();
         if (wk->db == c->db && equalStringObjects(key,wk->key))
             return; /* Key already watched */
     }
@@ -234,35 +233,34 @@ void watchForKey(client *c, robj *key) {
         c->db->watched_keys->dictAdd(key,clients);
         incrRefCount(key);
     }
-    listAddNodeTail(clients,c);
+    clients->listAddNodeTail(c);
     /* Add the new key to the list of keys watched by this client */
     wk = (watchedKey *)zmalloc(sizeof(*wk));
     wk->key = key;
     wk->db = c->db;
     incrRefCount(key);
-    listAddNodeTail(c->watched_keys,wk);
+    c->watched_keys->listAddNodeTail(wk);
 }
 
 /* Unwatch all the keys watched by this client. To clean the EXEC dirty
  * flag is up to the caller. */
 void unwatchAllKeys(client *c) {
-    listIter li;
     listNode *ln;
 
-    if (listLength(c->watched_keys) == 0) return;
-    listRewind(c->watched_keys,&li);
-    while((ln = listNext(&li))) {
+    if (c->watched_keys->listLength() == 0) return;
+    listIter li(c->watched_keys);
+    while((ln = li.listNext())) {
         /* Lookup the watched key -> clients list and remove the client
          * from the list */
-        watchedKey *wk = (watchedKey *)listNodeValue(ln);
+        watchedKey *wk = (watchedKey *)ln->listNodeValue();
         list *clients = (list *)wk->db->watched_keys->dictFetchValue(wk->key);
         serverAssertWithInfo(c,NULL,clients != NULL);
-        listDelNode(clients,listSearchKey(clients,c));
+        clients->listDelNode(clients->listSearchKey(c));
         /* Kill the entry at all if this was the only client */
-        if (listLength(clients) == 0)
+        if (clients->listLength() == 0)
             wk->db->watched_keys->dictDelete( wk->key);
         /* Remove this watched key from the client->watched list */
-        listDelNode(c->watched_keys,ln);
+        c->watched_keys->listDelNode(ln);
         decrRefCount(wk->key);
         zfree(wk);
     }
@@ -272,7 +270,6 @@ void unwatchAllKeys(client *c) {
  * next EXEC will fail. */
 void touchWatchedKey(redisDb *db, robj *key) {
     list *clients;
-    listIter li;
     listNode *ln;
 
     if (db->watched_keys->dictSize() == 0) return;
@@ -281,9 +278,9 @@ void touchWatchedKey(redisDb *db, robj *key) {
 
     /* Mark all the clients watching this key as CLIENT_DIRTY_CAS */
     /* Check if we are already watching for this key */
-    listRewind(clients,&li);
-    while((ln = listNext(&li))) {
-        client *c = (client *)listNodeValue(ln);
+    listIter li(clients);
+    while((ln = li.listNext())) {
+        client *c = (client *)ln->listNodeValue();
 
         c->flags |= CLIENT_DIRTY_CAS;
     }
@@ -294,16 +291,15 @@ void touchWatchedKey(redisDb *db, robj *key) {
  * be touched. "dbid" is the DB that's getting the flush. -1 if it is
  * a FLUSHALL operation (all the DBs flushed). */
 void touchWatchedKeysOnFlush(int dbid) {
-    listIter li1, li2;
     listNode *ln;
 
     /* For every client, check all the waited keys */
-    listRewind(server.clients,&li1);
-    while((ln = listNext(&li1))) {
-        client *c = (client *)listNodeValue(ln);
-        listRewind(c->watched_keys,&li2);
-        while((ln = listNext(&li2))) {
-            watchedKey *wk = (watchedKey *)listNodeValue(ln);
+    listIter li1(server.clients);
+    while((ln = li1.listNext())) {
+        client *c = (client *)ln->listNodeValue();
+        listIter li2(c->watched_keys);
+        while((ln = li2.listNext())) {
+            watchedKey *wk = (watchedKey *)ln->listNodeValue();
 
             /* For every watched key matching the specified DB, if the
              * key exists, mark the client as dirty, as the key will be

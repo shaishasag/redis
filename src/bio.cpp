@@ -136,7 +136,7 @@ void bioCreateBackgroundJob(int type, void *arg1, void *arg2, void *arg3) {
     job->arg2 = arg2;
     job->arg3 = arg3;
     pthread_mutex_lock(&bio_mutex[type]);
-    listAddNodeTail(bio_jobs[type],job);
+    bio_jobs[type]->listAddNodeTail(job);
     bio_pending[type]++;
     pthread_cond_signal(&bio_newjob_cond[type]);
     pthread_mutex_unlock(&bio_mutex[type]);
@@ -172,13 +172,13 @@ void *bioProcessBackgroundJobs(void *arg) {
         listNode *ln;
 
         /* The loop always starts with the lock hold. */
-        if (listLength(bio_jobs[type]) == 0) {
+        if (bio_jobs[type]->listLength() == 0) {
             pthread_cond_wait(&bio_newjob_cond[type],&bio_mutex[type]);
             continue;
         }
         /* Pop the job from the queue. */
-        ln = listFirst(bio_jobs[type]);
-        job = (bio_job*)ln->value;
+        ln = bio_jobs[type]->listFirst();
+        job = (bio_job*)ln->listNodeValue();
         /* It is now possible to unlock the background system as we know have
          * a stand alone job structure to process.*/
         pthread_mutex_unlock(&bio_mutex[type]);
@@ -210,7 +210,7 @@ void *bioProcessBackgroundJobs(void *arg) {
         /* Lock again before reiterating the loop, if there are no longer
          * jobs to process we'll block again in pthread_cond_wait(). */
         pthread_mutex_lock(&bio_mutex[type]);
-        listDelNode(bio_jobs[type],ln);
+        bio_jobs[type]->listDelNode(ln);
         bio_pending[type]--;
     }
 }

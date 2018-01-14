@@ -686,24 +686,23 @@ void sentinelScheduleScriptExecution(char *path, ...) {
     sj->pid = 0;
     memcpy(sj->argv,argv,sizeof(char*)*(argc+1));
 
-    listAddNodeTail(sentinel.scripts_queue,sj);
+    sentinel.scripts_queue->listAddNodeTail(sj);
 
     /* Remove the oldest non running script if we already hit the limit. */
-    if (listLength(sentinel.scripts_queue) > SENTINEL_SCRIPT_MAX_QUEUE) {
+    if (sentinel.scripts_queue->listLength() > SENTINEL_SCRIPT_MAX_QUEUE) {
         listNode *ln;
-        listIter li;
 
-        listRewind(sentinel.scripts_queue,&li);
-        while ((ln = listNext(&li)) != NULL) {
-            sj = (sentinelScriptJob *)ln->value;
+        listIter li(sentinel.scripts_queue);
+        while ((ln = li.listNext()) != NULL) {
+            sj = (sentinelScriptJob *)ln->listNodeValue();
 
             if (sj->flags & SENTINEL_SCRIPT_RUNNING) continue;
             /* The first node is the oldest as we add on tail. */
-            listDelNode(sentinel.scripts_queue,ln);
+            sentinel.scripts_queue->listDelNode(ln);
             sentinelReleaseScriptJob(sj);
             break;
         }
-        serverAssert(listLength(sentinel.scripts_queue) <=
+        serverAssert(sentinel.scripts_queue->listLength() <=
                     SENTINEL_SCRIPT_MAX_QUEUE);
     }
 }
@@ -712,11 +711,10 @@ void sentinelScheduleScriptExecution(char *path, ...) {
  * (so that we can easily remove it from the queue if needed). */
 listNode *sentinelGetScriptListNodeByPid(pid_t pid) {
     listNode *ln;
-    listIter li;
 
-    listRewind(sentinel.scripts_queue,&li);
-    while ((ln = listNext(&li)) != NULL) {
-        sentinelScriptJob *sj = (sentinelScriptJob *)ln->value;
+    listIter li(sentinel.scripts_queue);
+    while ((ln = li.listNext()) != NULL) {
+        sentinelScriptJob *sj = (sentinelScriptJob *)ln->listNodeValue();
 
         if ((sj->flags & SENTINEL_SCRIPT_RUNNING) && sj->pid == pid)
             return ln;
@@ -728,16 +726,15 @@ listNode *sentinelGetScriptListNodeByPid(pid_t pid) {
  * scripts. */
 void sentinelRunPendingScripts(void) {
     listNode *ln;
-    listIter li;
     mstime_t now = mstime();
 
     /* Find jobs that are not running and run them, from the top to the
      * tail of the queue, so we run older jobs first. */
-    listRewind(sentinel.scripts_queue,&li);
+    listIter li(sentinel.scripts_queue);
     while (sentinel.running_scripts < SENTINEL_SCRIPT_MAX_RUNNING &&
-           (ln = listNext(&li)) != NULL)
+           (ln = li.listNext()) != NULL)
     {
-        sentinelScriptJob *sj = (sentinelScriptJob *)ln->value;
+        sentinelScriptJob *sj = (sentinelScriptJob *)ln->listNodeValue();
         pid_t pid;
 
         /* Skip if already running. */
@@ -809,7 +806,7 @@ void sentinelCollectTerminatedScripts(void) {
             serverLog(LL_WARNING,"wait3() returned a pid (%ld) we can't find in our scripts execution queue!", (long)pid);
             continue;
         }
-        sj = (sentinelScriptJob *)ln->value;
+        sj = (sentinelScriptJob *)ln->listNodeValue();
 
         /* If the script was terminated by a signal or returns an
          * exit code of "1" (that means: please retry), we reschedule it
@@ -828,7 +825,7 @@ void sentinelCollectTerminatedScripts(void) {
                 sentinelEvent(LL_WARNING,"-script-error",NULL,
                               "%s %d %d", sj->argv[0], bysignal, exitcode);
             }
-            listDelNode(sentinel.scripts_queue,ln);
+            sentinel.scripts_queue->listDelNode(ln);
             sentinelReleaseScriptJob(sj);
             sentinel.running_scripts--;
         }
@@ -839,12 +836,11 @@ void sentinelCollectTerminatedScripts(void) {
  * sentinelCollectTerminatedScripts() function. */
 void sentinelKillTimedoutScripts(void) {
     listNode *ln;
-    listIter li;
     mstime_t now = mstime();
 
-    listRewind(sentinel.scripts_queue,&li);
-    while ((ln = listNext(&li)) != NULL) {
-        sentinelScriptJob *sj = (sentinelScriptJob *)ln->value;
+    listIter li(sentinel.scripts_queue);
+    while ((ln = li.listNext()) != NULL) {
+        sentinelScriptJob *sj = (sentinelScriptJob *)ln->listNodeValue();
 
         if (sj->flags & SENTINEL_SCRIPT_RUNNING &&
             (now - sj->start_time) > SENTINEL_SCRIPT_MAX_RUNTIME)
@@ -859,12 +855,11 @@ void sentinelKillTimedoutScripts(void) {
 /* Implements SENTINEL PENDING-SCRIPTS command. */
 void sentinelPendingScriptsCommand(client *c) {
     listNode *ln;
-    listIter li;
 
-    addReplyMultiBulkLen(c,listLength(sentinel.scripts_queue));
-    listRewind(sentinel.scripts_queue,&li);
-    while ((ln = listNext(&li)) != NULL) {
-        sentinelScriptJob *sj = (sentinelScriptJob *)ln->value;
+    addReplyMultiBulkLen(c,sentinel.scripts_queue->listLength());
+    listIter li(sentinel.scripts_queue);
+    while ((ln = li.listNext()) != NULL) {
+        sentinelScriptJob *sj = (sentinelScriptJob *)ln->listNodeValue();
         int j = 0;
 
         addReplyMultiBulkLen(c,10);
@@ -3225,7 +3220,7 @@ void sentinelInfoCommand(client *c) {
             sentinel.masters->dictSize(),
             sentinel.tilt,
             sentinel.running_scripts,
-            listLength(sentinel.scripts_queue),
+            sentinel.scripts_queue->listLength(),
             sentinel.simfailure_flags);
 
         dictIterator di(sentinel.masters);

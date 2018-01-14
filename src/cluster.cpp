@@ -698,7 +698,7 @@ clusterNode *createClusterNode(char *nodename, int flags) {
     node->orphaned_time = 0;
     node->repl_offset_time = 0;
     node->repl_offset = 0;
-    listSetFreeMethod(node->fail_reports,zfree);
+    node->fail_reports->listSetFreeMethod(zfree);
     return node;
 }
 
@@ -715,14 +715,13 @@ clusterNode *createClusterNode(char *nodename, int flags) {
 int clusterNodeAddFailureReport(clusterNode *failing, clusterNode *sender) {
     list *l = failing->fail_reports;
     listNode *ln;
-    listIter li;
     clusterNodeFailReport *fr;
 
     /* If a failure report from the same sender already exists, just update
      * the timestamp. */
-    listRewind(l,&li);
-    while ((ln = listNext(&li)) != NULL) {
-        fr = (clusterNodeFailReport *)ln->value;
+    listIter li(l);
+    while ((ln = li.listNext()) != NULL) {
+        fr = (clusterNodeFailReport *)ln->listNodeValue();
         if (fr->node == sender) {
             fr->time = mstime();
             return 0;
@@ -733,7 +732,7 @@ int clusterNodeAddFailureReport(clusterNode *failing, clusterNode *sender) {
     fr = (clusterNodeFailReport *)zmalloc(sizeof(*fr));
     fr->node = sender;
     fr->time = mstime();
-    listAddNodeTail(l,fr);
+    l->listAddNodeTail(fr);
     return 1;
 }
 
@@ -745,16 +744,15 @@ int clusterNodeAddFailureReport(clusterNode *failing, clusterNode *sender) {
 void clusterNodeCleanupFailureReports(clusterNode *node) {
     list *l = node->fail_reports;
     listNode *ln;
-    listIter li;
     clusterNodeFailReport *fr;
     mstime_t maxtime = server.cluster_node_timeout *
                      CLUSTER_FAIL_REPORT_VALIDITY_MULT;
     mstime_t now = mstime();
 
-    listRewind(l,&li);
-    while ((ln = listNext(&li)) != NULL) {
-        fr = (clusterNodeFailReport *)ln->value;
-        if (now - fr->time > maxtime) listDelNode(l,ln);
+    listIter li(l);
+    while ((ln = li.listNext()) != NULL) {
+        fr = (clusterNodeFailReport *)ln->listNodeValue();
+        if (now - fr->time > maxtime) l->listDelNode(ln);
     }
 }
 
@@ -772,19 +770,18 @@ void clusterNodeCleanupFailureReports(clusterNode *node) {
 int clusterNodeDelFailureReport(clusterNode *node, clusterNode *sender) {
     list *l = node->fail_reports;
     listNode *ln;
-    listIter li;
     clusterNodeFailReport *fr;
 
     /* Search for a failure report from this sender. */
-    listRewind(l,&li);
-    while ((ln = listNext(&li)) != NULL) {
-        fr = (clusterNodeFailReport *)ln->value;
+    listIter li(l);
+    while ((ln = li.listNext()) != NULL) {
+        fr = (clusterNodeFailReport *)ln->listNodeValue();
         if (fr->node == sender) break;
     }
     if (!ln) return 0; /* No failure report from this sender. */
 
     /* Remove the failure report. */
-    listDelNode(l,ln);
+    l->listDelNode(ln);
     clusterNodeCleanupFailureReports(node);
     return 1;
 }
@@ -794,7 +791,7 @@ int clusterNodeDelFailureReport(clusterNode *node, clusterNode *sender) {
  * node as well. */
 int clusterNodeFailureReportsCount(clusterNode *node) {
     clusterNodeCleanupFailureReports(node);
-    return listLength(node->fail_reports);
+    return node->fail_reports->listLength();
 }
 
 int clusterNodeRemoveSlave(clusterNode *master, clusterNode *slave) {
@@ -1976,7 +1973,7 @@ int clusterProcessPacket(clusterLink *link) {
         /* Don't bother creating useless objects if there are no
          * Pub/Sub subscribers. */
         if (server.pubsub_channels->dictSize() ||
-           listLength(server.pubsub_patterns))
+           server.pubsub_patterns->listLength())
         {
             channel_len = ntohl(hdr->data.publish.msg.channel_len);
             message_len = ntohl(hdr->data.publish.msg.message_len);

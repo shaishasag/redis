@@ -33,63 +33,94 @@
 
 /* Node, List, and Iterator are the only data structures used currently. */
 
-struct listNode {
-    listNode *prev;
-    listNode *next;
-    void *value;
+class list;
+
+class listNode
+{
+friend class list;
+public:
+    inline listNode* listPrevNode() { return m_prev; }
+    inline listNode* listNextNode() { return m_next; }
+    inline void*     listNodeValue(){ return m_value;}
+
+    inline void     SetNodeValue(void* new_value){ m_value = new_value;}
+
+private:
+    listNode* m_prev;
+    listNode* m_next;
+    void *m_value;
 };
 
-struct listIter {
-    listNode *next;
-    int direction;
-};
-
-struct list {
-    listNode *head;
-    listNode *tail;
-    void *(*dup)(void *ptr);
-    void (*free)(void *ptr);
-    int (*match)(void *ptr, void *key);
-    unsigned long len;
-};
-
-/* Functions implemented as macros */
-#define listLength(l) ((l)->len)
-#define listFirst(l) ((l)->head)
-#define listLast(l) ((l)->tail)
-#define listPrevNode(n) ((n)->prev)
-#define listNextNode(n) ((n)->next)
-#define listNodeValue(n) ((n)->value)
-
-#define listSetDupMethod(l,m) ((l)->dup = (m))
-#define listSetFreeMethod(l,m) ((l)->free = (m))
-#define listSetMatchMethod(l,m) ((l)->match = (m))
-
-#define listGetDupMethod(l) ((l)->dup)
-#define listGetFree(l) ((l)->free)
-#define listGetMatchMethod(l) ((l)->match)
-
-/* Prototypes */
-list *listCreate(void);
-void listRelease(list *list);
-void listEmpty(list *list);
-list *listAddNodeHead(list *list, void *value);
-list *listAddNodeTail(list *list, void *value);
-list *listInsertNode(list *list, listNode *old_node, void *value, int after);
-void listDelNode(list *list, listNode *node);
-listIter *listGetIterator(list *list, int direction);
-listNode *listNext(listIter *iter);
-void listReleaseIterator(listIter *iter);
-list *listDup(list *orig);
-listNode *listSearchKey(list *list, void *key);
-listNode *listIndex(list *list, long index);
-void listRewind(list *list, listIter *li);
-void listRewindTail(list *list, listIter *li);
-void listRotate(list *list);
-void listJoin(list *l, list *o);
 
 /* Directions for iterators */
-#define AL_START_HEAD 0
-#define AL_START_TAIL 1
+const int AL_START_HEAD = 0;
+const int AL_START_TAIL = 1;
 
+class listIter
+{
+friend class list;
+public:
+    listIter();
+    listIter(list* list_to_iter, int direct = AL_START_HEAD);
+    listNode *listNext();
+
+private:
+    listNode *m_next;
+    int m_direction;
+};
+
+class list
+{
+friend class listIter;
+public:
+    list();
+    ~list();
+    void listEmpty();
+    list *listDup();
+    list* listAddNodeHead(void *value);
+    list *listAddNodeTail(void *value);
+    list *listInsertNode(listNode *old_node, void *value, int after);
+    void listDelNode(listNode *node);
+    listNode *listSearchKey(void *key);
+    listNode *listIndex(long index);
+    void listRotate();
+    void listJoin(list *o);
+    inline unsigned long listLength() {return m_len;}
+    inline listNode* listFirst() {return m_head;}
+    inline listNode* listLast() {return m_tail;}
+
+    typedef void*(*dup_method_type)(void*);
+    typedef void(*free_method_type)(void*);
+    typedef int(*match_method_type)(void*, void*);
+
+    void listSetDupMethod(dup_method_type in_dup) {m_dup = in_dup;}
+    void listSetFreeMethod(free_method_type in_free) {m_free = in_free;}
+    void listSetMatchMethod(match_method_type in_match) {m_match = in_match;}
+
+    dup_method_type listGetDupMethod() {return m_dup;}
+    free_method_type listGetFree() {return m_free;}
+    match_method_type listGetMatchMethod() {return m_match;}
+
+private:
+    listNode *m_head;
+    listNode *m_tail;
+    dup_method_type m_dup;
+    free_method_type m_free;
+    match_method_type m_match;
+    unsigned long m_len;
+};
+
+/* NO more Functions implemented as macros */
+
+/* Prototypes */
+list *listCreate();
+void listRelease(list*& list);
+
+#if 0
+// after C++isation these functions are unsed and have replacments
+listIter *listGetIterator(list *list, int direction);
+void listReleaseIterator(listIter *iter);
+void listRewind(list *list, listIter *li);
+void listRewindTail(list *list, listIter *li);
+#endif
 #endif /* __ADLIST_H__ */

@@ -110,11 +110,11 @@ void processUnblockedClients(void) {
     listNode *ln;
     client *c;
 
-    while (listLength(server.unblocked_clients)) {
-        ln = listFirst(server.unblocked_clients);
+    while (server.unblocked_clients->listLength()) {
+        ln = server.unblocked_clients->listFirst();
         serverAssert(ln != NULL);
-        c = (client *)ln->value;
-        listDelNode(server.unblocked_clients,ln);
+        c = (client *)ln->listNodeValue();
+        server.unblocked_clients->listDelNode(ln);
         c->flags &= ~CLIENT_UNBLOCKED;
 
         /* Process remaining data in the input buffer, unless the client
@@ -150,7 +150,7 @@ void unblockClient(client *c) {
      * blocking operation, don't add back it into the list multiple times. */
     if (!(c->flags & CLIENT_UNBLOCKED)) {
         c->flags |= CLIENT_UNBLOCKED;
-        listAddNodeTail(server.unblocked_clients,c);
+        server.unblocked_clients->listAddNodeTail(c);
     }
 }
 
@@ -178,11 +178,10 @@ void replyToBlockedClientTimedOut(client *c) {
  * it at the same time. */
 void disconnectAllBlockedClients(void) {
     listNode *ln;
-    listIter li;
 
-    listRewind(server.clients,&li);
-    while((ln = listNext(&li))) {
-        client *c = (client *)listNodeValue(ln);
+    listIter li(server.clients);
+    while((ln = li.listNext())) {
+        client *c = (client *)ln->listNodeValue();
 
         if (c->flags & CLIENT_BLOCKED) {
             addReplySds(c,sdsnew(

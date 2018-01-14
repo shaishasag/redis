@@ -166,7 +166,7 @@ void queueLoadModule(sds path, sds *argv, int argc) {
     for (i = 0; i < argc; i++) {
         loadmod->argv[i] = createRawStringObject(argv[i],sdslen(argv[i]));
     }
-    listAddNodeTail(server.loadmodule_queue,loadmod);
+    server.loadmodule_queue->listAddNodeTail(loadmod);
 }
 
 void loadServerConfigFromString(char *config) {
@@ -1476,7 +1476,7 @@ void rewriteConfigAddLineNumberToOption(struct rewriteConfigState *state, sds op
         l = listCreate();
         state->option_to_line->dictAdd(sdsdup(option),l);
     }
-    listAddNodeTail(l,(void*)(long)linenum);
+    l->listAddNodeTail((void*)(long)linenum);
 }
 
 /* Add the specified option to the set of processed options.
@@ -1581,13 +1581,13 @@ void rewriteConfigRewriteLine(struct rewriteConfigState *state, const char *opti
     }
 
     if (l) {
-        listNode *ln = listFirst(l);
-        int linenum = (long) ln->value;
+        listNode *ln = l->listFirst();
+        int linenum = (long) ln->listNodeValue();
 
         /* There are still lines in the old configuration file we can reuse
          * for this option. Replace the line with the new one. */
-        listDelNode(l,ln);
-        if (listLength(l) == 0) state->option_to_line->dictDelete(o);
+        l->listDelNode(ln);
+        if (l->listLength() == 0) state->option_to_line->dictDelete(o);
         sdsfree(state->lines[linenum]);
         state->lines[linenum] = line;
     } else {
@@ -1861,13 +1861,13 @@ void rewriteConfigRemoveOrphaned(struct rewriteConfigState *state) {
             continue;
         }
 
-        while(listLength(l)) {
-            listNode *ln = listFirst(l);
-            int linenum = (long) ln->value;
+        while(l->listLength()) {
+            listNode *ln = l->listFirst();
+            int linenum = (long) ln->listNodeValue();
 
             sdsfree(state->lines[linenum]);
             state->lines[linenum] = sdsempty();
-            listDelNode(l,ln);
+            l->listDelNode(ln);
         }
     }
 }

@@ -1784,11 +1784,10 @@ void backgroundSaveDoneHandlerSocket(int exitcode, int bysignal) {
     /* We can continue the replication process with all the slaves that
      * correctly received the full payload. Others are terminated. */
     listNode *ln;
-    listIter li;
 
-    listRewind(server.slaves,&li);
-    while((ln = listNext(&li))) {
-        client *slave = (client *)ln->value;
+    listIter li(server.slaves);
+    while((ln = li.listNext())) {
+        client *slave = (client *)ln->listNodeValue();
 
         if (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_END) {
             uint64_t j;
@@ -1847,7 +1846,6 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
     uint64_t *clientids;
     int numfds;
     listNode *ln;
-    listIter li;
     pid_t childpid;
     long long start;
     int pipefds[2];
@@ -1863,16 +1861,16 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
 
     /* Collect the file descriptors of the slaves we want to transfer
      * the RDB to, which are i WAIT_BGSAVE_START state. */
-    fds = (int *)zmalloc(sizeof(int)*listLength(server.slaves));
+    fds = (int *)zmalloc(sizeof(int)*server.slaves->listLength());
     /* We also allocate an array of corresponding client IDs. This will
      * be useful for the child process in order to build the report
      * (sent via unix pipe) that will be sent to the parent. */
-    clientids = (uint64_t *)zmalloc(sizeof(uint64_t)*listLength(server.slaves));
+    clientids = (uint64_t *)zmalloc(sizeof(uint64_t)*server.slaves->listLength());
     numfds = 0;
 
-    listRewind(server.slaves,&li);
-    while((ln = listNext(&li))) {
-        client *slave = (client *)ln->value;
+    listIter li(server.slaves);
+    while((ln = li.listNext())) {
+        client *slave = (client *)ln->listNodeValue();
 
         if (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_START) {
             clientids[numfds] = slave->id;
@@ -1967,9 +1965,9 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
             /* Undo the state change. The caller will perform cleanup on
              * all the slaves in BGSAVE_START state, but an early call to
              * replicationSetupSlaveForFullResync() turned it into BGSAVE_END */
-            listRewind(server.slaves,&li);
-            while((ln = listNext(&li))) {
-                client *slave = (client *)ln->value;
+            listIter li(server.slaves);
+            while((ln = li.listNext())) {
+                client *slave = (client *)ln->listNodeValue();
                 int j;
 
                 for (j = 0; j < numfds; j++) {

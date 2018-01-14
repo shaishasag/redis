@@ -114,7 +114,7 @@ void slowlogFreeEntry(void *septr) {
 void slowlogInit(void) {
     server.slowlog = listCreate();
     server.slowlog_entry_id = 0;
-    listSetFreeMethod(server.slowlog,slowlogFreeEntry);
+    server.slowlog->listSetFreeMethod(slowlogFreeEntry);
 }
 
 /* Push a new entry into the slow log.
@@ -123,18 +123,18 @@ void slowlogInit(void) {
 void slowlogPushEntryIfNeeded(client *c, robj **argv, int argc, long long duration) {
     if (server.slowlog_log_slower_than < 0) return; /* Slowlog disabled */
     if (duration >= server.slowlog_log_slower_than)
-        listAddNodeHead(server.slowlog,
+        server.slowlog->listAddNodeHead(
                         slowlogCreateEntry(c,argv,argc,duration));
 
     /* Remove old entries if needed. */
-    while (listLength(server.slowlog) > server.slowlog_max_len)
-        listDelNode(server.slowlog,listLast(server.slowlog));
+    while (server.slowlog->listLength() > server.slowlog_max_len)
+        server.slowlog->listDelNode(server.slowlog->listLast());
 }
 
 /* Remove all the entries from the current slow log. */
 void slowlogReset(void) {
-    while (listLength(server.slowlog) > 0)
-        listDelNode(server.slowlog,listLast(server.slowlog));
+    while (server.slowlog->listLength() > 0)
+        server.slowlog->listDelNode(server.slowlog->listLast());
 }
 
 /* The SLOWLOG command. Implements all the subcommands needed to handle the
@@ -144,12 +144,11 @@ void slowlogCommand(client *c) {
         slowlogReset();
         addReply(c,shared.ok);
     } else if (c->argc == 2 && !strcasecmp((const char*)c->argv[1]->ptr,"len")) {
-        addReplyLongLong(c,listLength(server.slowlog));
+        addReplyLongLong(c,server.slowlog->listLength());
     } else if ((c->argc == 2 || c->argc == 3) &&
                !strcasecmp((const char*)c->argv[1]->ptr,"get"))
     {
         long count = 10, sent = 0;
-        listIter li;
         void *totentries;
         listNode *ln;
         slowlogEntry *se;
@@ -158,12 +157,12 @@ void slowlogCommand(client *c) {
             getLongFromObjectOrReply(c,c->argv[2],&count,NULL) != C_OK)
             return;
 
-        listRewind(server.slowlog,&li);
+        listIter li(server.slowlog);
         totentries = addDeferredMultiBulkLength(c);
-        while(count-- && (ln = listNext(&li))) {
+        while(count-- && (ln = li.listNext())) {
             int j;
 
-            se = (slowlogEntry *)ln->value;
+            se = (slowlogEntry *)ln->listNodeValue();
             addReplyMultiBulkLen(c,6);
             addReplyLongLong(c,se->id);
             addReplyLongLong(c,se->time);

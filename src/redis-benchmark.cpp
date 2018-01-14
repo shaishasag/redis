@@ -133,17 +133,17 @@ static void freeClient(pclient c) {
     zfree(c->randptr);
     zfree(c);
     config.liveclients--;
-    ln = listSearchKey(config.clients,c);
+    ln = config.clients->listSearchKey(c);
     assert(ln != NULL);
-    listDelNode(config.clients,ln);
+    config.clients->listDelNode(ln);
 }
 
 static void freeAllClients(void) {
-    listNode *ln = config.clients->head, *next;
+    listNode *ln = config.clients->listFirst();
 
     while(ln) {
-        next = ln->next;
-        freeClient((pclient)ln->value);
+        listNode* next = ln->listNextNode();
+        freeClient((pclient)ln->listNodeValue());
         ln = next;
     }
 }
@@ -407,7 +407,7 @@ static pclient createClient(char *cmd, size_t len, pclient from) {
     }
     if (config.idlemode == 0)
         aeCreateFileEvent(config.el,c->context->fd,AE_WRITABLE,writeHandler,c);
-    listAddNodeTail(config.clients,c);
+    config.clients->listAddNodeTail(c);
     config.liveclients++;
     return c;
 }

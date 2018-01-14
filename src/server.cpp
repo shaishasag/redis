@@ -442,7 +442,7 @@ void dictVanillaFree(void *privdata, void *val)
 void dictListDestructor(void *privdata, void *val)
 {
     DICT_NOTUSED(privdata);
-    listRelease((list*)val);
+    listRelease(((list*&)val));
 }
 
 int dictSdsKeyCompare(void *privdata, const void *key1,
@@ -843,7 +843,7 @@ void clientsCron(void) {
      * per call. Since this function is called server.hz times per second
      * we are sure that in the worst case we process all the clients in 1
      * second. */
-    int numclients = listLength(server.clients);
+    int numclients = server.clients->listLength();
     int iterations = numclients/server.hz;
     mstime_t now = mstime();
 
@@ -854,13 +854,13 @@ void clientsCron(void) {
         iterations = (numclients < CLIENTS_CRON_MIN_ITERATIONS) ?
                      numclients : CLIENTS_CRON_MIN_ITERATIONS;
 
-    while(listLength(server.clients) && iterations--) {
+    while(server.clients->listLength() && iterations--) {
         /* Rotate the list, take the current head, process.
          * This way if the client must be removed from the list it's the
          * first element and we don't incur into O(N) computation. */
-        listRotate(server.clients);
-        listNode* head = listFirst(server.clients);
-        client* c = (client *)listNodeValue(head);
+        server.clients->listRotate();
+        listNode* head = server.clients->listFirst();
+        client* c = (client *)head->listNodeValue();
         /* The following functions do different service checks on the client.
          * The protocol is that they return non-zero if the client was
          * terminated. */
@@ -1023,8 +1023,8 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
         run_with_period(5000) {
             serverLog(LL_VERBOSE,
                 "%lu clients connected (%lu slaves), %zu bytes in use",
-                listLength(server.clients)-listLength(server.slaves),
-                listLength(server.slaves),
+                server.clients->listLength() - server.slaves->listLength(),
+                server.slaves->listLength(),
                 zmalloc_used_memory());
         }
     }
@@ -1214,7 +1214,7 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
 
     /* Unblock all the clients blocked for synchronous replication
      * in WAIT. */
-    if (listLength(server.clients_waiting_acks))
+    if (server.clients_waiting_acks->listLength())
         processClientsWaitingReplicas();
 
     /* Check if there are clients unblocked by modules that implement
@@ -1222,7 +1222,7 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
     moduleHandleBlockedClients();
 
     /* Try to process pending commands for clients that were just unblocked. */
-    if (listLength(server.unblocked_clients))
+    if (server.unblocked_clients->listLength())
         processUnblockedClients();
 
     /* Write the AOF buffer on disk */
@@ -1879,8 +1879,8 @@ void initServer(void) {
     evictionPoolAlloc(); /* Initialize the LRU keys pool. */
     server.pubsub_channels = dictCreate(&keylistDictType,NULL);
     server.pubsub_patterns = listCreate();
-    listSetFreeMethod(server.pubsub_patterns,freePubsubPattern);
-    listSetMatchMethod(server.pubsub_patterns,listMatchPubsubPattern);
+    server.pubsub_patterns->listSetFreeMethod(freePubsubPattern);
+    server.pubsub_patterns->listSetMatchMethod(listMatchPubsubPattern);
     server.cronloops = 0;
     server.rdb_child_pid = -1;
     server.aof_child_pid = -1;
@@ -2202,7 +2202,7 @@ void call(client *c, int flags) {
 
     /* Sent the command to clients in MONITOR mode, only if the commands are
      * not generated from reading an AOF. */
-    if (listLength(server.monitors) &&
+    if (server.monitors->listLength() &&
         !server.loading &&
         !(c->cmd->flags & (CMD_SKIP_MONITOR|CMD_ADMIN)))
     {
@@ -2501,7 +2501,7 @@ int processCommand(client *c) {
     } else {
         call(c,CMD_CALL_FULL);
         c->woff = server.master_repl_offset;
-        if (listLength(server.ready_keys))
+        if (server.ready_keys->listLength())
             handleClientsBlockedOnLists();
     }
     return C_OK;
@@ -2907,7 +2907,7 @@ sds genRedisInfoString(const char *section) {
             "client_longest_output_list:%lu\r\n"
             "client_biggest_input_buf:%lu\r\n"
             "blocked_clients:%d\r\n",
-            listLength(server.clients)-listLength(server.slaves),
+            server.clients->listLength() - server.slaves->listLength(),
             lol, bib,
             server.bpop_blocked_clients);
     }
@@ -3126,7 +3126,7 @@ sds genRedisInfoString(const char *section) {
             server.stat_keyspace_hits,
             server.stat_keyspace_misses,
             server.pubsub_channels->dictSize(),
-            listLength(server.pubsub_patterns),
+            server.pubsub_patterns->listLength(),
             server.stat_fork_time,
             server.migrate_cached_sockets->dictSize(),
             getSlaveKeyWithExpireCount(),
@@ -3192,7 +3192,7 @@ sds genRedisInfoString(const char *section) {
 
         info = sdscatprintf(info,
             "connected_slaves:%lu\r\n",
-            listLength(server.slaves));
+            server.slaves->listLength());
 
         /* If min-slaves-to-write is active, write the number of slaves
          * currently considered 'good'. */
@@ -3203,15 +3203,14 @@ sds genRedisInfoString(const char *section) {
                 server.repl_good_slaves_count);
         }
 
-        if (listLength(server.slaves)) {
+        if (server.slaves->listLength()) {
             int slaveid = 0;
             listNode *ln;
-            listIter li;
 
-            listRewind(server.slaves,&li);
-            while((ln = listNext(&li))) {
-                //client *slave = (client *)listNodeValue(ln);
-                auto slave = (client *)listNodeValue(ln);
+            listIter li(server.slaves);
+            while((ln = li.listNext())) {
+                //client *slave = (client *)ln->listNodeValue();
+                auto slave = (client *)ln->listNodeValue();
                 char *state = NULL;
                 char ip[NET_IP_STR_LEN], *slaveip = slave->slave_ip;
                 int port;
@@ -3341,7 +3340,7 @@ void monitorCommand(client *c) {
     if (c->flags & CLIENT_SLAVE) return;
 
     c->flags |= (CLIENT_SLAVE|CLIENT_MONITOR);
-    listAddNodeTail(server.monitors,c);
+    server.monitors->listAddNodeTail(c);
     addReply(c,shared.ok);
 }
 

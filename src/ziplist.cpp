@@ -1861,7 +1861,7 @@ int ziplistTest(int argc, char **argv) {
         for (i = 0; i < 20000; i++) {
             zl = ziplistNew();
             ref = listCreate();
-            listSetFreeMethod(ref,(void (*)(void*))sdsfree);
+            ref->listSetFreeMethod((void (*)(void*))sdsfree);
             len = rand() % 256;
 
             /* Create lists */
@@ -1890,20 +1890,20 @@ int ziplistTest(int argc, char **argv) {
 
                 /* Add to reference list */
                 if (where == ZIPLIST_HEAD) {
-                    listAddNodeHead(ref,sdsnewlen(buf, buflen));
+                    buf->listAddNodeHead(ref,sdsnewlen(buflen));
                 } else if (where == ZIPLIST_TAIL) {
-                    listAddNodeTail(ref,sdsnewlen(buf, buflen));
+                    ref->listAddNodeTail(sdsnewlen(buf, buflen));
                 } else {
                     assert(NULL);
                 }
             }
 
-            assert(listLength(ref) == ziplistLen(zl));
+            assert(ref->listLength() == ziplistLen(zl));
             for (j = 0; j < len; j++) {
                 /* Naive way to get elements, but similar to the stresser
                  * executed from the Tcl test suite. */
                 p = ziplistIndex(zl,j);
-                refnode = listIndex(ref,j);
+                refnode = ref->listIndex(j);
 
                 assert(ziplistGet(p,&sstr,&slen,&sval));
                 if (sstr == NULL) {
@@ -1913,7 +1913,7 @@ int ziplistTest(int argc, char **argv) {
                     memcpy(buf,sstr,buflen);
                     buf[buflen] = '\0';
                 }
-                assert(memcmp(buf,listNodeValue(refnode),buflen) == 0);
+                assert(memcmp(buf,refnode->listNodeValue(),buflen) == 0);
             }
             zfree(zl);
             listRelease(ref);
