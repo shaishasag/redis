@@ -106,7 +106,7 @@ void discardCommand(client *c) {
 void execCommandPropagateMulti(client *c) {
     robj *multistring = createStringObject("MULTI",5);
 
-    propagate(server.multiCommand,c->db->id,&multistring,1,
+    propagate(server.multiCommand,c->db->m_id,&multistring,1,
               PROPAGATE_AOF|PROPAGATE_REPL);
     decrRefCount(multistring);
 }
@@ -193,7 +193,7 @@ handle_monitor:
      * Instead EXEC is flagged as CMD_SKIP_MONITOR in the command
      * table, and we do it here with correct ordering. */
     if (server.monitors->listLength() && !server.loading)
-        replicationFeedMonitors(c,server.monitors,c->db->id,c->argv,c->argc);
+        replicationFeedMonitors(c,server.monitors,c->db->m_id,c->argv,c->argc);
 }
 
 /* ===================== WATCH (CAS alike for MULTI/EXEC) ===================
@@ -227,10 +227,10 @@ void watchForKey(client *c, robj *key) {
             return; /* Key already watched */
     }
     /* This key is not already watched in this DB. Let's add it */
-    clients = (list *)c->db->watched_keys->dictFetchValue(key);
+    clients = (list *)c->db->m_watched_keys->dictFetchValue(key);
     if (!clients) {
         clients = listCreate();
-        c->db->watched_keys->dictAdd(key,clients);
+        c->db->m_watched_keys->dictAdd(key,clients);
         incrRefCount(key);
     }
     clients->listAddNodeTail(c);
@@ -253,12 +253,12 @@ void unwatchAllKeys(client *c) {
         /* Lookup the watched key -> clients list and remove the client
          * from the list */
         watchedKey *wk = (watchedKey *)ln->listNodeValue();
-        list *clients = (list *)wk->db->watched_keys->dictFetchValue(wk->key);
+        list *clients = (list *)wk->db->m_watched_keys->dictFetchValue(wk->key);
         serverAssertWithInfo(c,NULL,clients != NULL);
         clients->listDelNode(clients->listSearchKey(c));
         /* Kill the entry at all if this was the only client */
         if (clients->listLength() == 0)
-            wk->db->watched_keys->dictDelete( wk->key);
+            wk->db->m_watched_keys->dictDelete( wk->key);
         /* Remove this watched key from the client->watched list */
         c->watched_keys->listDelNode(ln);
         decrRefCount(wk->key);
@@ -272,8 +272,8 @@ void touchWatchedKey(redisDb *db, robj *key) {
     list *clients;
     listNode *ln;
 
-    if (db->watched_keys->dictSize() == 0) return;
-    clients = (list *)db->watched_keys->dictFetchValue(key);
+    if (db->m_watched_keys->dictSize() == 0) return;
+    clients = (list *)db->m_watched_keys->dictFetchValue(key);
     if (!clients) return;
 
     /* Mark all the clients watching this key as CLIENT_DIRTY_CAS */
@@ -304,8 +304,8 @@ void touchWatchedKeysOnFlush(int dbid) {
             /* For every watched key matching the specified DB, if the
              * key exists, mark the client as dirty, as the key will be
              * removed. */
-            if (dbid == -1 || wk->db->id == dbid) {
-                if (wk->db->_dict->dictFind(wk->key->ptr) != NULL)
+            if (dbid == -1 || wk->db->m_id == dbid) {
+                if (wk->db->m_dict->dictFind(wk->key->ptr) != NULL)
                     c->flags |= CLIENT_DIRTY_CAS;
             }
         }

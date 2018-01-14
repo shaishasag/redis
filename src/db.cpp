@@ -51,7 +51,7 @@ void updateLFU(robj *val) {
  * implementations that should instead rely on lookupKeyRead(),
  * lookupKeyWrite() and lookupKeyReadWithFlags(). */
 robj *lookupKey(redisDb *db, robj *key, int flags) {
-    dictEntry *de = db->_dict->dictFind(key->ptr);
+    dictEntry *de = db->m_dict->dictFind(key->ptr);
     if (de) {
         robj *val = (robj *)de->dictGetVal();
 
@@ -166,7 +166,7 @@ robj *lookupKeyWriteOrReply(client *c, robj *key, robj *reply) {
  * The program is aborted if the key already exists. */
 void dbAdd(redisDb *db, robj *key, robj *val) {
     sds copy = sdsdup((sds)key->ptr);
-    int retval = db->_dict->dictAdd(copy, val);
+    int retval = db->m_dict->dictAdd(copy, val);
 
     serverAssertWithInfo(NULL,key,retval == DICT_OK);
     if (val->type == OBJ_LIST) signalListAsReady(db, key);
@@ -179,19 +179,19 @@ void dbAdd(redisDb *db, robj *key, robj *val) {
  *
  * The program is aborted if the key was not already present. */
 void dbOverwrite(redisDb *db, robj *key, robj *val) {
-    dictEntry *de = db->_dict->dictFind(key->ptr);
+    dictEntry *de = db->m_dict->dictFind(key->ptr);
 
     serverAssertWithInfo(NULL,key,de != NULL);
     if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
         robj* old = (robj*)de->dictGetVal();
         int saved_lru = old->lru;
-        db->_dict->dictReplace(key->ptr, val);
+        db->m_dict->dictReplace(key->ptr, val);
         val->lru = saved_lru;
         /* LFU should be not only copied but also updated
          * when a key is overwritten. */
         updateLFU(val);
     } else {
-        db->_dict->dictReplace(key->ptr, val);
+        db->m_dict->dictReplace(key->ptr, val);
     }
 }
 
@@ -215,7 +215,7 @@ void setKey(redisDb *db, robj *key, robj *val) {
 }
 
 int dbExists(redisDb *db, robj *key) {
-    return db->_dict->dictFind(key->ptr) != NULL;
+    return db->m_dict->dictFind(key->ptr) != NULL;
 }
 
 /* Return a random key, in form of a Redis object.
@@ -229,12 +229,12 @@ robj *dbRandomKey(redisDb *db) {
         sds key;
         robj *keyobj;
 
-        de = db->_dict->dictGetRandomKey();
+        de = db->m_dict->dictGetRandomKey();
         if (de == NULL) return NULL;
 
         key = (sds)de->dictGetKey();
         keyobj = createStringObject(key,sdslen(key));
-        if (db->expires->dictFind(key)) {
+        if (db->m_expires->dictFind(key)) {
             if (expireIfNeeded(db,keyobj)) {
                 decrRefCount(keyobj);
                 continue; /* search for another key. This expired. */
@@ -248,8 +248,8 @@ robj *dbRandomKey(redisDb *db) {
 int dbSyncDelete(redisDb *db, robj *key) {
     /* Deleting an entry from the expires dict will not free the sds of
      * the key, because it is shared with the main dictionary. */
-    if (db->expires->dictSize() > 0) db->expires->dictDelete(key->ptr);
-    if (db->_dict->dictDelete(key->ptr) == DICT_OK) {
+    if (db->m_expires->dictSize() > 0) db->m_expires->dictDelete(key->ptr);
+    if (db->m_dict->dictDelete(key->ptr) == DICT_OK) {
         if (server.cluster_enabled) slotToKeyDel(key);
         return 1;
     } else {
@@ -327,12 +327,12 @@ long long emptyDb(int dbnum, int flags, void(callback)(void*)) {
 
     for (j = 0; j < server.dbnum; j++) {
         if (dbnum != -1 && dbnum != j) continue;
-        removed += server.db[j]._dict->dictSize();
+        removed += server.db[j].m_dict->dictSize();
         if (async) {
             emptyDbAsync(&server.db[j]);
         } else {
-            server.db[j]._dict->dictEmpty(callback);
-            server.db[j].expires->dictEmpty(callback);
+            server.db[j].m_dict->dictEmpty(callback);
+            server.db[j].m_expires->dictEmpty(callback);
         }
     }
     if (server.cluster_enabled) {
@@ -403,8 +403,8 @@ void flushdbCommand(client *c) {
     int flags;
 
     if (getFlushCommandFlags(c,&flags) == C_ERR) return;
-    signalFlushedDb(c->db->id);
-    server.dirty += emptyDb(c->db->id,flags,NULL);
+    signalFlushedDb(c->db->m_id);
+    server.dirty += emptyDb(c->db->m_id,flags,NULL);
     addReply(c,shared.ok);
 }
 
@@ -445,7 +445,7 @@ void delGenericCommand(client *c, int lazy) {
         if (deleted) {
             signalModifiedKey(c->db,c->argv[j]);
             notifyKeyspaceEvent(NOTIFY_GENERIC,
-                "del",c->argv[j],c->db->id);
+                "del",c->argv[j],c->db->m_id);
             server.dirty++;
             numdel++;
         }
@@ -511,7 +511,7 @@ void keysCommand(client *c) {
     unsigned long numkeys = 0;
     void *replylen = addDeferredMultiBulkLength(c);
 
-    dictIterator di(c->db->_dict, 1);
+    dictIterator di(c->db->m_dict, 1);
     allkeys = (pattern[0] == '*' && pattern[1] == '\0');
     while((de = dictNext(&di)) != NULL) {
         sds key = (sds)de->dictGetKey();
@@ -650,7 +650,7 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
     /* Handle the case of a hash table. */
     ht = NULL;
     if (o == NULL) {
-        ht = c->db->_dict;
+        ht = c->db->m_dict;
     } else if (o->type == OBJ_SET && o->encoding == OBJ_ENCODING_HT) {
         ht = (dict *)o->ptr;
     } else if (o->type == OBJ_HASH && o->encoding == OBJ_ENCODING_HT) {
@@ -776,7 +776,7 @@ void scanCommand(client *c) {
 }
 
 void dbsizeCommand(client *c) {
-    addReplyLongLong(c,c->db->_dict->dictSize());
+    addReplyLongLong(c,c->db->m_dict->dictSize());
 }
 
 void lastsaveCommand(client *c) {
@@ -870,9 +870,9 @@ void renameGenericCommand(client *c, int nx) {
     signalModifiedKey(c->db,c->argv[1]);
     signalModifiedKey(c->db,c->argv[2]);
     notifyKeyspaceEvent(NOTIFY_GENERIC,"rename_from",
-        c->argv[1],c->db->id);
+        c->argv[1],c->db->m_id);
     notifyKeyspaceEvent(NOTIFY_GENERIC,"rename_to",
-        c->argv[2],c->db->id);
+        c->argv[2],c->db->m_id);
     server.dirty++;
     addReply(c,nx ? shared.cone : shared.ok);
 }
@@ -898,7 +898,7 @@ void moveCommand(client *c) {
 
     /* Obtain source and target DB pointers */
     src = c->db;
-    srcid = c->db->id;
+    srcid = c->db->m_id;
 
     if (getLongLongFromObject(c->argv[2],&dbid) == C_ERR ||
         dbid < INT_MIN || dbid > INT_MAX ||
@@ -946,7 +946,7 @@ void moveCommand(client *c) {
  * the function is used for more info. */
 void scanDatabaseForReadyLists(redisDb *db) {
     dictEntry *de;
-    dictIterator di(db->blocking_keys, 1);
+    dictIterator di(db->m_blocking_keys, 1);
     while((de = dictNext(&di)) != NULL) {
         robj *key = (robj *)de->dictGetKey();
         robj *value = lookupKey(db,key,LOOKUP_NOTOUCH);
@@ -973,13 +973,13 @@ int dbSwapDatabases(int id1, int id2) {
     /* Swap hash tables. Note that we don't swap blocking_keys,
      * ready_keys and watched_keys, since we want clients to
      * remain in the same DB they were. */
-    db1->_dict = db2->_dict;
-    db1->expires = db2->expires;
-    db1->avg_ttl = db2->avg_ttl;
+    db1->m_dict = db2->m_dict;
+    db1->m_expires = db2->m_expires;
+    db1->m_avg_ttl = db2->m_avg_ttl;
 
-    db2->_dict = aux._dict;
-    db2->expires = aux.expires;
-    db2->avg_ttl = aux.avg_ttl;
+    db2->m_dict = aux.m_dict;
+    db2->m_expires = aux.m_expires;
+    db2->m_avg_ttl = aux.m_avg_ttl;
 
     /* Now we need to handle clients blocked on lists: as an effect
      * of swapping the two DBs, a client that was waiting for list
@@ -1031,8 +1031,8 @@ void swapdbCommand(client *c) {
 int removeExpire(redisDb *db, robj *key) {
     /* An expire may only be removed if there is a corresponding entry in the
      * main dict. Otherwise, the key will never be freed. */
-    serverAssertWithInfo(NULL,key,db->_dict->dictFind(key->ptr) != NULL);
-    return db->expires->dictDelete(key->ptr) == DICT_OK;
+    serverAssertWithInfo(NULL,key,db->m_dict->dictFind(key->ptr) != NULL);
+    return db->m_expires->dictDelete(key->ptr) == DICT_OK;
 }
 
 /* Set an expire to the specified key. If the expire is set in the context
@@ -1043,9 +1043,9 @@ void setExpire(client *c, redisDb *db, robj *key, long long when) {
     dictEntry *kde, *de;
 
     /* Reuse the sds from the main dict in the expire dict */
-    kde = db->_dict->dictFind(key->ptr);
+    kde = db->m_dict->dictFind(key->ptr);
     serverAssertWithInfo(NULL,key,kde != NULL);
-    de = db->expires->dictAddOrFind(kde->dictGetKey());
+    de = db->m_expires->dictAddOrFind(kde->dictGetKey());
     de->dictSetSignedIntegerVal(when);
 
     int writable_slave = server.masterhost && server.repl_slave_ro == 0;
@@ -1059,12 +1059,12 @@ long long getExpire(redisDb *db, robj *key) {
     dictEntry *de;
 
     /* No expire? return ASAP */
-    if (db->expires->dictSize() == 0 ||
-       (de = db->expires->dictFind(key->ptr)) == NULL) return -1;
+    if (db->m_expires->dictSize() == 0 ||
+       (de = db->m_expires->dictFind(key->ptr)) == NULL) return -1;
 
     /* The entry was found in the expire dict, this means it should also
      * be present in the main dict (safety check). */
-    serverAssertWithInfo(NULL,key,db->_dict->dictFind(key->ptr) != NULL);
+    serverAssertWithInfo(NULL,key,db->m_dict->dictFind(key->ptr) != NULL);
     return de->dictGetSignedIntegerVal();
 }
 
@@ -1085,8 +1085,8 @@ void propagateExpire(redisDb *db, robj *key, int lazy) {
     incrRefCount(argv[1]);
 
     if (server.aof_state != AOF_OFF)
-        feedAppendOnlyFile(server.delCommand,db->id,argv,2);
-    replicationFeedSlaves(server.slaves,db->id,argv,2);
+        feedAppendOnlyFile(server.delCommand,db->m_id,argv,2);
+    replicationFeedSlaves(server.slaves,db->m_id,argv,2);
 
     decrRefCount(argv[0]);
     decrRefCount(argv[1]);
@@ -1124,7 +1124,7 @@ int expireIfNeeded(redisDb *db, robj *key) {
     server.stat_expiredkeys++;
     propagateExpire(db,key,server.lazyfree_lazy_expire);
     notifyKeyspaceEvent(NOTIFY_EXPIRED,
-        "expired",key,db->id);
+        "expired",key,db->m_id);
     return server.lazyfree_lazy_expire ? dbAsyncDelete(db,key) :
                                          dbSyncDelete(db,key);
 }

@@ -32,6 +32,7 @@
 
 /* This structure defines an entry inside the slow log list */
 struct slowlogEntry {
+
     robj **argv;
     int argc;
     long long id;       /* Unique entry identifier. */
@@ -42,7 +43,7 @@ struct slowlogEntry {
 };
 
 /* Exported API */
-void slowlogInit(void);
+void slowlogInit();
 void slowlogPushEntryIfNeeded(client *c, robj **argv, int argc, long long duration);
 
 /* Exported commands */

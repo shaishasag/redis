@@ -86,9 +86,9 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
     setKey(c->db,key,val);
     server.dirty++;
     if (expire) setExpire(c,c->db,key,mstime()+milliseconds);
-    notifyKeyspaceEvent(NOTIFY_STRING,"set",key,c->db->id);
+    notifyKeyspaceEvent(NOTIFY_STRING,"set",key,c->db->m_id);
     if (expire) notifyKeyspaceEvent(NOTIFY_GENERIC,
-        "expire",key,c->db->id);
+        "expire",key,c->db->m_id);
     addReply(c, ok_reply ? ok_reply : shared.ok);
 }
 
@@ -177,7 +177,7 @@ void getsetCommand(client *c) {
     if (getGenericCommand(c) == C_ERR) return;
     c->argv[2] = tryObjectEncoding(c->argv[2]);
     setKey(c->db,c->argv[1],c->argv[2]);
-    notifyKeyspaceEvent(NOTIFY_STRING,"set",c->argv[1],c->db->id);
+    notifyKeyspaceEvent(NOTIFY_STRING,"set",c->argv[1],c->db->m_id);
     server.dirty++;
 }
 
@@ -235,7 +235,7 @@ void setrangeCommand(client *c) {
         memcpy((char*)o->ptr+offset,value,sdslen(value));
         signalModifiedKey(c->db,c->argv[1]);
         notifyKeyspaceEvent(NOTIFY_STRING,
-            "setrange",c->argv[1],c->db->id);
+            "setrange",c->argv[1],c->db->m_id);
         server.dirty++;
     }
     addReplyLongLong(c,sdslen((sds)o->ptr));
@@ -324,7 +324,7 @@ void msetGenericCommand(client *c, int nx) {
     for (j = 1; j < c->argc; j += 2) {
         c->argv[j+1] = tryObjectEncoding(c->argv[j+1]);
         setKey(c->db,c->argv[j],c->argv[j+1]);
-        notifyKeyspaceEvent(NOTIFY_STRING,"set",c->argv[j],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_STRING,"set",c->argv[j],c->db->m_id);
     }
     server.dirty += (c->argc-1)/2;
     addReply(c, nx ? shared.cone : shared.ok);
@@ -369,7 +369,7 @@ void incrDecrCommand(client *c, long long incr) {
         }
     }
     signalModifiedKey(c->db,c->argv[1]);
-    notifyKeyspaceEvent(NOTIFY_STRING,"incrby",c->argv[1],c->db->id);
+    notifyKeyspaceEvent(NOTIFY_STRING,"incrby",c->argv[1],c->db->m_id);
     server.dirty++;
     addReply(c,shared.colon);
     addReply(c,_new);
@@ -419,7 +419,7 @@ void incrbyfloatCommand(client *c) {
     else
         dbAdd(c->db,c->argv[1],_new);
     signalModifiedKey(c->db,c->argv[1]);
-    notifyKeyspaceEvent(NOTIFY_STRING,"incrbyfloat",c->argv[1],c->db->id);
+    notifyKeyspaceEvent(NOTIFY_STRING,"incrbyfloat",c->argv[1],c->db->m_id);
     server.dirty++;
     addReplyBulk(c,_new);
 
@@ -460,7 +460,7 @@ void appendCommand(client *c) {
         totlen = sdslen((sds)o->ptr);
     }
     signalModifiedKey(c->db,c->argv[1]);
-    notifyKeyspaceEvent(NOTIFY_STRING,"append",c->argv[1],c->db->id);
+    notifyKeyspaceEvent(NOTIFY_STRING,"append",c->argv[1],c->db->m_id);
     server.dirty++;
     addReplyLongLong(c,totlen);
 }

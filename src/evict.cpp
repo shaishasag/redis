@@ -423,9 +423,9 @@ int freeMemoryIfNeeded(void) {
                 for (i = 0; i < server.dbnum; i++) {
                     db = server.db+i;
                     _dict = (server.maxmemory_policy & MAXMEMORY_FLAG_ALLKEYS) ?
-                            db->_dict : db->expires;
+                            db->m_dict : db->m_expires;
                     if ((keys = _dict->dictSize()) != 0) {
-                        evictionPoolPopulate(i, _dict, db->_dict, pool);
+                        evictionPoolPopulate(i, _dict, db->m_dict, pool);
                         total_keys += keys;
                     }
                 }
@@ -437,9 +437,9 @@ int freeMemoryIfNeeded(void) {
                     bestdbid = pool[k].dbid;
 
                     if (server.maxmemory_policy & MAXMEMORY_FLAG_ALLKEYS) {
-                        de = server.db[pool[k].dbid]._dict->dictFind(pool[k].key);
+                        de = server.db[pool[k].dbid].m_dict->dictFind(pool[k].key);
                     } else {
-                        de = server.db[pool[k].dbid].expires->dictFind(pool[k].key);
+                        de = server.db[pool[k].dbid].m_expires->dictFind(pool[k].key);
                     }
 
                     /* Remove the entry from the pool. */
@@ -471,7 +471,7 @@ int freeMemoryIfNeeded(void) {
                 j = (++next_db) % server.dbnum;
                 db = server.db+j;
                 _dict = (server.maxmemory_policy == MAXMEMORY_ALLKEYS_RANDOM) ?
-                        db->_dict : db->expires;
+                        db->m_dict : db->m_expires;
                 if (_dict->dictSize() != 0) {
                     de = _dict->dictGetRandomKey();
                     bestkey = (sds)de->dictGetKey();
@@ -507,7 +507,7 @@ int freeMemoryIfNeeded(void) {
             mem_freed += delta;
             server.stat_evictedkeys++;
             notifyKeyspaceEvent(NOTIFY_EVICTED, "evicted",
-                keyobj, db->id);
+                keyobj, db->m_id);
             decrRefCount(keyobj);
             keys_freed++;
 

@@ -1337,7 +1337,7 @@ void evalGenericCommand(client *c, int evalsha) {
     luaSetGlobalArray(lua,"ARGV",c->argv+3+numkeys,c->argc-3-numkeys);
 
     /* Select the right DB in the context of the Lua client */
-    selectDb(server.lua_client,c->db->id);
+    selectDb(server.lua_client,c->db->m_id);
 
     /* Set a hook in order to be able to stop the script execution if it
      * is running for too much time.
@@ -1410,7 +1410,7 @@ void evalGenericCommand(client *c, int evalsha) {
         if (server.lua_multi_emitted) {
             robj *propargv[1];
             propargv[0] = createStringObject("EXEC",4);
-            alsoPropagate(server.execCommand,c->db->id,propargv,1,
+            alsoPropagate(server.execCommand,c->db->m_id,propargv,1,
                 PROPAGATE_AOF|PROPAGATE_REPL);
             decrRefCount(propargv[0]);
         }

@@ -63,7 +63,7 @@ int activeExpireCycleTryExpire(redisDb *db, dictEntry *de, long long now) {
         else
             dbSyncDelete(db,keyobj);
         notifyKeyspaceEvent(NOTIFY_EXPIRED,
-            "expired",keyobj,db->id);
+            "expired",keyobj,db->m_id);
         decrRefCount(keyobj);
         server.stat_expiredkeys++;
         return 1;
@@ -158,11 +158,11 @@ void activeExpireCycle(int type) {
             iteration++;
 
             /* If there is nothing to expire try next DB ASAP. */
-            if ((num = db->expires->dictSize()) == 0) {
-                db->avg_ttl = 0;
+            if ((num = db->m_expires->dictSize()) == 0) {
+                db->m_avg_ttl = 0;
                 break;
             }
-            slots = db->expires->dictSlots();
+            slots = db->m_expires->dictSlots();
             now = mstime();
 
             /* When there are less than 1% filled slots getting random
@@ -184,7 +184,7 @@ void activeExpireCycle(int type) {
                 dictEntry *de;
                 long long ttl;
 
-                if ((de = db->expires->dictGetRandomKey()) == NULL) break;
+                if ((de = db->m_expires->dictGetRandomKey()) == NULL) break;
                 ttl = de->dictGetSignedIntegerVal()-now;
                 if (activeExpireCycleTryExpire(db,de,now)) expired++;
                 if (ttl > 0) {
@@ -201,8 +201,8 @@ void activeExpireCycle(int type) {
                 /* Do a simple running average with a few samples.
                  * We just use the current estimate with a weight of 2%
                  * and the previous estimate with a weight of 98%. */
-                if (db->avg_ttl == 0) db->avg_ttl = avg_ttl;
-                db->avg_ttl = (db->avg_ttl/50)*49 + (avg_ttl/50);
+                if (db->m_avg_ttl == 0) db->m_avg_ttl = avg_ttl;
+                db->m_avg_ttl = (db->m_avg_ttl/50)*49 + (avg_ttl/50);
             }
 
             /* We can't block forever here even if there are many keys to
@@ -281,7 +281,7 @@ void expireSlaveKeys(void) {
         while(dbids && dbid < server.dbnum) {
             if ((dbids & 1) != 0) {
                 redisDb *db = server.db+dbid;
-                dictEntry *expire = db->expires->dictFind(keyname);
+                dictEntry *expire = db->m_expires->dictFind(keyname);
                 int expired = 0;
 
                 if (expire &&
@@ -334,7 +334,7 @@ void rememberSlaveKeyWithExpire(redisDb *db, robj *key) {
         };
         slaveKeysWithExpire = dictCreate(&dt,NULL);
     }
-    if (db->id > 63) return;
+    if (db->m_id > 63) return;
 
     dictEntry *de = slaveKeysWithExpire->dictAddOrFind(key->ptr);
     /* If the entry was just created, set it to a copy of the SDS string
@@ -347,7 +347,7 @@ void rememberSlaveKeyWithExpire(redisDb *db, robj *key) {
     }
 
     uint64_t dbids = de->dictGetUnsignedIntegerVal();
-    dbids |= (uint64_t)1 << db->id;
+    dbids |= (uint64_t)1 << db->m_id;
     de->dictSetUnsignedIntegerVal(dbids);
 }
 
@@ -417,14 +417,14 @@ void expireGenericCommand(client *c, long long basetime, int unit) {
         aux = server.lazyfree_lazy_expire ? shared.unlink : shared.del;
         rewriteClientCommandVector(c,2,aux,key);
         signalModifiedKey(c->db,key);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",key,c->db->id);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",key,c->db->m_id);
         addReply(c, shared.cone);
         return;
     } else {
         setExpire(c,c->db,key,when);
         addReply(c,shared.cone);
         signalModifiedKey(c->db,key);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"expire",key,c->db->id);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"expire",key,c->db->m_id);
         server.dirty++;
         return;
     }

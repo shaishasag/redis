@@ -894,7 +894,7 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
 
     for (j = 0; j < server.dbnum; j++) {
         redisDb *db = server.db+j;
-        dict *d = db->_dict;
+        dict *d = db->m_dict;
         if (d->dictSize() == 0) continue;
 
         /* Write the SELECT DB opcode */
@@ -906,11 +906,11 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
          * However this does not limit the actual size of the DB to load since
          * these sizes are just hints to resize the hash tables. */
         uint32_t db_size, expires_size;
-        db_size = (db->_dict->dictSize() <= UINT32_MAX) ?
-                                db->_dict->dictSize() :
+        db_size = (db->m_dict->dictSize() <= UINT32_MAX) ?
+                                db->m_dict->dictSize() :
                                 UINT32_MAX;
-        expires_size = (db->expires->dictSize() <= UINT32_MAX) ?
-                                db->expires->dictSize() :
+        expires_size = (db->m_expires->dictSize() <= UINT32_MAX) ?
+                                db->m_expires->dictSize() :
                                 UINT32_MAX;
         if (rdbSaveType(rdb,RDB_OPCODE_RESIZEDB) == -1) goto werr;
         if (rdbSaveLen(rdb,db_size) == -1) goto werr;
@@ -1583,8 +1583,8 @@ int rdbLoadRio(rio *rdb, rdbSaveInfo *rsi) {
                 goto eoferr;
             if ((expires_size = rdbLoadLen(rdb,NULL)) == RDB_LENERR)
                 goto eoferr;
-            db->_dict->dictExpand(db_size);
-            db->expires->dictExpand(expires_size);
+            db->m_dict->dictExpand(db_size);
+            db->m_expires->dictExpand(expires_size);
             continue; /* Read type again. */
         } else if (type == RDB_OPCODE_AUX) {
             /* AUX: generic string-string fields. Use to add state to RDB
@@ -2083,7 +2083,7 @@ rdbSaveInfo *rdbPopulateSaveInfo(rdbSaveInfo *rsi) {
     /* If the instance is a slave we need a connected master
      * in order to fetch the currently selected DB. */
     if (server.master) {
-        rsi->repl_stream_db = server.master->db->id;
+        rsi->repl_stream_db = server.master->db->m_id;
         return rsi;
     }
 
@@ -2093,7 +2093,7 @@ rdbSaveInfo *rdbPopulateSaveInfo(rdbSaveInfo *rsi) {
      * master, so if we are disconnected the offset in the cached master
      * is valid. */
     if (server.cached_master) {
-        rsi->repl_stream_db = server.cached_master->db->id;
+        rsi->repl_stream_db = server.cached_master->db->m_id;
         return rsi;
     }
     return NULL;

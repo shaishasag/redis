@@ -609,14 +609,18 @@ struct evictionPoolEntry; /* Defined in evict.c */
 /* Redis database representation. There are multiple databases identified
  * by integers from 0 (the default database) up to the max configured
  * database. The database number is the 'id' field in the structure. */
-struct redisDb {
-    dict *_dict;                 /* The keyspace for this DB */
-    dict *expires;              /* Timeout of keys with a timeout set */
-    dict *blocking_keys;        /* Keys with clients waiting for data (BLPOP)*/
-    dict *ready_keys;           /* Blocked keys that received a PUSH */
-    dict *watched_keys;         /* WATCHED keys for MULTI/EXEC CAS */
-    int id;                     /* Database ID */
-    long long avg_ttl;          /* Average TTL, just for stats */
+class redisDb
+{
+public:
+    redisDb(int in_id);
+
+    dict *m_dict;                 /* The keyspace for this DB */
+    dict *m_expires;              /* Timeout of keys with a timeout set */
+    dict *m_blocking_keys;        /* Keys with clients waiting for data (BLPOP)*/
+    dict *m_ready_keys;           /* Blocked keys that received a PUSH */
+    dict *m_watched_keys;         /* WATCHED keys for MULTI/EXEC CAS */
+    int m_id;                     /* Database ID */
+    long long m_avg_ttl;          /* Average TTL, just for stats */
 };
 
 /* Client MULTI/EXEC state */

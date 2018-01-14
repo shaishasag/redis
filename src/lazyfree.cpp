@@ -54,12 +54,12 @@ size_t lazyfreeGetFreeEffort(robj *obj) {
 int dbAsyncDelete(redisDb *db, robj *key) {
     /* Deleting an entry from the expires dict will not free the sds of
      * the key, because it is shared with the main dictionary. */
-    if (db->expires->dictSize() > 0) db->expires->dictDelete(key->ptr);
+    if (db->m_expires->dictSize() > 0) db->m_expires->dictDelete(key->ptr);
 
     /* If the value is composed of a few allocations, to free in a lazy way
      * is actually just slower... So under a certain limit we just free
      * the object synchronously. */
-    dictEntry *de = db->_dict->dictUnlink(key->ptr);
+    dictEntry *de = db->m_dict->dictUnlink(key->ptr);
     if (de) {
         robj* val = (robj*)de->dictGetVal();
         size_t free_effort = lazyfreeGetFreeEffort(val);
@@ -69,14 +69,14 @@ int dbAsyncDelete(redisDb *db, robj *key) {
         if (free_effort > LAZYFREE_THRESHOLD) {
             atomicIncr(lazyfree_objects,1);
             bioCreateBackgroundJob(BIO_LAZY_FREE,val,NULL,NULL);
-            db->_dict->dictSetVal(de,NULL);
+            db->m_dict->dictSetVal(de,NULL);
         }
     }
 
     /* Release the key-val pair, or just the key if we set the val
      * field to NULL in order to lazy free it later. */
     if (de) {
-        db->_dict->dictFreeUnlinkedEntry(de);
+        db->m_dict->dictFreeUnlinkedEntry(de);
         if (server.cluster_enabled) slotToKeyDel(key);
         return 1;
     } else {
@@ -88,9 +88,9 @@ int dbAsyncDelete(redisDb *db, robj *key) {
  * create a new empty set of hash tables and scheduling the old ones for
  * lazy freeing. */
 void emptyDbAsync(redisDb *db) {
-    dict *oldht1 = db->_dict, *oldht2 = db->expires;
-    db->_dict = dictCreate(&dbDictType,NULL);
-    db->expires = dictCreate(&keyptrDictType,NULL);
+    dict *oldht1 = db->m_dict, *oldht2 = db->m_expires;
+    db->m_dict = dictCreate(&dbDictType,NULL);
+    db->m_expires = dictCreate(&keyptrDictType,NULL);
     atomicIncr(lazyfree_objects,oldht1->dictSize());
     bioCreateBackgroundJob(BIO_LAZY_FREE,NULL,oldht1,oldht2);
 }

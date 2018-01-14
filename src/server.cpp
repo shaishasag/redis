@@ -55,6 +55,7 @@
 #include <sys/utsname.h>
 #include <locale.h>
 #include <sys/socket.h>
+#include <new>
 
 #include <fstream>
 //std::ofstream outer_server("/Users/shai/Desktop/redis-cpp.txt", std::ios::app);
@@ -706,10 +707,10 @@ int htNeedsResize(dict *dict) {
 /* If the percentage of used slots in the HT reaches HASHTABLE_MIN_FILL
  * we resize the hash table to save memory */
 void tryResizeHashTables(int dbid) {
-    if (htNeedsResize(server.db[dbid]._dict))
-        server.db[dbid]._dict->dictResize();
-    if (htNeedsResize(server.db[dbid].expires))
-        server.db[dbid].expires->dictResize();
+    if (htNeedsResize(server.db[dbid].m_dict))
+        server.db[dbid].m_dict->dictResize();
+    if (htNeedsResize(server.db[dbid].m_expires))
+        server.db[dbid].m_expires->dictResize();
 }
 
 /* Our hash table implementation performs rehashing incrementally while
@@ -721,13 +722,13 @@ void tryResizeHashTables(int dbid) {
  * is returned. */
 int incrementallyRehash(int dbid) {
     /* Keys dictionary */
-    if (server.db[dbid]._dict->dictIsRehashing()) {
-        dictRehashMilliseconds(server.db[dbid]._dict,1);
+    if (server.db[dbid].m_dict->dictIsRehashing()) {
+        dictRehashMilliseconds(server.db[dbid].m_dict,1);
         return 1; /* already used our millisecond for this loop... */
     }
     /* Expires */
-    if (server.db[dbid].expires->dictIsRehashing()) {
-        dictRehashMilliseconds(server.db[dbid].expires,1);
+    if (server.db[dbid].m_expires->dictIsRehashing()) {
+        dictRehashMilliseconds(server.db[dbid].m_expires,1);
         return 1; /* already used our millisecond for this loop... */
     }
     return 0;
@@ -1008,12 +1009,12 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
         for (j = 0; j < server.dbnum; j++) {
             long long size, used, vkeys;
 
-            size = server.db[j]._dict->dictSlots();
-            used = server.db[j]._dict->dictSize();
-            vkeys = server.db[j].expires->dictSize();
+            size = server.db[j].m_dict->dictSlots();
+            used = server.db[j].m_dict->dictSize();
+            vkeys = server.db[j].m_expires->dictSize();
             if (used || vkeys) {
                 serverLog(LL_VERBOSE,"DB %d: %lld keys (%lld volatile) in %lld slots HT.",j,used,vkeys,size);
-                /* dictPrintStats(server._dict); */
+                /* dictPrintStats(server.m_dict); */
             }
         }
     }
@@ -1868,13 +1869,7 @@ void initServer(void) {
 
     /* Create the Redis databases, and initialize other internal state. */
     for (j = 0; j < server.dbnum; j++) {
-        server.db[j]._dict = dictCreate(&dbDictType,NULL);
-        server.db[j].expires = dictCreate(&keyptrDictType,NULL);
-        server.db[j].blocking_keys = dictCreate(&keylistDictType,NULL);
-        server.db[j].ready_keys = dictCreate(&objectKeyPointerValueDictType,NULL);
-        server.db[j].watched_keys = dictCreate(&keylistDictType,NULL);
-        server.db[j].id = j;
-        server.db[j].avg_ttl = 0;
+        new (server.db + j) redisDb(j);
     }
     evictionPoolAlloc(); /* Initialize the LRU keys pool. */
     server.pubsub_channels = dictCreate(&keylistDictType,NULL);
@@ -2206,7 +2201,7 @@ void call(client *c, int flags) {
         !server.loading &&
         !(c->cmd->flags & (CMD_SKIP_MONITOR|CMD_ADMIN)))
     {
-        replicationFeedMonitors(c,server.monitors,c->db->id,c->argv,c->argc);
+        replicationFeedMonitors(c,server.monitors,c->db->m_id,c->argv,c->argc);
     }
 
     /* Initialization: clear the flags that must be set by the command on
@@ -2280,7 +2275,7 @@ void call(client *c, int flags) {
          * propagation is needed. Note that modules commands handle replication
          * in an explicit way, so we never replicate them automatically. */
         if (propagate_flags != PROPAGATE_NONE && !(c->cmd->flags & CMD_MODULE))
-            propagate(c->cmd,c->db->id,c->argv,c->argc,propagate_flags);
+            propagate(c->cmd,c->db->m_id,c->argv,c->argc,propagate_flags);
     }
 
     /* Restore the old replication flags, since call() can be executed
@@ -3313,12 +3308,12 @@ sds genRedisInfoString(const char *section) {
         for (j = 0; j < server.dbnum; j++) {
             long long keys, vkeys;
 
-            keys = server.db[j]._dict->dictSize();
-            vkeys = server.db[j].expires->dictSize();
+            keys = server.db[j].m_dict->dictSize();
+            vkeys = server.db[j].m_expires->dictSize();
             if (keys || vkeys) {
                 info = sdscatprintf(info,
                     "db%d:keys=%lld,expires=%lld,avg_ttl=%lld\r\n",
-                    j, keys, vkeys, server.db[j].avg_ttl);
+                    j, keys, vkeys, server.db[j].m_avg_ttl);
             }
         }
     }
@@ -3684,6 +3679,16 @@ int redisIsSupervised(int mode) {
     return 0;
 }
 
+redisDb::redisDb(int in_id)
+{
+    m_dict = dictCreate(&dbDictType,NULL);
+    m_expires = dictCreate(&keyptrDictType,NULL);
+    m_blocking_keys = dictCreate(&keylistDictType,NULL);
+    m_ready_keys = dictCreate(&objectKeyPointerValueDictType,NULL);
+    m_watched_keys = dictCreate(&keylistDictType,NULL);
+    m_id = in_id;
+    m_avg_ttl = 0;
+}
 
 int main(int argc, char **argv) {
     struct timeval tv;

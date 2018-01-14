@@ -281,7 +281,7 @@ void saddCommand(client *c) {
     }
     if (added) {
         signalModifiedKey(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_SET,"sadd",c->argv[1],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_SET,"sadd",c->argv[1],c->db->m_id);
     }
     server.dirty += added;
     addReplyLongLong(c,added);
@@ -306,10 +306,10 @@ void sremCommand(client *c) {
     }
     if (deleted) {
         signalModifiedKey(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_SET,"srem",c->argv[1],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_SET,"srem",c->argv[1],c->db->m_id);
         if (keyremoved)
             notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],
-                                c->db->id);
+                                c->db->m_id);
         server.dirty += deleted;
     }
     addReplyLongLong(c,deleted);
@@ -344,12 +344,12 @@ void smoveCommand(client *c) {
         addReply(c,shared.czero);
         return;
     }
-    notifyKeyspaceEvent(NOTIFY_SET,"srem",c->argv[1],c->db->id);
+    notifyKeyspaceEvent(NOTIFY_SET,"srem",c->argv[1],c->db->m_id);
 
     /* Remove the src set from the database when empty */
     if (setTypeSize(srcset) == 0) {
         dbDelete(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->m_id);
     }
 
     /* Create the destination set when it doesn't exist */
@@ -365,7 +365,7 @@ void smoveCommand(client *c) {
     /* An extra key has changed when ele was successfully added to dstset */
     if (setTypeAdd(dstset,(sds)ele->ptr)) {
         server.dirty++;
-        notifyKeyspaceEvent(NOTIFY_SET,"sadd",c->argv[2],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_SET,"sadd",c->argv[2],c->db->m_id);
     }
     addReply(c,shared.cone);
 }
@@ -428,7 +428,7 @@ void spopWithCountCommand(client *c) {
     size = setTypeSize(set);
 
     /* Generate an SPOP keyspace notification */
-    notifyKeyspaceEvent(NOTIFY_SET,"spop",c->argv[1],c->db->id);
+    notifyKeyspaceEvent(NOTIFY_SET,"spop",c->argv[1],c->db->m_id);
     server.dirty += count;
 
     /* CASE 1:
@@ -440,7 +440,7 @@ void spopWithCountCommand(client *c) {
 
         /* Delete the set as it is now empty */
         dbDelete(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->m_id);
 
         /* Propagate this command as an DEL operation */
         rewriteClientCommandVector(c,2,shared.del,c->argv[1]);
@@ -487,7 +487,7 @@ void spopWithCountCommand(client *c) {
 
             /* Replicate/AOF this command as an SREM operation */
             propargv[2] = objele;
-            alsoPropagate(server.sremCommand,c->db->id,propargv,3,
+            alsoPropagate(server.sremCommand,c->db->m_id,propargv,3,
                 PROPAGATE_AOF|PROPAGATE_REPL);
             decrRefCount(objele);
         }
@@ -534,7 +534,7 @@ void spopWithCountCommand(client *c) {
 
             /* Replicate/AOF this command as an SREM operation */
             propargv[2] = objele;
-            alsoPropagate(server.sremCommand,c->db->id,propargv,3,
+            alsoPropagate(server.sremCommand,c->db->m_id,propargv,3,
                 PROPAGATE_AOF|PROPAGATE_REPL);
             decrRefCount(objele);
         }
@@ -583,7 +583,7 @@ void spopCommand(client *c) {
         setTypeRemove(set,(sds)ele->ptr);
     }
 
-    notifyKeyspaceEvent(NOTIFY_SET,"spop",c->argv[1],c->db->id);
+    notifyKeyspaceEvent(NOTIFY_SET,"spop",c->argv[1],c->db->m_id);
 
     /* Replicate/AOF this command as an SREM operation */
     aux = createStringObject("SREM",4);
@@ -597,7 +597,7 @@ void spopCommand(client *c) {
     /* Delete the set if it's empty */
     if (setTypeSize(set) == 0) {
         dbDelete(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->m_id);
     }
 
     /* Set has been modified */
@@ -902,13 +902,13 @@ void sinterGenericCommand(client *c, robj **setkeys,
             dbAdd(c->db,dstkey,dstset);
             addReplyLongLong(c,setTypeSize(dstset));
             notifyKeyspaceEvent(NOTIFY_SET,"sinterstore",
-                dstkey,c->db->id);
+                dstkey,c->db->m_id);
         } else {
             decrRefCount(dstset);
             addReply(c,shared.czero);
             if (deleted)
                 notifyKeyspaceEvent(NOTIFY_GENERIC,"del",
-                    dstkey,c->db->id);
+                    dstkey,c->db->m_id);
         }
         signalModifiedKey(c->db,dstkey);
         server.dirty++;
@@ -1076,13 +1076,13 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
             addReplyLongLong(c,setTypeSize(dstset));
             notifyKeyspaceEvent(NOTIFY_SET,
                 op == SET_OP_UNION ? "sunionstore" : "sdiffstore",
-                dstkey,c->db->id);
+                dstkey,c->db->m_id);
         } else {
             decrRefCount(dstset);
             addReply(c,shared.czero);
             if (deleted)
                 notifyKeyspaceEvent(NOTIFY_GENERIC,"del",
-                    dstkey,c->db->id);
+                    dstkey,c->db->m_id);
         }
         signalModifiedKey(c->db,dstkey);
         server.dirty++;

@@ -3745,7 +3745,7 @@ int verifyClusterConfigWithData(void) {
 
     /* Make sure we only have keys in DB0. */
     for (j = 1; j < server.dbnum; j++) {
-        if (server.db[j]._dict->dictSize()) return C_ERR;
+        if (server.db[j].m_dict->dictSize()) return C_ERR;
     }
 
     /* Check that all the slots we see populated memory have a corresponding
@@ -4090,7 +4090,7 @@ void clusterCommand(client *c) {
         clusterReplyMultiBulkSlots(c);
     } else if (!strcasecmp((const char*)c->argv[1]->ptr,"flushslots") && c->argc == 2) {
         /* CLUSTER FLUSHSLOTS */
-        if (server.db[0]._dict->dictSize() != 0) {
+        if (server.db[0].m_dict->dictSize() != 0) {
             addReplyError(c,"DB must be empty to perform CLUSTER FLUSHSLOTS.");
             return;
         }
@@ -4425,7 +4425,7 @@ void clusterCommand(client *c) {
          * slots nor keys to accept to replicate some other node.
          * Slaves can switch to another master without issues. */
         if (nodeIsMaster(myself) &&
-            (myself->numslots != 0 || server.db[0]._dict->dictSize() != 0)) {
+            (myself->numslots != 0 || server.db[0].m_dict->dictSize() != 0)) {
             addReplyError(c,
                 "To set a master the node must be empty and "
                 "without assigned slots.");
@@ -4581,7 +4581,7 @@ void clusterCommand(client *c) {
 
         /* Slaves can be reset while containing data, but not master nodes
          * that must be empty. */
-        if (nodeIsMaster(myself) && c->db->_dict->dictSize() != 0) {
+        if (nodeIsMaster(myself) && c->db->m_dict->dictSize() != 0) {
             addReplyError(c,"CLUSTER RESET can't be called with "
                             "master nodes containing keys");
             return;

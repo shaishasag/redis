@@ -125,9 +125,9 @@ void computeDatasetDigest(unsigned char *final) {
     for (j = 0; j < server.dbnum; j++) {
         redisDb *db = server.db+j;
 
-        if (db->_dict->dictSize() == 0) continue;
+        if (db->m_dict->dictSize() == 0) continue;
         
-        dictIterator di(db->_dict, 1);
+        dictIterator di(db->m_dict, 1);
 
         /* hash the DB id, so the same dataset moved in a different
          * DB will lead to a different digest */
@@ -365,7 +365,7 @@ void debugCommand(client *c) {
         robj *val;
         char *strenc;
 
-        if ((de = c->db->_dict->dictFind(c->argv[2]->ptr)) == NULL) {
+        if ((de = c->db->m_dict->dictFind(c->argv[2]->ptr)) == NULL) {
             addReply(c,shared.nokeyerr);
             return;
         }
@@ -417,7 +417,7 @@ void debugCommand(client *c) {
         robj *val;
         sds key;
 
-        if ((de = c->db->_dict->dictFind(c->argv[2]->ptr)) == NULL) {
+        if ((de = c->db->m_dict->dictFind(c->argv[2]->ptr)) == NULL) {
             addReply(c,shared.nokeyerr);
             return;
         }
@@ -457,7 +457,7 @@ void debugCommand(client *c) {
 
         if (getLongFromObjectOrReply(c, c->argv[2], &keys, NULL) != C_OK)
             return;
-        c->db->_dict->dictExpand(keys);
+        c->db->m_dict->dictExpand(keys);
         for (j = 0; j < keys; j++) {
             long valsize = 0;
             snprintf(buf,sizeof(buf),"%s:%lu",
@@ -543,11 +543,11 @@ void debugCommand(client *c) {
         }
 
         stats = sdscatprintf(stats,"[Dictionary HT]\n");
-        dictGetStats(buf,sizeof(buf),server.db[dbid]._dict);
+        dictGetStats(buf,sizeof(buf),server.db[dbid].m_dict);
         stats = sdscat(stats,buf);
 
         stats = sdscatprintf(stats,"[Expires HT]\n");
-        dictGetStats(buf,sizeof(buf),server.db[dbid].expires);
+        dictGetStats(buf,sizeof(buf),server.db[dbid].m_expires);
         stats = sdscat(stats,buf);
 
         addReplyBulkSds(c,stats);
@@ -915,7 +915,7 @@ void logCurrentClient(void) {
         dictEntry *de;
 
         key = getDecodedObject(cc->argv[1]);
-        de = cc->db->_dict->dictFind(key->ptr);
+        de = cc->db->m_dict->dictFind(key->ptr);
         if (de) {
             val = (robj *)de->dictGetVal();
             serverLog(LL_WARNING,"key '%s' found in DB containing the following object:", (char*)key->ptr);

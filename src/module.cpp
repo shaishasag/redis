@@ -448,7 +448,7 @@ void moduleHandlePropagationAfterCommandCallback(RedisModuleCtx *ctx) {
     if (ctx->flags & REDISMODULE_CTX_MULTI_EMITTED) {
         robj *propargv[1];
         propargv[0] = createStringObject("EXEC",4);
-        alsoPropagate(server.execCommand,c->db->id,propargv,1,
+        alsoPropagate(server.execCommand,c->db->m_id,propargv,1,
             PROPAGATE_AOF|PROPAGATE_REPL);
         decrRefCount(propargv[0]);
     }
@@ -1219,7 +1219,7 @@ int RM_Replicate(RedisModuleCtx *ctx, const char *cmdname, const char *fmt, ...)
 
     /* Replicate! */
     moduleReplicateMultiIfNeeded(ctx);
-    alsoPropagate(cmd,ctx->_client->db->id,argv,argc,
+    alsoPropagate(cmd,ctx->_client->db->m_id,argv,argc,
         PROPAGATE_AOF|PROPAGATE_REPL);
 
     /* Release the argv. */
@@ -1241,7 +1241,7 @@ int RM_Replicate(RedisModuleCtx *ctx, const char *cmdname, const char *fmt, ...)
  *
  * The function always returns REDISMODULE_OK. */
 int RM_ReplicateVerbatim(RedisModuleCtx *ctx) {
-    alsoPropagate(ctx->_client->cmd,ctx->_client->db->id,
+    alsoPropagate(ctx->_client->cmd,ctx->_client->db->m_id,
         ctx->_client->argv,ctx->_client->argc,
         PROPAGATE_AOF|PROPAGATE_REPL);
     server.dirty++;
@@ -1270,7 +1270,7 @@ unsigned long long RM_GetClientId(RedisModuleCtx *ctx) {
 
 /* Return the currently selected DB. */
 int RM_GetSelectedDb(RedisModuleCtx *ctx) {
-    return ctx->_client->db->id;
+    return ctx->_client->db->m_id;
 }
 
 
@@ -3433,7 +3433,7 @@ RedisModuleBlockedClient *RM_BlockClient(RedisModuleCtx *ctx, RedisModuleCmdFunc
     bc->privdata = NULL;
     bc->reply_client = createClient(-1);
     bc->reply_client->flags |= CLIENT_MODULE;
-    bc->dbid = c->db->id;
+    bc->dbid = c->db->m_id;
     c->bpop.timeout = timeout_ms ? (mstime()+timeout_ms) : 0;
 
     if (islua || ismulti) {

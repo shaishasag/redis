@@ -218,7 +218,7 @@ void pushGenericCommand(client *c, int where) {
         const char *event = (where == LIST_HEAD) ? "lpush" : "rpush";
 
         signalModifiedKey(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_LIST,event,c->argv[1],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_LIST,event,c->argv[1],c->db->m_id);
     }
     server.dirty += pushed;
 }
@@ -248,7 +248,7 @@ void pushxGenericCommand(client *c, int where) {
     if (pushed) {
         const char *event = (where == LIST_HEAD) ? "lpush" : "rpush";
         signalModifiedKey(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_LIST,event,c->argv[1],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_LIST,event,c->argv[1],c->db->m_id);
     }
     server.dirty += pushed;
 }
@@ -294,7 +294,7 @@ void linsertCommand(client *c) {
     if (inserted) {
         signalModifiedKey(c->db,c->argv[1]);
         notifyKeyspaceEvent(NOTIFY_LIST,"linsert",
-                            c->argv[1],c->db->id);
+                            c->argv[1],c->db->m_id);
         server.dirty++;
     } else {
         /* Notify client of a failed insert */
@@ -356,7 +356,7 @@ void lsetCommand(client *c) {
         } else {
             addReply(c,shared.ok);
             signalModifiedKey(c->db,c->argv[1]);
-            notifyKeyspaceEvent(NOTIFY_LIST,"lset",c->argv[1],c->db->id);
+            notifyKeyspaceEvent(NOTIFY_LIST,"lset",c->argv[1],c->db->m_id);
             server.dirty++;
         }
     } else {
@@ -376,10 +376,10 @@ void popGenericCommand(client *c, int where) {
 
         addReplyBulk(c,value);
         decrRefCount(value);
-        notifyKeyspaceEvent(NOTIFY_LIST,event,c->argv[1],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_LIST,event,c->argv[1],c->db->m_id);
         if (listTypeLength(o) == 0) {
             notifyKeyspaceEvent(NOTIFY_GENERIC,"del",
-                                c->argv[1],c->db->id);
+                                c->argv[1],c->db->m_id);
             dbDelete(c->db,c->argv[1]);
         }
         signalModifiedKey(c->db,c->argv[1]);
@@ -477,10 +477,10 @@ void ltrimCommand(client *c) {
         serverPanic("Unknown list encoding");
     }
 
-    notifyKeyspaceEvent(NOTIFY_LIST,"ltrim",c->argv[1],c->db->id);
+    notifyKeyspaceEvent(NOTIFY_LIST,"ltrim",c->argv[1],c->db->m_id);
     if (listTypeLength(o) == 0) {
         dbDelete(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->m_id);
     }
     signalModifiedKey(c->db,c->argv[1]);
     server.dirty++;
@@ -520,12 +520,12 @@ void lremCommand(client *c) {
 
     if (removed) {
         signalModifiedKey(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"lrem",c->argv[1],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"lrem",c->argv[1],c->db->m_id);
     }
 
     if (listTypeLength(subject) == 0) {
         dbDelete(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->id);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->m_id);
     }
 
     addReplyLongLong(c,removed);
@@ -557,7 +557,7 @@ void rpoplpushHandlePush(client *c, robj *dstkey, robj *dstobj, robj *value) {
     }
     signalModifiedKey(c->db,dstkey);
     listTypePush(dstobj,value,LIST_HEAD);
-    notifyKeyspaceEvent(NOTIFY_LIST,"lpush",dstkey,c->db->id);
+    notifyKeyspaceEvent(NOTIFY_LIST,"lpush",dstkey,c->db->m_id);
     /* Always send the pushed value to the client. */
     addReplyBulk(c,value);
 }
@@ -587,11 +587,11 @@ void rpoplpushCommand(client *c) {
         decrRefCount(value);
 
         /* Delete the source list when it is empty */
-        notifyKeyspaceEvent(NOTIFY_LIST,"rpop",touchedkey,c->db->id);
+        notifyKeyspaceEvent(NOTIFY_LIST,"rpop",touchedkey,c->db->m_id);
         if (listTypeLength(sobj) == 0) {
             dbDelete(c->db,touchedkey);
             notifyKeyspaceEvent(NOTIFY_GENERIC,"del",
-                                touchedkey,c->db->id);
+                                touchedkey,c->db->m_id);
         }
         signalModifiedKey(c->db,touchedkey);
         decrRefCount(touchedkey);
@@ -611,7 +611,7 @@ void rpoplpushCommand(client *c) {
  *   empty we need to block. In order to do so we remove the notification for
  *   new data to read in the client socket (so that we'll not serve new
  *   requests if the blocking request is not served). Also we put the client
- *   in a dictionary (db->blocking_keys) mapping keys to a list of clients
+ *   in a dictionary (db->m_blocking_keys) mapping keys to a list of clients
  *   blocking for this keys.
  * - If a PUSH operation against a key with blocked clients waiting is
  *   performed, we mark this key as "ready", and after the current command,
@@ -638,13 +638,13 @@ void blockForKeys(client *c, robj **keys, int numkeys, mstime_t timeout, robj *t
         incrRefCount(keys[j]);
 
         /* And in the other "side", to map keys -> clients */
-        de = c->db->blocking_keys->dictFind(keys[j]);
+        de = c->db->m_blocking_keys->dictFind(keys[j]);
         if (de == NULL) {
             int retval;
 
             /* For every key we take a list of clients blocked for it */
             l = listCreate();
-            retval = c->db->blocking_keys->dictAdd(keys[j],l);
+            retval = c->db->m_blocking_keys->dictAdd(keys[j],l);
             incrRefCount(keys[j]);
             serverAssertWithInfo(c,keys[j],retval == DICT_OK);
         } else {
@@ -668,12 +668,12 @@ void unblockClientWaitingData(client *c) {
             robj *key = (robj *)de->dictGetKey();
 
             /* Remove this client from the list of clients waiting for this key. */
-            list *l = (list *)(c->db->blocking_keys)->dictFetchValue(key);
+            list *l = (list *)(c->db->m_blocking_keys)->dictFetchValue(key);
             serverAssertWithInfo(c,key,l != NULL);
             l->listDelNode(l->listSearchKey(c));
             /* If the list is empty we need to remove it to avoid wasting memory */
             if (l->listLength() == 0)
-                c->db->blocking_keys->dictDelete(key);
+                c->db->m_blocking_keys->dictDelete(key);
         }
     }
     
@@ -687,7 +687,7 @@ void unblockClientWaitingData(client *c) {
 
 /* If the specified key has clients blocked waiting for list pushes, this
  * function will put the key reference into the server.ready_keys list.
- * Note that db->ready_keys is a hash table that allows us to avoid putting
+ * Note that db->m_ready_keys is a hash table that allows us to avoid putting
  * the same key again and again in the list in case of multiple pushes
  * made by a script or in the context of MULTI/EXEC.
  *
@@ -696,10 +696,10 @@ void signalListAsReady(redisDb *db, robj *key) {
     readyList *rl;
 
     /* No clients blocking for this key? No need to queue it. */
-    if (db->blocking_keys->dictFind(key) == NULL) return;
+    if (db->m_blocking_keys->dictFind(key) == NULL) return;
 
     /* Key was already signaled? No need to queue it again. */
-    if (db->ready_keys->dictFind(key) != NULL) return;
+    if (db->m_ready_keys->dictFind(key) != NULL) return;
 
     /* Ok, we need to queue this key into server.ready_keys. */
     rl = (readyList *)zmalloc(sizeof(*rl));
@@ -708,11 +708,11 @@ void signalListAsReady(redisDb *db, robj *key) {
     incrRefCount(key);
     server.ready_keys->listAddNodeTail(rl);
 
-    /* We also add the key in the db->ready_keys dictionary in order
+    /* We also add the key in the db->m_ready_keys dictionary in order
      * to avoid adding it multiple times into a list with a simple O(1)
      * check. */
     incrRefCount(key);
-    serverAssert(db->ready_keys->dictAdd(key,NULL) == DICT_OK);
+    serverAssert(db->m_ready_keys->dictAdd(key,NULL) == DICT_OK);
 }
 
 /* This is a helper function for handleClientsBlockedOnLists(). It's work
@@ -745,7 +745,7 @@ int serveClientBlockedOnList(client *receiver, robj *key, robj *dstkey, redisDb 
         argv[1] = key;
         propagate((where == LIST_HEAD) ?
             server.lpopCommand : server.rpopCommand,
-            db->id,argv,2,PROPAGATE_AOF|PROPAGATE_REPL);
+            db->m_id,argv,2,PROPAGATE_AOF|PROPAGATE_REPL);
 
         /* BRPOP/BLPOP */
         addReplyMultiBulkLen(receiver,2);
@@ -762,7 +762,7 @@ int serveClientBlockedOnList(client *receiver, robj *key, robj *dstkey, redisDb 
             argv[0] = shared.rpop;
             argv[1] = key;
             propagate(server.rpopCommand,
-                db->id,argv,2,
+                db->m_id,argv,2,
                 PROPAGATE_AOF|
                 PROPAGATE_REPL);
             rpoplpushHandlePush(receiver,dstkey,dstobj,
@@ -772,7 +772,7 @@ int serveClientBlockedOnList(client *receiver, robj *key, robj *dstkey, redisDb 
             argv[1] = dstkey;
             argv[2] = value;
             propagate(server.lpushCommand,
-                db->id,argv,3,
+                db->m_id,argv,3,
                 PROPAGATE_AOF|
                 PROPAGATE_REPL);
         } else {
@@ -808,9 +808,9 @@ void handleClientsBlockedOnLists(void) {
             listNode *ln = l->listFirst();
             readyList *rl = (readyList *)ln->listNodeValue();
 
-            /* First of all remove this key from db->ready_keys so that
+            /* First of all remove this key from db->m_ready_keys so that
              * we can safely call signalListAsReady() against this key. */
-            rl->db->ready_keys->dictDelete(rl->key);
+            rl->db->m_ready_keys->dictDelete(rl->key);
 
             /* If the key exists and it's a list, serve blocked clients
              * with data. */
@@ -820,7 +820,7 @@ void handleClientsBlockedOnLists(void) {
 
                 /* We serve clients in the same order they blocked for
                  * this key, from the first blocked to the last. */
-                de = rl->db->blocking_keys->dictFind(rl->key);
+                de = rl->db->m_blocking_keys->dictFind(rl->key);
                 if (de) {
                     list* clients = (list*)de->dictGetVal();
                     int numclients = clients->listLength();
@@ -901,11 +901,11 @@ void blockingPopGenericCommand(client *c, int where) {
                     addReplyBulk(c,value);
                     decrRefCount(value);
                     notifyKeyspaceEvent(NOTIFY_LIST,(char *)event,
-                                        c->argv[j],c->db->id);
+                                        c->argv[j],c->db->m_id);
                     if (listTypeLength(o) == 0) {
                         dbDelete(c->db,c->argv[j]);
                         notifyKeyspaceEvent(NOTIFY_GENERIC,"del",
-                                            c->argv[j],c->db->id);
+                                            c->argv[j],c->db->m_id);
                     }
                     signalModifiedKey(c->db,c->argv[j]);
                     server.dirty++;

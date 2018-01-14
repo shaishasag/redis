@@ -1067,7 +1067,7 @@ int rewriteAppendOnlyFileRio(rio *aof) {
     for (j = 0; j < server.dbnum; j++) {
         char selectcmd[] = "*2\r\n$6\r\nSELECT\r\n";
         redisDb *db = server.db+j;
-        dict *d = db->_dict;
+        dict *d = db->m_dict;
         if (d->dictSize() == 0) continue;
 
         /* SELECT the new DB */

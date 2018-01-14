@@ -871,21 +871,21 @@ struct redisMemOverhead *getMemoryOverheadData(void) {
 
     for (j = 0; j < server.dbnum; j++) {
         redisDb *db = server.db+j;
-        long long keyscount = db->_dict->dictSize();
+        long long keyscount = db->m_dict->dictSize();
         if (keyscount==0) continue;
 
         mh->total_keys += keyscount;
         mh->db = (redisMemOverhead::redisMemOverhead_db*)zrealloc(mh->db,sizeof(mh->db[0])*(mh->num_dbs+1));
         mh->db[mh->num_dbs].dbid = j;
 
-        mem = db->_dict->dictSize() * sizeof(dictEntry) +
-              db->_dict->dictSlots() * sizeof(dictEntry*) +
-              db->_dict->dictSize() * sizeof(robj);
+        mem = db->m_dict->dictSize() * sizeof(dictEntry) +
+              db->m_dict->dictSlots() * sizeof(dictEntry*) +
+              db->m_dict->dictSize() * sizeof(robj);
         mh->db[mh->num_dbs].overhead_ht_main = mem;
         mem_total+=mem;
 
-        mem = db->expires->dictSize() * sizeof(dictEntry) +
-              db->expires->dictSlots() * sizeof(dictEntry*);
+        mem = db->m_expires->dictSize() * sizeof(dictEntry) +
+              db->m_expires->dictSlots() * sizeof(dictEntry*);
         mh->db[mh->num_dbs].overhead_ht_expires = mem;
         mem_total+=mem;
 
@@ -996,7 +996,7 @@ sds getMemoryDoctorReport(void) {
 robj *objectCommandLookup(client *c, robj *key) {
     dictEntry *de;
 
-    if ((de = c->db->_dict->dictFind(key->ptr)) == NULL) return NULL;
+    if ((de = c->db->m_dict->dictFind(key->ptr)) == NULL) return NULL;
     return (robj*) de->dictGetVal();
 }
 

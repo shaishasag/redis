@@ -672,11 +672,11 @@ void georadiusGeneric(client *c, int flags) {
             setKey(c->db,storekey,zobj);
             decrRefCount(zobj);
             notifyKeyspaceEvent(NOTIFY_LIST,"georadiusstore",storekey,
-                                c->db->id);
+                                c->db->m_id);
             server.dirty += returned_items;
         } else if (dbDelete(c->db,storekey)) {
             signalModifiedKey(c->db,storekey);
-            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",storekey,c->db->id);
+            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",storekey,c->db->m_id);
             server.dirty++;
         }
         addReplyLongLong(c, returned_items);

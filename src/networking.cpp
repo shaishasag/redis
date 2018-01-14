@@ -1521,7 +1521,7 @@ sds catClientInfoString(sds s, client *client) {
         (long long)(server.unixtime - client->ctime),
         (long long)(server.unixtime - client->lastinteraction),
         flags,
-        client->db->id,
+        client->db->m_id,
         (int) client->pubsub_channels->dictSize(),
         (int) client->pubsub_patterns->listLength(),
         (client->flags & CLIENT_MULTI) ? client->mstate.count : -1,

@@ -284,12 +284,12 @@ int defragKey(redisDb *db, dictEntry *de) {
     newsds = activeDefragSds(keysds);
     if (newsds)
         defragged++, de->key = newsds;
-    if (db->expires->dictSize()) {
+    if (db->m_expires->dictSize()) {
          /* Dirty code:
-          * I can't search in db->expires for that key after i already released
+          * I can't search in db->m_expires for that key after i already released
           * the pointer it holds it won't be able to do the string compare */
-        unsigned int hash = dictGetHash(db->_dict, de->key);
-        replaceSateliteDictKeyPtrAndOrDefragDictEntry(db->expires, keysds, newsds, hash, &defragged);
+        unsigned int hash = dictGetHash(db->m_dict, de->key);
+        replaceSateliteDictKeyPtrAndOrDefragDictEntry(db->m_expires, keysds, newsds, hash, &defragged);
     }
 
     /* Try to defrag robj and / or string value. */
@@ -553,7 +553,7 @@ void activeDefragCycle(void) {
         }
 
         do {
-            cursor = db->_dict->dictScan(cursor, defragScanCallback, defragDictBucketCallback, db);
+            cursor = db->m_dict->dictScan(cursor, defragScanCallback, defragDictBucketCallback, db);
             /* Once in 16 scan iterations, or 1000 pointer reallocations
              * (if we have a lot of pointers in one hash bucket), check if we
              * reached the tiem limit. */
