@@ -38,7 +38,7 @@
 
 #include <stdio.h>
 
-static int evport_debug = 0;
+int evport_debug = 0;
 
 /*
  * This file implements the ae API using event ports, present on Solaris-based
@@ -72,7 +72,7 @@ typedef struct aeApiState {
     int     pending_masks[MAX_EVENT_BATCHSZ];   /* pending fds' masks */
 } aeApiState;
 
-static int aeApiCreate(aeEventLoop *eventLoop) {
+int aeEventLoop::aeApiCreate() {
     int i;
     aeApiState* state = (aeApiState*)zmalloc(sizeof(aeApiState));
     if (!state) return -1;
@@ -90,23 +90,23 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
         state->pending_masks[i] = AE_NONE;
     }
 
-    eventLoop->apidata = state;
+    m_apidata = state;
     return 0;
 }
 
-static int aeApiResize(aeEventLoop *eventLoop, int setsize) {
+int aeEventLoop::aeApiResize(int setsize) {
     /* Nothing to resize here. */
     return 0;
 }
 
-static void aeApiFree(aeEventLoop *eventLoop) {
-    aeApiState *state = eventLoop->apidata;
+void aeEventLoop::aeApiFree() {
+    aeApiState *state = m_apidata;
 
     close(state->portfd);
     zfree(state);
 }
 
-static int aeApiLookupPending(aeApiState *state, int fd) {
+int aeEventLoop::aeApiLookupPending(aeApiState *state, int fd) {
     int i;
 
     for (i = 0; i < state->npending; i++) {
@@ -149,8 +149,8 @@ static int aeApiAssociate(const char *where, int portfd, int fd, int mask) {
     return rv;
 }
 
-static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
-    aeApiState *state = eventLoop->apidata;
+int aeEventLoop::aeApiAddEvent(int fd, int mask) {
+    aeApiState *state = m_apidata;
     int fullmask, pfd;
 
     if (evport_debug)
@@ -161,7 +161,7 @@ static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
      * must be sure to include whatever events are already associated when
      * we call port_associate() again.
      */
-    fullmask = mask | eventLoop->events[fd].mask;
+    fullmask = mask | m_events[fd].mask;
     pfd = aeApiLookupPending(state, fd);
 
     if (pfd != -1) {
@@ -180,8 +180,8 @@ static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
     return (aeApiAssociate("aeApiAddEvent", state->portfd, fd, fullmask));
 }
 
-static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int mask) {
-    aeApiState *state = eventLoop->apidata;
+void aeEventLoop::aeApiDelEvent(int fd, int mask) {
+    aeApiState *state = m_apidata;
     int fullmask, pfd;
 
     if (evport_debug)
@@ -214,7 +214,7 @@ static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int mask) {
      * the fact that our caller has already updated the mask in the eventLoop.
      */
 
-    fullmask = eventLoop->events[fd].mask;
+    fullmask = m_events[fd].mask;
     if (fullmask == AE_NONE) {
         /*
          * We're removing *all* events, so use port_dissociate to remove the
@@ -240,8 +240,8 @@ static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int mask) {
     }
 }
 
-static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
-    aeApiState *state = eventLoop->apidata;
+int aeEventLoop::aeApiPoll(struct timeval *tvp) {
+    aeApiState *state = m_apidata;
     struct timespec timeout, *tsp;
     int mask, i;
     uint_t nevents;
@@ -301,8 +301,8 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
             if (event[i].portev_events & POLLOUT)
                 mask |= AE_WRITABLE;
 
-            eventLoop->fired[i].fd = event[i].portev_object;
-            eventLoop->fired[i].mask = mask;
+            m_fired[i].fd = event[i].portev_object;
+            m_fired[i].mask = mask;
 
             if (evport_debug)
                 fprintf(stderr, "aeApiPoll: fd %d mask 0x%x\n",
@@ -315,6 +315,6 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
     return nevents;
 }
 
-static char *aeApiName(void) {
+char *aeEventLoop::aeApiName() {
     return "evport";
 }

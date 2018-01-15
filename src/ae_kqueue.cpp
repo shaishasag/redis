@@ -38,11 +38,12 @@ typedef struct aeApiState {
     struct kevent *events;
 } aeApiState;
 
-static int aeApiCreate(aeEventLoop *eventLoop) {
+int aeEventLoop::aeApiCreate() {
     aeApiState *state = (aeApiState *)zmalloc(sizeof(aeApiState));
 
-    if (!state) return -1;
-    state->events = (struct kevent *)zmalloc(sizeof(struct kevent)*eventLoop->setsize);
+    if (!state)
+        return -1;
+    state->events = (struct kevent *)zmalloc(sizeof(struct kevent)*m_setsize);
     if (!state->events) {
         zfree(state);
         return -1;
@@ -53,27 +54,27 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
         zfree(state);
         return -1;
     }
-    eventLoop->apidata = state;
+    m_apidata = state;
     return 0;
 }
 
-static int aeApiResize(aeEventLoop *eventLoop, int setsize) {
-    aeApiState *state = (aeApiState *)eventLoop->apidata;
+int aeEventLoop::aeApiResize(int setsize) {
+    aeApiState *state = (aeApiState *)m_apidata;
 
     state->events = (struct kevent *)zrealloc(state->events, sizeof(struct kevent)*setsize);
     return 0;
 }
 
-static void aeApiFree(aeEventLoop *eventLoop) {
-    aeApiState *state = (aeApiState *)eventLoop->apidata;
+void aeEventLoop::aeApiFree() {
+    aeApiState *state = (aeApiState *)m_apidata;
 
     close(state->kqfd);
     zfree(state->events);
     zfree(state);
 }
 
-static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
-    aeApiState *state = (aeApiState *)eventLoop->apidata;
+int aeEventLoop::aeApiAddEvent(int fd, int mask) {
+    aeApiState *state = (aeApiState *)m_apidata;
     struct kevent ke;
 
     if (mask & AE_READABLE) {
@@ -87,8 +88,8 @@ static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
     return 0;
 }
 
-static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int mask) {
-    aeApiState *state = (aeApiState *)eventLoop->apidata;
+void aeEventLoop::aeApiDelEvent(int fd, int mask) {
+    aeApiState *state = (aeApiState *)m_apidata;
     struct kevent ke;
 
     if (mask & AE_READABLE) {
@@ -101,18 +102,18 @@ static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int mask) {
     }
 }
 
-static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
-    aeApiState *state = (aeApiState *)eventLoop->apidata;
+int aeEventLoop::aeApiPoll(struct timeval *tvp) {
+    aeApiState *state = (aeApiState *)m_apidata;
     int retval, numevents = 0;
 
     if (tvp != NULL) {
         struct timespec timeout;
         timeout.tv_sec = tvp->tv_sec;
         timeout.tv_nsec = tvp->tv_usec * 1000;
-        retval = kevent(state->kqfd, NULL, 0, state->events, eventLoop->setsize,
+        retval = kevent(state->kqfd, NULL, 0, state->events, m_setsize,
                         &timeout);
     } else {
-        retval = kevent(state->kqfd, NULL, 0, state->events, eventLoop->setsize,
+        retval = kevent(state->kqfd, NULL, 0, state->events, m_setsize,
                         NULL);
     }
 
@@ -126,13 +127,13 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
 
             if (e->filter == EVFILT_READ) mask |= AE_READABLE;
             if (e->filter == EVFILT_WRITE) mask |= AE_WRITABLE;
-            eventLoop->fired[j].fd = e->ident;
-            eventLoop->fired[j].mask = mask;
+            m_fired[j].fd = e->ident;
+            m_fired[j].mask = mask;
         }
     }
     return numevents;
 }
 
-static char *aeApiName(void) {
+char *aeEventLoop::aeApiName(void) {
     return (char *)"kqueue";
 }

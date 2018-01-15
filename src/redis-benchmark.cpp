@@ -126,8 +126,8 @@ static long long mstime(void) {
 
 static void freeClient(pclient c) {
     listNode *ln;
-    aeDeleteFileEvent(config.el,c->context->fd,AE_WRITABLE);
-    aeDeleteFileEvent(config.el,c->context->fd,AE_READABLE);
+    config.el->aeDeleteFileEvent(c->context->fd,AE_WRITABLE);
+    config.el->aeDeleteFileEvent(c->context->fd,AE_READABLE);
     redisFree(c->context);
     sdsfree(c->obuf);
     zfree(c->randptr);
@@ -149,9 +149,9 @@ static void freeAllClients(void) {
 }
 
 static void resetClient(pclient c) {
-    aeDeleteFileEvent(config.el,c->context->fd,AE_WRITABLE);
-    aeDeleteFileEvent(config.el,c->context->fd,AE_READABLE);
-    aeCreateFileEvent(config.el,c->context->fd,AE_WRITABLE,writeHandler,c);
+    config.el->aeDeleteFileEvent(c->context->fd,AE_WRITABLE);
+    config.el->aeDeleteFileEvent(c->context->fd,AE_READABLE);
+    config.el->aeCreateFileEvent(c->context->fd,AE_WRITABLE,writeHandler,c);
     c->written = 0;
     c->pending = config.pipeline;
 }
@@ -175,7 +175,7 @@ static void randomizeClientKey(pclient c) {
 static void clientDone(pclient c) {
     if (config.requests_finished == config.requests) {
         freeClient(c);
-        aeStop(config.el);
+        config.el->aeStop();
         return;
     }
     if (config.keepalive) {
@@ -288,8 +288,8 @@ static void writeHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
         }
         c->written += nwritten;
         if (sdslen(c->obuf) == c->written) {
-            aeDeleteFileEvent(config.el,c->context->fd,AE_WRITABLE);
-            aeCreateFileEvent(config.el,c->context->fd,AE_READABLE,readHandler,c);
+            config.el->aeDeleteFileEvent(c->context->fd,AE_WRITABLE);
+            config.el->aeCreateFileEvent(c->context->fd,AE_READABLE,readHandler,c);
         }
     }
 }
@@ -406,7 +406,7 @@ static pclient createClient(char *cmd, size_t len, pclient from) {
         }
     }
     if (config.idlemode == 0)
-        aeCreateFileEvent(config.el,c->context->fd,AE_WRITABLE,writeHandler,c);
+        config.el->aeCreateFileEvent(c->context->fd,AE_WRITABLE,writeHandler,c);
     config.clients->listAddNodeTail(c);
     config.liveclients++;
     return c;
@@ -469,7 +469,7 @@ static void benchmark(char *title, char *cmd, int len) {
     createMissingClients(c);
 
     config.start = mstime();
-    aeMain(config.el);
+    config.el->aeMain();
     config.totlatency = mstime()-config.start;
 
     showLatencyReport();
@@ -660,7 +660,7 @@ int main(int argc, const char **argv) {
     config.requests = 100000;
     config.liveclients = 0;
     config.el = aeCreateEventLoop(1024*10);
-    aeCreateTimeEvent(config.el,1,showThroughput,NULL,NULL);
+    config.el->aeCreateTimeEvent(1,showThroughput,NULL,NULL);
     config.keepalive = 1;
     config.datasize = 3;
     config.pipeline = 1;
@@ -694,7 +694,7 @@ int main(int argc, const char **argv) {
         printf("Creating %d idle connections and waiting forever (Ctrl+C when done)\n", config.numclients);
         c = createClient("",0,NULL); /* will never receive a reply */
         createMissingClients(c);
-        aeMain(config.el);
+        config.el->aeMain();
         /* and will wait for every */
     }
 

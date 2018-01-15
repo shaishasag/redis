@@ -22,7 +22,7 @@ void getCallback(redisAsyncContext *c, void *r, void *privdata) {
 void connectCallback(const redisAsyncContext *c, int status) {
     if (status != REDIS_OK) {
         printf("Error: %s\n", c->errstr);
-        aeStop(loop);
+        loop->aeStop();
         return;
     }
 
@@ -32,12 +32,12 @@ void connectCallback(const redisAsyncContext *c, int status) {
 void disconnectCallback(const redisAsyncContext *c, int status) {
     if (status != REDIS_OK) {
         printf("Error: %s\n", c->errstr);
-        aeStop(loop);
+        loop->aeStop();
         return;
     }
 
     printf("Disconnected...\n");
-    aeStop(loop);
+    loop->aeStop();
 }
 
 int main (int argc, char **argv) {

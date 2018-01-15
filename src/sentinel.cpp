@@ -287,7 +287,7 @@ static void redisAeAddRead(void *privdata) {
     aeEventLoop *loop = e->loop;
     if (!e->reading) {
         e->reading = 1;
-        aeCreateFileEvent(loop,e->fd,AE_READABLE,redisAeReadEvent,e);
+        loop->aeCreateFileEvent(e->fd,AE_READABLE,redisAeReadEvent,e);
     }
 }
 
@@ -296,7 +296,7 @@ static void redisAeDelRead(void *privdata) {
     aeEventLoop *loop = e->loop;
     if (e->reading) {
         e->reading = 0;
-        aeDeleteFileEvent(loop,e->fd,AE_READABLE);
+        loop->aeDeleteFileEvent(e->fd,AE_READABLE);
     }
 }
 
@@ -305,7 +305,7 @@ static void redisAeAddWrite(void *privdata) {
     aeEventLoop *loop = e->loop;
     if (!e->writing) {
         e->writing = 1;
-        aeCreateFileEvent(loop,e->fd,AE_WRITABLE,redisAeWriteEvent,e);
+        loop->aeCreateFileEvent(e->fd,AE_WRITABLE,redisAeWriteEvent,e);
     }
 }
 
@@ -314,7 +314,7 @@ static void redisAeDelWrite(void *privdata) {
     aeEventLoop *loop = e->loop;
     if (e->writing) {
         e->writing = 0;
-        aeDeleteFileEvent(loop,e->fd,AE_WRITABLE);
+        loop->aeDeleteFileEvent(e->fd,AE_WRITABLE);
     }
 }
 

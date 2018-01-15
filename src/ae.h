@@ -54,13 +54,13 @@
 /* Macros */
 #define AE_NOTUSED(V) ((void) V)
 
-struct aeEventLoop;
+class aeEventLoop;
 
 /* Types and data structures */
-typedef void aeFileProc(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask);
-typedef int aeTimeProc(struct aeEventLoop *eventLoop, long long id, void *clientData);
-typedef void aeEventFinalizerProc(struct aeEventLoop *eventLoop, void *clientData);
-typedef void aeBeforeSleepProc(struct aeEventLoop *eventLoop);
+typedef void aeFileProc(aeEventLoop*, int fd, void *clientData, int mask);
+typedef int aeTimeProc(aeEventLoop*, long long id, void *clientData);
+typedef void aeEventFinalizerProc(aeEventLoop*, void *clientData);
+typedef void aeBeforeSleepProc(aeEventLoop*);
 
 /* File event structure */
 typedef struct aeFileEvent {
@@ -87,40 +87,59 @@ typedef struct aeFiredEvent {
     int mask;
 } aeFiredEvent;
 
-/* State of an event based program */
-typedef struct aeEventLoop {
-    int maxfd;   /* highest file descriptor currently registered */
-    int setsize; /* max number of file descriptors tracked */
-    long long timeEventNextId;
-    time_t lastTime;     /* Used to detect system clock skew */
-    aeFileEvent *events; /* Registered events */
-    aeFiredEvent *fired; /* Fired events */
-    aeTimeEvent *timeEventHead;
-    int stop;
-    void *apidata; /* This is used for polling API specific data */
-    aeBeforeSleepProc *beforesleep;
-    aeBeforeSleepProc *aftersleep;
-} aeEventLoop;
-
 /* Prototypes */
-aeEventLoop *aeCreateEventLoop(int setsize);
-void aeDeleteEventLoop(aeEventLoop *eventLoop);
-void aeStop(aeEventLoop *eventLoop);
-int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
-        aeFileProc *proc, void *clientData);
-void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask);
-int aeGetFileEvents(aeEventLoop *eventLoop, int fd);
-long long aeCreateTimeEvent(aeEventLoop *eventLoop, long long milliseconds,
+
+aeEventLoop *aeCreateEventLoop(int in_setsize);
+void aeDeleteEventLoop(aeEventLoop* eventLoop);
+int aeWait(int fd, int mask, long long milliseconds);
+
+/* State of an event based program */
+class aeEventLoop {
+    friend aeEventLoop *aeCreateEventLoop(int in_setsize);
+public:
+    aeEventLoop(int setsize);
+    ~aeEventLoop();
+    
+    void aeStop();
+    int aeCreateFileEvent(int fd, int mask, aeFileProc *proc, void *clientData);
+    void aeDeleteFileEvent(int fd, int mask);
+    int aeGetFileEvents(int fd);
+    long long aeCreateTimeEvent(long long milliseconds,
         aeTimeProc *proc, void *clientData,
         aeEventFinalizerProc *finalizerProc);
-int aeDeleteTimeEvent(aeEventLoop *eventLoop, long long id);
-int aeProcessEvents(aeEventLoop *eventLoop, int flags);
-int aeWait(int fd, int mask, long long milliseconds);
-void aeMain(aeEventLoop *eventLoop);
-char *aeGetApiName(void);
-void aeSetBeforeSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *beforesleep);
-void aeSetAfterSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *aftersleep);
-int aeGetSetSize(aeEventLoop *eventLoop);
-int aeResizeSetSize(aeEventLoop *eventLoop, int setsize);
+    int aeDeleteTimeEvent(long long id);
+    int aeProcessEvents(int flags);
+    void aeMain();
+    void aeSetBeforeSleepProc(aeBeforeSleepProc *beforesleep);
+    void aeSetAfterSleepProc(aeBeforeSleepProc *aftersleep);
+    int aeGetSetSize();
+    int aeResizeSetSize(int in_setsize);
+    char *aeApiName();
+
+private:
+    int m_maxfd;   /* highest file descriptor currently registered */
+    int m_setsize; /* max number of file descriptors tracked */
+    long long m_timeEventNextId;
+    time_t m_lastTime;     /* Used to detect system clock skew */
+    aeFileEvent *m_events; /* Registered events */
+    aeFiredEvent *m_fired; /* Fired events */
+    aeTimeEvent *m_timeEventHead;
+    int m_stop;
+    void *m_apidata; /* This is used for polling API specific data */
+    aeBeforeSleepProc *m_beforesleep;
+    aeBeforeSleepProc *m_aftersleep;
+
+    aeTimeEvent* aeSearchNearestTimer();
+    int processTimeEvents();
+
+    int aeApiCreate();
+    int aeApiResize(int setsize);
+    void aeApiFree();
+    int aeApiAddEvent(int fd, int mask);
+    void aeApiDelEvent(int fd, int delmask);
+    int aeApiPoll(struct timeval *tvp);
+
+};
+
 
 #endif

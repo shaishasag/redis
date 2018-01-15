@@ -104,7 +104,7 @@ void aofChildWriteDiffData(aeEventLoop *el, int fd, void *privdata, int mask) {
         ln = server.aof_rewrite_buf_blocks->listFirst();
         block = ln ? (aofrwblock *)ln->listNodeValue() : NULL;
         if (server.aof_stop_sending_diff || !block) {
-            aeDeleteFileEvent(server.el,server.aof_pipe_write_data_to_child,
+            server.el->aeDeleteFileEvent(server.aof_pipe_write_data_to_child,
                               AE_WRITABLE);
             return;
         }
@@ -161,8 +161,8 @@ void aofRewriteBufferAppend(unsigned char *s, unsigned long len) {
 
     /* Install a file event to send data to the rewrite child if there is
      * not one already. */
-    if (aeGetFileEvents(server.el,server.aof_pipe_write_data_to_child) == 0) {
-        aeCreateFileEvent(server.el, server.aof_pipe_write_data_to_child,
+    if (server.el->aeGetFileEvents(server.aof_pipe_write_data_to_child) == 0) {
+        server.el->aeCreateFileEvent(server.aof_pipe_write_data_to_child,
             AE_WRITABLE, aofChildWriteDiffData, NULL);
     }
 }
@@ -1263,7 +1263,7 @@ void aofChildPipeReadable(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
     /* Remove the handler since this can be called only one time during a
      * rewrite. */
-    aeDeleteFileEvent(server.el,server.aof_pipe_read_ack_from_child,AE_READABLE);
+    server.el->aeDeleteFileEvent(server.aof_pipe_read_ack_from_child,AE_READABLE);
 }
 
 /* Create the pipes used for parent - child process IPC during rewrite.
@@ -1281,7 +1281,7 @@ int aofCreatePipes(void) {
     /* Parent -> children data is non blocking. */
     if (anetNonBlock(NULL,fds[0]) != ANET_OK) goto error;
     if (anetNonBlock(NULL,fds[1]) != ANET_OK) goto error;
-    if (aeCreateFileEvent(server.el, fds[2], AE_READABLE, aofChildPipeReadable, NULL) == AE_ERR) goto error;
+    if (server.el->aeCreateFileEvent(fds[2], AE_READABLE, aofChildPipeReadable, NULL) == AE_ERR) goto error;
 
     server.aof_pipe_write_data_to_child = fds[1];
     server.aof_pipe_read_data_from_parent = fds[0];
@@ -1300,8 +1300,8 @@ error:
 }
 
 void aofClosePipes(void) {
-    aeDeleteFileEvent(server.el,server.aof_pipe_read_ack_from_child,AE_READABLE);
-    aeDeleteFileEvent(server.el,server.aof_pipe_write_data_to_child,AE_WRITABLE);
+    server.el->aeDeleteFileEvent(server.aof_pipe_read_ack_from_child,AE_READABLE);
+    server.el->aeDeleteFileEvent(server.aof_pipe_write_data_to_child,AE_WRITABLE);
     close(server.aof_pipe_write_data_to_child);
     close(server.aof_pipe_read_data_from_parent);
     close(server.aof_pipe_write_ack_to_parent);

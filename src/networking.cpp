@@ -79,7 +79,7 @@ client *createClient(int fd) {
         anetEnableTcpNoDelay(NULL,fd);
         if (server.tcpkeepalive)
             anetKeepAlive(NULL,fd,server.tcpkeepalive);
-        if (aeCreateFileEvent(server.el,fd,AE_READABLE,
+        if (server.el->aeCreateFileEvent(fd,AE_READABLE,
             readQueryFromClient, c) == AE_ERR)
         {
             close(fd);
@@ -748,8 +748,8 @@ void unlinkClient(client *c) {
         server.clients->listDelNode(ln);
 
         /* Unregister async I/O handlers and close the socket. */
-        aeDeleteFileEvent(server.el,c->fd,AE_READABLE);
-        aeDeleteFileEvent(server.el,c->fd,AE_WRITABLE);
+        server.el->aeDeleteFileEvent(c->fd,AE_READABLE);
+        server.el->aeDeleteFileEvent(c->fd,AE_WRITABLE);
         close(c->fd);
         c->fd = -1;
     }
@@ -964,7 +964,7 @@ int writeToClient(int fd, client *c, int handler_installed) {
     }
     if (!clientHasPendingReplies(c)) {
         c->sentlen = 0;
-        if (handler_installed) aeDeleteFileEvent(server.el,c->fd,AE_WRITABLE);
+        if (handler_installed) server.el->aeDeleteFileEvent(c->fd,AE_WRITABLE);
 
         /* Close connection after entire reply has been sent. */
         if (c->flags & CLIENT_CLOSE_AFTER_REPLY) {
@@ -1002,7 +1002,7 @@ int handleClientsWithPendingWrites(void) {
         /* If there is nothing left, do nothing. Otherwise install
          * the write handler. */
         if (clientHasPendingReplies(c) &&
-            aeCreateFileEvent(server.el, c->fd, AE_WRITABLE,
+            server.el->aeCreateFileEvent(c->fd, AE_WRITABLE,
                 sendReplyToClient, c) == AE_ERR)
         {
             freeClientAsync(c);
@@ -1507,7 +1507,7 @@ sds catClientInfoString(sds s, client *client) {
     if (p == flags) *p++ = 'N';
     *p++ = '\0';
 
-    emask = client->fd == -1 ? 0 : aeGetFileEvents(server.el,client->fd);
+    emask = client->fd == -1 ? 0 : server.el->aeGetFileEvents(client->fd);
     p = events;
     if (emask & AE_READABLE) *p++ = 'r';
     if (emask & AE_WRITABLE) *p++ = 'w';
@@ -1931,7 +1931,7 @@ void flushSlavesOutputBuffers(void) {
          * of put_online_on_ack is to postpone the moment it is installed.
          * This is what we want since slaves in this state should not receive
          * writes before the first ACK. */
-        events = aeGetFileEvents(server.el,slave->fd);
+        events = server.el->aeGetFileEvents(slave->fd);
         if (events & AE_WRITABLE &&
             slave->replstate == SLAVE_STATE_ONLINE &&
             clientHasPendingReplies(slave))
@@ -2008,7 +2008,7 @@ int processEventsWhileBlocked(void) {
     int count = 0;
     while (iterations--) {
         int events = 0;
-        events += aeProcessEvents(server.el, AE_FILE_EVENTS|AE_DONT_WAIT);
+        events += server.el->aeProcessEvents(AE_FILE_EVENTS|AE_DONT_WAIT);
         events += handleClientsWithPendingWrites();
         if (!events) break;
         count += events;

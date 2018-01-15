@@ -1907,7 +1907,7 @@ void initServer(void) {
     /* Create the timer callback, this is our way to process many background
      * operations incrementally, like clients timeout, eviction of unaccessed
      * expired keys and so forth. */
-    if (aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR) {
+    if (server.el->aeCreateTimeEvent(1, serverCron, NULL, NULL) == AE_ERR) {
         serverPanic("Can't create event loop timers.");
         exit(1);
     }
@@ -1915,20 +1915,20 @@ void initServer(void) {
     /* Create an event handler for accepting new connections in TCP and Unix
      * domain sockets. */
     for (j = 0; j < server.ipfd_count; j++) {
-        if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
+        if (server.el->aeCreateFileEvent(server.ipfd[j], AE_READABLE,
             acceptTcpHandler,NULL) == AE_ERR)
             {
                 serverPanic(
                     "Unrecoverable error creating server.ipfd file event.");
             }
     }
-    if (server.sofd > 0 && aeCreateFileEvent(server.el,server.sofd,AE_READABLE,
+    if (server.sofd > 0 && server.el->aeCreateFileEvent(server.sofd,AE_READABLE,
         acceptUnixHandler,NULL) == AE_ERR) serverPanic("Unrecoverable error creating server.sofd file event.");
 
 
     /* Register a readable event for the pipe used to awake the event loop
      * when a blocked client in a module needs attention. */
-    if (aeCreateFileEvent(server.el, server.module_blocked_pipe[0], AE_READABLE,
+    if (server.el->aeCreateFileEvent(server.module_blocked_pipe[0], AE_READABLE,
         moduleBlockedClientPipeReadable,NULL) == AE_ERR) {
             serverPanic(
                 "Error registering the readable event for the module "
@@ -2875,7 +2875,7 @@ sds genRedisInfoString(const char *section) {
             mode,
             name.sysname, name.release, name.machine,
             server.arch_bits,
-            aeGetApiName(),
+            server.el->aeApiName(),
             REDIS_ATOMIC_API,
 #ifdef __GNUC__
             __GNUC__,__GNUC_MINOR__,__GNUC_PATCHLEVEL__,
@@ -3879,9 +3879,9 @@ int main(int argc, char **argv) {
         serverLog(LL_WARNING,"WARNING: You specified a maxmemory value that is less than 1MB (current value is %llu bytes). Are you sure this is what you really want?", server.maxmemory);
     }
 
-    aeSetBeforeSleepProc(server.el,beforeSleep);
-    aeSetAfterSleepProc(server.el,afterSleep);
-    aeMain(server.el);
+    server.el->aeSetBeforeSleepProc(beforeSleep);
+    server.el->aeSetAfterSleepProc(afterSleep);
+    server.el->aeMain();
     aeDeleteEventLoop(server.el);
     return 0;
 }

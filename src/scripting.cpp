@@ -1239,7 +1239,7 @@ void luaMaskCountHook(lua_State *lua, lua_Debug *ar) {
          * we need to mask the client executing the script from the event loop.
          * If we don't do that the client may disconnect and could no longer be
          * here when the EVAL command will return. */
-         aeDeleteFileEvent(server.el, server.lua_caller->fd, AE_READABLE);
+         server.el->aeDeleteFileEvent( server.lua_caller->fd, AE_READABLE);
     }
     if (server.lua_timedout) processEventsWhileBlocked();
     if (server.lua_kill) {
@@ -1370,7 +1370,7 @@ void evalGenericCommand(client *c, int evalsha) {
         server.lua_timedout = 0;
         /* Restore the readable handler that was unregistered when the
          * script timeout was detected. */
-        aeCreateFileEvent(server.el,c->fd,AE_READABLE,
+        server.el->aeCreateFileEvent(c->fd,AE_READABLE,
                           readQueryFromClient,c);
     }
     server.lua_caller = NULL;

@@ -864,10 +864,10 @@ void configSetCommand(client *c) {
                 server.maxclients = orig_value;
                 return;
             }
-            if ((unsigned int) aeGetSetSize(server.el) <
+            if ((unsigned int) server.el->aeGetSetSize() <
                 server.maxclients + CONFIG_FDSET_INCR)
             {
-                if (aeResizeSetSize(server.el,
+                if (server.el->aeResizeSetSize(
                     server.maxclients + CONFIG_FDSET_INCR) == AE_ERR)
                 {
                     addReplyError(c,"The event loop API used by Redis is not able to handle the specified number of clients");
