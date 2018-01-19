@@ -851,7 +851,7 @@ struct redisMemOverhead *getMemoryOverheadData(void) {
         listIter li(server.clients);
         while((ln = li.listNext())) {
             client *c = (client *)ln->listNodeValue();
-            if (c->flags & CLIENT_SLAVE)
+            if (c->m_flags & CLIENT_SLAVE)
                 continue;
             mem += getClientOutputBufferMemoryUsage(c);
             mem += sdsAllocSize(c->querybuf);

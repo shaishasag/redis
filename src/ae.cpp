@@ -61,6 +61,29 @@
     #endif
 #endif
 
+static void aeAddMillisecondsToNow(long long milliseconds, long *sec, long *ms);
+
+aeFileEvent::aeFileEvent()
+: m_mask(AE_NONE)
+, m_rfileProc(NULL)
+, m_wfileProc(NULL)
+, m_clientData(NULL)
+{
+
+}
+
+aeTimeEvent::aeTimeEvent(long long in_id, long long in_milliseconds, aeTimeProc *proc, void *in_clientData, aeEventFinalizerProc *in_finalizerProc, aeTimeEvent* in_next)
+: m_id(in_id)
+, m_when_sec(0) /* seconds */
+, m_when_ms(0) /* milliseconds */
+, m_timeProc(proc)
+, m_finalizerProc(in_finalizerProc)
+, m_clientData(in_clientData)
+, m_next(in_next)
+{
+    aeAddMillisecondsToNow(in_milliseconds, &m_when_sec, &m_when_ms);
+}
+
 aeEventLoop::aeEventLoop(int in_setsize)
 {
     m_events = (aeFileEvent *)zmalloc(sizeof(aeFileEvent)*in_setsize);
@@ -74,10 +97,10 @@ aeEventLoop::aeEventLoop(int in_setsize)
     m_beforesleep = NULL;
     m_aftersleep = NULL;
     aeApiCreate();
-    /* Events with mask == AE_NONE are not set. So let's initialize the
+    /* Events with m_mask == AE_NONE are not set. So let's initialize the
      * vector with it. */
     for (int i = 0; i < m_setsize; i++)
-        m_events[i].mask = AE_NONE;
+        new (m_events+i) aeFileEvent;
 }
 
 aeEventLoop *aeCreateEventLoop(int in_setsize)
@@ -123,9 +146,9 @@ int aeEventLoop::aeResizeSetSize(int in_setsize) {
     m_setsize = in_setsize;
 
     /* Make sure that if we created new slots, they are initialized with
-     * an AE_NONE mask. */
+     * an AE_NONE m_mask. */
     for (i = m_maxfd+1; i < m_setsize; i++)
-        m_events[i].mask = AE_NONE;
+        new (m_events+i) aeFileEvent;
     return AE_OK;
 }
 
@@ -159,10 +182,10 @@ int aeEventLoop::aeCreateFileEvent(int fd, int mask, aeFileProc *proc, void *cli
 
     if (aeApiAddEvent(fd, mask) == -1)
         return AE_ERR;
-    fe->mask |= mask;
-    if (mask & AE_READABLE) fe->rfileProc = proc;
-    if (mask & AE_WRITABLE) fe->wfileProc = proc;
-    fe->clientData = clientData;
+    fe->m_mask |= mask;
+    if (mask & AE_READABLE) fe->m_rfileProc = proc;
+    if (mask & AE_WRITABLE) fe->m_wfileProc = proc;
+    fe->m_clientData = clientData;
     if (fd > m_maxfd)
         m_maxfd = fd;
     return AE_OK;
@@ -172,16 +195,16 @@ void aeEventLoop::aeDeleteFileEvent(int fd, int mask)
 {
     if (fd >= m_setsize) return;
     aeFileEvent *fe = &m_events[fd];
-    if (fe->mask == AE_NONE) return;
+    if (fe->m_mask == AE_NONE) return;
 
     aeApiDelEvent(fd, mask);
-    fe->mask = fe->mask & (~mask);
-    if (fd == m_maxfd && fe->mask == AE_NONE) {
+    fe->m_mask = fe->m_mask & (~mask);
+    if (fd == m_maxfd && fe->m_mask == AE_NONE) {
         /* Update the max fd */
         int j;
 
         for (j = m_maxfd-1; j >= 0; j--)
-            if (m_events[j].mask != AE_NONE) break;
+            if (m_events[j].m_mask != AE_NONE) break;
         m_maxfd = j;
     }
 }
@@ -190,7 +213,7 @@ int aeEventLoop::aeGetFileEvents(int fd) {
     if (fd >= m_setsize) return 0;
     aeFileEvent *fe = &m_events[fd];
 
-    return fe->mask;
+    return fe->m_mask;
 }
 
 static void aeGetTime(long *seconds, long *milliseconds)
@@ -218,17 +241,14 @@ static void aeAddMillisecondsToNow(long long milliseconds, long *sec, long *ms) 
 
 long long aeEventLoop::aeCreateTimeEvent(long long milliseconds, aeTimeProc *proc, void *clientData, aeEventFinalizerProc *finalizerProc)
 {
-    long long id = m_timeEventNextId++;
-    aeTimeEvent *te;
+    aeTimeEvent *te = NULL;
 
-    te = (aeTimeEvent *)zmalloc(sizeof(*te));
-    if (te == NULL) return AE_ERR;
-    te->id = id;
-    aeAddMillisecondsToNow(milliseconds,&te->when_sec,&te->when_ms);
-    te->timeProc = proc;
-    te->finalizerProc = finalizerProc;
-    te->clientData = clientData;
-    te->next = m_timeEventHead;
+    void* aeTimeEvent_mem = zmalloc(sizeof(aeTimeEvent));
+    if (aeTimeEvent_mem == NULL) return AE_ERR;
+
+    long long id = m_timeEventNextId++;
+    te = new (aeTimeEvent_mem) aeTimeEvent(id, milliseconds, proc, clientData, finalizerProc, m_timeEventHead);
+
     m_timeEventHead = te;
     return id;
 }
@@ -237,11 +257,11 @@ int aeEventLoop::aeDeleteTimeEvent(long long id)
 {
     aeTimeEvent *te = m_timeEventHead;
     while(te) {
-        if (te->id == id) {
-            te->id = AE_DELETED_EVENT_ID;
+        if (te->m_id == id) {
+            te->m_id = AE_DELETED_EVENT_ID;
             return AE_OK;
         }
-        te = te->next;
+        te = te->m_next;
     }
     return AE_ERR; /* NO event with the specified ID found */
 }
@@ -263,11 +283,11 @@ aeTimeEvent *aeEventLoop::aeSearchNearestTimer()
     aeTimeEvent *nearest = NULL;
 
     while(te) {
-        if (!nearest || te->when_sec < nearest->when_sec ||
-                (te->when_sec == nearest->when_sec &&
-                 te->when_ms < nearest->when_ms))
+        if (!nearest || te->m_when_sec < nearest->m_when_sec ||
+                (te->m_when_sec == nearest->m_when_sec &&
+                 te->m_when_ms < nearest->m_when_ms))
             nearest = te;
-        te = te->next;
+        te = te->m_next;
     }
     return nearest;
 }
@@ -291,8 +311,8 @@ int aeEventLoop::processTimeEvents()
     if (now < m_lastTime) {
         te = m_timeEventHead;
         while(te) {
-            te->when_sec = 0;
-            te = te->next;
+            te->m_when_sec = 0;
+            te = te->m_next;
         }
     }
     m_lastTime = now;
@@ -305,14 +325,14 @@ int aeEventLoop::processTimeEvents()
         long long id;
 
         /* Remove events scheduled for deletion. */
-        if (te->id == AE_DELETED_EVENT_ID) {
-            aeTimeEvent *next = te->next;
+        if (te->m_id == AE_DELETED_EVENT_ID) {
+            aeTimeEvent *next = te->m_next;
             if (prev == NULL)
-                m_timeEventHead = te->next;
+                m_timeEventHead = te->m_next;
             else
-                prev->next = te->next;
-            if (te->finalizerProc)
-                te->finalizerProc(this, te->clientData);
+                prev->m_next = te->m_next;
+            if (te->m_finalizerProc)
+                te->m_finalizerProc(this, te->m_clientData);
             zfree(te);
             te = next;
             continue;
@@ -323,27 +343,27 @@ int aeEventLoop::processTimeEvents()
          * add new timers on the head, however if we change the implementation
          * detail, this check may be useful again: we keep it here for future
          * defense. */
-        if (te->id > maxId) {
-            te = te->next;
+        if (te->m_id > maxId) {
+            te = te->m_next;
             continue;
         }
         aeGetTime(&now_sec, &now_ms);
-        if (now_sec > te->when_sec ||
-            (now_sec == te->when_sec && now_ms >= te->when_ms))
+        if (now_sec > te->m_when_sec ||
+            (now_sec == te->m_when_sec && now_ms >= te->m_when_ms))
         {
             int retval;
 
-            id = te->id;
-            retval = te->timeProc(this, id, te->clientData);
+            id = te->m_id;
+            retval = te->m_timeProc(this, id, te->m_clientData);
             processed++;
             if (retval != AE_NOMORE) {
-                aeAddMillisecondsToNow(retval,&te->when_sec,&te->when_ms);
+                aeAddMillisecondsToNow(retval, &te->m_when_sec, &te->m_when_ms);
             } else {
-                te->id = AE_DELETED_EVENT_ID;
+                te->m_id = AE_DELETED_EVENT_ID;
             }
         }
         prev = te;
-        te = te->next;
+        te = te->m_next;
     }
     return processed;
 }
@@ -390,8 +410,8 @@ int aeEventLoop::aeProcessEvents(int flags)
             /* How many milliseconds we need to wait for the next
              * time event to fire? */
             long long ms =
-                (shortest->when_sec - now_sec)*1000 +
-                shortest->when_ms - now_ms;
+                (shortest->m_when_sec - now_sec)*1000 +
+                shortest->m_when_ms - now_ms;
 
             if (ms > 0) {
                 tvp->tv_sec = ms/1000;
@@ -422,21 +442,21 @@ int aeEventLoop::aeProcessEvents(int flags)
             m_aftersleep(this);
 
         for (j = 0; j < numevents; j++) {
-            aeFileEvent *fe = &m_events[m_fired[j].fd];
-            int mask = m_fired[j].mask;
-            int fd = m_fired[j].fd;
+            aeFileEvent *fe = &m_events[m_fired[j].m_fd];
+            int mask = m_fired[j].m_mask;
+            int fd = m_fired[j].m_fd;
             int rfired = 0;
 
-	    /* note the fe->mask & mask & ... code: maybe an already processed
+	    /* note the fe->m_mask & mask & ... code: maybe an already processed
              * event removed an element that fired and we still didn't
              * processed, so we check if the event is still valid. */
-            if (fe->mask & mask & AE_READABLE) {
+            if (fe->m_mask & mask & AE_READABLE) {
                 rfired = 1;
-                fe->rfileProc(this,fd,fe->clientData,mask);
+                fe->m_rfileProc(this,fd,fe->m_clientData,mask);
             }
-            if (fe->mask & mask & AE_WRITABLE) {
-                if (!rfired || fe->wfileProc != fe->rfileProc)
-                    fe->wfileProc(this,fd,fe->clientData,mask);
+            if (fe->m_mask & mask & AE_WRITABLE) {
+                if (!rfired || fe->m_wfileProc != fe->m_rfileProc)
+                    fe->m_wfileProc(this,fd,fe->m_clientData,mask);
             }
             processed++;
         }

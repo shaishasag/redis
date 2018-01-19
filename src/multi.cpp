@@ -33,23 +33,23 @@
 
 /* Client state initialization for MULTI/EXEC */
 void initClientMultiState(client *c) {
-    c->mstate.commands = NULL;
-    c->mstate.count = 0;
+    c->mstate.m_commands = NULL;
+    c->mstate.m_count = 0;
 }
 
 /* Release all the resources associated with MULTI/EXEC state */
 void freeClientMultiState(client *c) {
     int j;
 
-    for (j = 0; j < c->mstate.count; j++) {
+    for (j = 0; j < c->mstate.m_count; j++) {
         int i;
-        multiCmd *mc = c->mstate.commands+j;
+        multiCmd *mc = c->mstate.m_commands+j;
 
         for (i = 0; i < mc->argc; i++)
             decrRefCount(mc->argv[i]);
         zfree(mc->argv);
     }
-    zfree(c->mstate.commands);
+    zfree(c->mstate.m_commands);
 }
 
 /* Add a new command into the MULTI commands queue */
@@ -57,43 +57,43 @@ void queueMultiCommand(client *c) {
     multiCmd *mc;
     int j;
 
-    c->mstate.commands = (multiCmd *)zrealloc(c->mstate.commands,
-            sizeof(multiCmd)*(c->mstate.count+1));
-    mc = c->mstate.commands+c->mstate.count;
+    c->mstate.m_commands = (multiCmd *)zrealloc(c->mstate.m_commands,
+            sizeof(multiCmd)*(c->mstate.m_count+1));
+    mc = c->mstate.m_commands+c->mstate.m_count;
     mc->cmd = c->cmd;
     mc->argc = c->argc;
     mc->argv = (robj **)zmalloc(sizeof(robj*)*c->argc);
     memcpy(mc->argv,c->argv,sizeof(robj*)*c->argc);
     for (j = 0; j < c->argc; j++)
         incrRefCount(mc->argv[j]);
-    c->mstate.count++;
+    c->mstate.m_count++;
 }
 
 void discardTransaction(client *c) {
     freeClientMultiState(c);
     initClientMultiState(c);
-    c->flags &= ~(CLIENT_MULTI|CLIENT_DIRTY_CAS|CLIENT_DIRTY_EXEC);
+    c->m_flags &= ~(CLIENT_MULTI|CLIENT_DIRTY_CAS|CLIENT_DIRTY_EXEC);
     unwatchAllKeys(c);
 }
 
 /* Flag the transacation as DIRTY_EXEC so that EXEC will fail.
  * Should be called every time there is an error while queueing a command. */
 void flagTransaction(client *c) {
-    if (c->flags & CLIENT_MULTI)
-        c->flags |= CLIENT_DIRTY_EXEC;
+    if (c->m_flags & CLIENT_MULTI)
+        c->m_flags |= CLIENT_DIRTY_EXEC;
 }
 
 void multiCommand(client *c) {
-    if (c->flags & CLIENT_MULTI) {
+    if (c->m_flags & CLIENT_MULTI) {
         addReplyError(c,"MULTI calls can not be nested");
         return;
     }
-    c->flags |= CLIENT_MULTI;
+    c->m_flags |= CLIENT_MULTI;
     addReply(c,shared.ok);
 }
 
 void discardCommand(client *c) {
-    if (!(c->flags & CLIENT_MULTI)) {
+    if (!(c->m_flags & CLIENT_MULTI)) {
         addReplyError(c,"DISCARD without MULTI");
         return;
     }
@@ -119,7 +119,7 @@ void execCommand(client *c) {
     int must_propagate = 0; /* Need to propagate MULTI/EXEC to AOF / slaves? */
     int was_master = server.masterhost == NULL;
 
-    if (!(c->flags & CLIENT_MULTI)) {
+    if (!(c->m_flags & CLIENT_MULTI)) {
         addReplyError(c,"EXEC without MULTI");
         return;
     }
@@ -130,8 +130,8 @@ void execCommand(client *c) {
      * A failed EXEC in the first case returns a multi bulk nil object
      * (technically it is not an error but a special behavior), while
      * in the second an EXECABORT error is returned. */
-    if (c->flags & (CLIENT_DIRTY_CAS|CLIENT_DIRTY_EXEC)) {
-        addReply(c, c->flags & CLIENT_DIRTY_EXEC ? shared.execaborterr :
+    if (c->m_flags & (CLIENT_DIRTY_CAS|CLIENT_DIRTY_EXEC)) {
+        addReply(c, c->m_flags & CLIENT_DIRTY_EXEC ? shared.execaborterr :
                                                   shared.nullmultibulk);
         discardTransaction(c);
         goto handle_monitor;
@@ -142,18 +142,18 @@ void execCommand(client *c) {
     orig_argv = c->argv;
     orig_argc = c->argc;
     orig_cmd = c->cmd;
-    addReplyMultiBulkLen(c,c->mstate.count);
-    for (j = 0; j < c->mstate.count; j++) {
-        c->argc = c->mstate.commands[j].argc;
-        c->argv = c->mstate.commands[j].argv;
-        c->cmd = c->mstate.commands[j].cmd;
+    addReplyMultiBulkLen(c,c->mstate.m_count);
+    for (j = 0; j < c->mstate.m_count; j++) {
+        c->argc = c->mstate.m_commands[j].argc;
+        c->argv = c->mstate.m_commands[j].argv;
+        c->cmd = c->mstate.m_commands[j].cmd;
 
         /* Propagate a MULTI request once we encounter the first command which
          * is not readonly nor an administrative one.
          * This way we'll deliver the MULTI/..../EXEC block as a whole and
          * both the AOF and the replication link will have the same consistency
          * and atomicity guarantees. */
-        if (!must_propagate && !(c->cmd->flags & (CMD_READONLY|CMD_ADMIN))) {
+        if (!must_propagate && !(c->cmd->m_flags & (CMD_READONLY|CMD_ADMIN))) {
             execCommandPropagateMulti(c);
             must_propagate = 1;
         }
@@ -161,9 +161,9 @@ void execCommand(client *c) {
         call(c,CMD_CALL_FULL);
 
         /* Commands may alter argc/argv, restore mstate. */
-        c->mstate.commands[j].argc = c->argc;
-        c->mstate.commands[j].argv = c->argv;
-        c->mstate.commands[j].cmd = c->cmd;
+        c->mstate.m_commands[j].argc = c->argc;
+        c->mstate.m_commands[j].argv = c->argv;
+        c->mstate.m_commands[j].cmd = c->cmd;
     }
     c->argv = orig_argv;
     c->argc = orig_argc;
@@ -282,7 +282,7 @@ void touchWatchedKey(redisDb *db, robj *key) {
     while((ln = li.listNext())) {
         client *c = (client *)ln->listNodeValue();
 
-        c->flags |= CLIENT_DIRTY_CAS;
+        c->m_flags |= CLIENT_DIRTY_CAS;
     }
 }
 
@@ -306,7 +306,7 @@ void touchWatchedKeysOnFlush(int dbid) {
              * removed. */
             if (dbid == -1 || wk->db->m_id == dbid) {
                 if (wk->db->m_dict->dictFind(wk->key->ptr) != NULL)
-                    c->flags |= CLIENT_DIRTY_CAS;
+                    c->m_flags |= CLIENT_DIRTY_CAS;
             }
         }
     }
@@ -315,7 +315,7 @@ void touchWatchedKeysOnFlush(int dbid) {
 void watchCommand(client *c) {
     int j;
 
-    if (c->flags & CLIENT_MULTI) {
+    if (c->m_flags & CLIENT_MULTI) {
         addReplyError(c,"WATCH inside MULTI is not allowed");
         return;
     }
@@ -326,6 +326,6 @@ void watchCommand(client *c) {
 
 void unwatchCommand(client *c) {
     unwatchAllKeys(c);
-    c->flags &= (~CLIENT_DIRTY_CAS);
+    c->m_flags &= (~CLIENT_DIRTY_CAS);
     addReply(c,shared.ok);
 }

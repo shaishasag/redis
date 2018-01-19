@@ -161,7 +161,7 @@ int aeEventLoop::aeApiAddEvent(int fd, int mask) {
      * must be sure to include whatever events are already associated when
      * we call port_associate() again.
      */
-    fullmask = mask | m_events[fd].mask;
+    fullmask = mask | m_events[fd].m_mask;
     pfd = aeApiLookupPending(state, fd);
 
     if (pfd != -1) {
@@ -214,7 +214,7 @@ void aeEventLoop::aeApiDelEvent(int fd, int mask) {
      * the fact that our caller has already updated the mask in the eventLoop.
      */
 
-    fullmask = m_events[fd].mask;
+    fullmask = m_events[fd].m_mask;
     if (fullmask == AE_NONE) {
         /*
          * We're removing *all* events, so use port_dissociate to remove the
@@ -301,8 +301,8 @@ int aeEventLoop::aeApiPoll(struct timeval *tvp) {
             if (event[i].portev_events & POLLOUT)
                 mask |= AE_WRITABLE;
 
-            m_fired[i].fd = event[i].portev_object;
-            m_fired[i].mask = mask;
+            m_fired[i].m_fd = event[i].portev_object;
+            m_fired[i].m_mask = mask;
 
             if (evport_debug)
                 fprintf(stderr, "aeApiPoll: fd %d mask 0x%x\n",

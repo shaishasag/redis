@@ -161,7 +161,7 @@ struct instanceLink {
 };
 
 struct sentinelRedisInstance {
-    int flags;      /* See SRI_... defines */
+    int m_flags;      /* See SRI_... defines */
     char *name;     /* Master name from the point of view of this sentinel. */
     char *runid;    /* Run ID of this instance, or unique ID if is a Sentinel.*/
     uint64_t config_epoch;  /* Configuration epoch. */
@@ -587,7 +587,7 @@ void sentinelEvent(int level, char *type, sentinelRedisInstance *ri,
 
     /* Handle %@ */
     if (fmt[0] == '%' && fmt[1] == '@') {
-        sentinelRedisInstance *master = (ri->flags & SRI_MASTER) ?
+        sentinelRedisInstance *master = (ri->m_flags & SRI_MASTER) ?
                                          NULL : ri->master;
 
         if (master) {
@@ -627,7 +627,7 @@ void sentinelEvent(int level, char *type, sentinelRedisInstance *ri,
 
     /* Call the notification script if applicable. */
     if (level == LL_WARNING && ri != NULL) {
-        sentinelRedisInstance *master = (ri->flags & SRI_MASTER) ?
+        sentinelRedisInstance *master = (ri->m_flags & SRI_MASTER) ?
                                          ri : ri->master;
         if (master && master->notification_script) {
             sentinelScheduleScriptExecution(master->notification_script,
@@ -1009,7 +1009,7 @@ instanceLink *releaseInstanceLink(instanceLink *link, sentinelRedisInstance *ri)
  * different master and sharing was performed. Otherwise C_ERR
  * is returned. */
 int sentinelTryConnectionSharing(sentinelRedisInstance *ri) {
-    serverAssert(ri->flags & SRI_SENTINEL);
+    serverAssert(ri->m_flags & SRI_SENTINEL);
     dictEntry *de;
 
     if (ri->runid == NULL) return C_ERR; /* No way to identify it. */
@@ -1044,7 +1044,7 @@ int sentinelTryConnectionSharing(sentinelRedisInstance *ri) {
  *
  * Return the number of updated Sentinel addresses. */
 int sentinelUpdateSentinelAddressInAllMasters(sentinelRedisInstance *ri) {
-    serverAssert(ri->flags & SRI_SENTINEL);
+    serverAssert(ri->m_flags & SRI_SENTINEL);
     dictEntry *de;
     int reconfigured = 0;
 
@@ -1171,7 +1171,7 @@ sentinelRedisInstance *createSentinelRedisInstance(char *name, int flags, char *
     ri = (sentinelRedisInstance *)zmalloc(sizeof(*ri));
     /* Note that all the instances are started in the disconnected state,
      * the event loop will take care of connecting them. */
-    ri->flags = flags;
+    ri->m_flags = flags;
     ri->name = sdsname;
     ri->runid = NULL;
     ri->config_epoch = 0;
@@ -1214,7 +1214,7 @@ sentinelRedisInstance *createSentinelRedisInstance(char *name, int flags, char *
     ri->info = NULL;
 
     /* Role */
-    ri->role_reported = ri->flags & (SRI_MASTER|SRI_SLAVE);
+    ri->role_reported = ri->m_flags & (SRI_MASTER|SRI_SLAVE);
     ri->role_reported_time = mstime();
     ri->slave_conf_change_time = mstime();
 
@@ -1247,7 +1247,7 @@ void releaseSentinelRedisInstance(sentinelRedisInstance *ri) {
     releaseSentinelAddr(ri->addr);
 
     /* Clear state into the master if needed. */
-    if ((ri->flags & SRI_SLAVE) && (ri->flags & SRI_PROMOTED) && ri->master)
+    if ((ri->m_flags & SRI_SLAVE) && (ri->m_flags & SRI_PROMOTED) && ri->master)
         ri->master->promoted_slave = NULL;
 
     zfree(ri);
@@ -1261,7 +1261,7 @@ sentinelRedisInstance *sentinelRedisInstanceLookupSlave(
     sentinelRedisInstance *slave;
     char buf[NET_PEER_ID_LEN];
 
-    serverAssert(ri->flags & SRI_MASTER);
+    serverAssert(ri->m_flags & SRI_MASTER);
     anetFormatAddr(buf,sizeof(buf),ip,port);
     key = sdsnew(buf);
     slave = (sentinelRedisInstance *)ri->slaves->dictFetchValue(key);
@@ -1271,9 +1271,9 @@ sentinelRedisInstance *sentinelRedisInstanceLookupSlave(
 
 /* Return the name of the type of the instance as a string. */
 const char *sentinelRedisInstanceTypeStr(sentinelRedisInstance *ri) {
-    if (ri->flags & SRI_MASTER) return "master";
-    else if (ri->flags & SRI_SLAVE) return "slave";
-    else if (ri->flags & SRI_SENTINEL) return "sentinel";
+    if (ri->m_flags & SRI_MASTER) return "master";
+    else if (ri->m_flags & SRI_SLAVE) return "slave";
+    else if (ri->m_flags & SRI_SENTINEL) return "sentinel";
     else return "unknown";
 }
 
@@ -1352,7 +1352,7 @@ void sentinelAddFlagsToDictOfRedisInstances(dict *instances, int flags) {
     dictIterator di(instances);
     while((de = dictNext(&di)) != NULL) {
         sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
-        ri->flags |= flags;
+        ri->m_flags |= flags;
     }
 }
 
@@ -1364,7 +1364,7 @@ void sentinelDelFlagsToDictOfRedisInstances(dict *instances, int flags) {
     dictIterator di(instances);
     while((de = dictNext(&di)) != NULL) {
         sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
-        ri->flags &= ~flags;
+        ri->m_flags &= ~flags;
     }
 }
 
@@ -1381,7 +1381,7 @@ void sentinelDelFlagsToDictOfRedisInstances(dict *instances, int flags) {
 
 #define SENTINEL_RESET_NO_SENTINELS (1<<0)
 void sentinelResetMaster(sentinelRedisInstance *ri, int flags) {
-    serverAssert(ri->flags & SRI_MASTER);
+    serverAssert(ri->m_flags & SRI_MASTER);
     dictRelease(ri->slaves);
     ri->slaves = dictCreate(&instancesDictType,NULL);
     if (!(flags & SENTINEL_RESET_NO_SENTINELS)) {
@@ -1390,7 +1390,7 @@ void sentinelResetMaster(sentinelRedisInstance *ri, int flags) {
     }
     instanceLinkCloseConnection(ri->link,ri->link->cc);
     instanceLinkCloseConnection(ri->link,ri->link->pc);
-    ri->flags &= SRI_MASTER;
+    ri->m_flags &= SRI_MASTER;
     if (ri->leader) {
         sdsfree(ri->leader);
         ri->leader = NULL;
@@ -1517,7 +1517,7 @@ sentinelAddr *sentinelGetCurrentMasterAddress(sentinelRedisInstance *master) {
      * already have the new configuration epoch in the master, and the
      * slave acknowledged the configuration switch. Advertise the new
      * address. */
-    if ((master->flags & SRI_FAILOVER_IN_PROGRESS) &&
+    if ((master->m_flags & SRI_FAILOVER_IN_PROGRESS) &&
         master->promoted_slave &&
         master->failover_state >= SENTINEL_FAILOVER_STATE_RECONF_SLAVES)
     {
@@ -1544,9 +1544,9 @@ void sentinelPropagateDownAfterPeriod(sentinelRedisInstance *master) {
 }
 
 char *sentinelGetInstanceTypeString(sentinelRedisInstance *ri) {
-    if (ri->flags & SRI_MASTER) return "master";
-    else if (ri->flags & SRI_SLAVE) return "slave";
-    else if (ri->flags & SRI_SENTINEL) return "sentinel";
+    if (ri->m_flags & SRI_MASTER) return "master";
+    else if (ri->m_flags & SRI_SLAVE) return "slave";
+    else if (ri->m_flags & SRI_SENTINEL) return "sentinel";
     else return "unknown";
 }
 
@@ -1854,7 +1854,7 @@ werr:
  * to the instance as if it fails Sentinel will detect the instance down,
  * will disconnect and reconnect the link and so forth. */
 void sentinelSendAuthIfNeeded(sentinelRedisInstance *ri, redisAsyncContext *c) {
-    char *auth_pass = (ri->flags & SRI_MASTER) ? ri->auth_pass :
+    char *auth_pass = (ri->m_flags & SRI_MASTER) ? ri->auth_pass :
                                                  ri->master->auth_pass;
 
     if (auth_pass) {
@@ -1916,7 +1916,7 @@ void sentinelReconnectInstance(sentinelRedisInstance *ri) {
         }
     }
     /* Pub / Sub */
-    if ((ri->flags & (SRI_MASTER|SRI_SLAVE)) && link->pc == NULL) {
+    if ((ri->m_flags & (SRI_MASTER|SRI_SLAVE)) && link->pc == NULL) {
         link->pc = redisAsyncConnectBind(ri->addr->ip,ri->addr->port,NET_FIRST_BIND_ADDR);
         if (link->pc->err) {
             sentinelEvent(LL_DEBUG,"-pubsub-link-reconnection",ri,"%@ #%s",
@@ -1948,7 +1948,7 @@ void sentinelReconnectInstance(sentinelRedisInstance *ri) {
     }
     /* Clear the disconnected status only if we have both the connections
      * (or just the commands connection if this is a sentinel instance). */
-    if (link->cc && (ri->flags & SRI_SENTINEL || link->pc))
+    if (link->cc && (ri->m_flags & SRI_SENTINEL || link->pc))
         link->disconnected = 0;
 }
 
@@ -1961,9 +1961,9 @@ void sentinelReconnectInstance(sentinelRedisInstance *ri) {
  * 4) We obtained last INFO no more than two times the INFO period time ago. */
 int sentinelMasterLooksSane(sentinelRedisInstance *master) {
     return
-        master->flags & SRI_MASTER &&
+        master->m_flags & SRI_MASTER &&
         master->role_reported == SRI_MASTER &&
-        (master->flags & (SRI_S_DOWN|SRI_O_DOWN)) == 0 &&
+        (master->m_flags & (SRI_S_DOWN|SRI_O_DOWN)) == 0 &&
         (mstime() - master->info_refresh) < SENTINEL_INFO_PERIOD*2;
 }
 
@@ -2002,7 +2002,7 @@ void sentinelRefreshInstanceInfo(sentinelRedisInstance *ri, const char *info) {
 
         /* old versions: slave0:<ip>,<port>,<state>
          * new versions: slave0:ip=127.0.0.1,port=9999,... */
-        if ((ri->flags & SRI_MASTER) &&
+        if ((ri->m_flags & SRI_MASTER) &&
             sdslen(l) >= 7 &&
             !memcmp(l,"slave",5) && isdigit(l[5]))
         {
@@ -2105,11 +2105,11 @@ void sentinelRefreshInstanceInfo(sentinelRedisInstance *ri, const char *info) {
         /* Log the event with +role-change if the new role is coherent or
          * with -role-change if there is a mismatch with the current config. */
         sentinelEvent(LL_VERBOSE,
-            (char*)(((ri->flags & (SRI_MASTER|SRI_SLAVE)) == role) ?
+            (char*)(((ri->m_flags & (SRI_MASTER|SRI_SLAVE)) == role) ?
             "+role-change" : "-role-change"),
             ri, "%@ new reported role is %s",
             role == SRI_MASTER ? "master" : "slave",
-            ri->flags & SRI_MASTER ? "master" : "slave");
+            ri->m_flags & SRI_MASTER ? "master" : "slave");
     }
 
     /* None of the following conditions are processed when in tilt mode, so
@@ -2117,18 +2117,18 @@ void sentinelRefreshInstanceInfo(sentinelRedisInstance *ri, const char *info) {
     if (sentinel.tilt) return;
 
     /* Handle master -> slave role switch. */
-    if ((ri->flags & SRI_MASTER) && role == SRI_SLAVE) {
+    if ((ri->m_flags & SRI_MASTER) && role == SRI_SLAVE) {
         /* Nothing to do, but masters claiming to be slaves are
          * considered to be unreachable by Sentinel, so eventually
          * a failover will be triggered. */
     }
 
     /* Handle slave -> master role switch. */
-    if ((ri->flags & SRI_SLAVE) && role == SRI_MASTER) {
+    if ((ri->m_flags & SRI_SLAVE) && role == SRI_MASTER) {
         /* If this is a promoted slave we can change state to the
          * failover state machine. */
-        if ((ri->flags & SRI_PROMOTED) &&
-            (ri->master->flags & SRI_FAILOVER_IN_PROGRESS) &&
+        if ((ri->m_flags & SRI_PROMOTED) &&
+            (ri->master->m_flags & SRI_FAILOVER_IN_PROGRESS) &&
             (ri->master->failover_state ==
                 SENTINEL_FAILOVER_STATE_WAIT_PROMOTION))
         {
@@ -2156,7 +2156,7 @@ void sentinelRefreshInstanceInfo(sentinelRedisInstance *ri, const char *info) {
              * going forward, to receive new configs if any. */
             mstime_t wait_time = SENTINEL_PUBLISH_PERIOD*4;
 
-            if (!(ri->flags & SRI_PROMOTED) &&
+            if (!(ri->m_flags & SRI_PROMOTED) &&
                  sentinelMasterLooksSane(ri->master) &&
                  sentinelRedisInstanceNoDownFor(ri,wait_time) &&
                  mstime() - ri->role_reported_time > wait_time)
@@ -2171,7 +2171,7 @@ void sentinelRefreshInstanceInfo(sentinelRedisInstance *ri, const char *info) {
     }
 
     /* Handle slaves replicating to a different master address. */
-    if ((ri->flags & SRI_SLAVE) &&
+    if ((ri->m_flags & SRI_SLAVE) &&
         role == SRI_SLAVE &&
         (ri->slave_master_port != ri->master->addr->port ||
          strcasecmp(ri->slave_master_host,ri->master->addr->ip)))
@@ -2194,27 +2194,27 @@ void sentinelRefreshInstanceInfo(sentinelRedisInstance *ri, const char *info) {
 
     /* Detect if the slave that is in the process of being reconfigured
      * changed state. */
-    if ((ri->flags & SRI_SLAVE) && role == SRI_SLAVE &&
-        (ri->flags & (SRI_RECONF_SENT|SRI_RECONF_INPROG)))
+    if ((ri->m_flags & SRI_SLAVE) && role == SRI_SLAVE &&
+        (ri->m_flags & (SRI_RECONF_SENT|SRI_RECONF_INPROG)))
     {
         /* SRI_RECONF_SENT -> SRI_RECONF_INPROG. */
-        if ((ri->flags & SRI_RECONF_SENT) &&
+        if ((ri->m_flags & SRI_RECONF_SENT) &&
             ri->slave_master_host &&
             strcmp(ri->slave_master_host,
                     ri->master->promoted_slave->addr->ip) == 0 &&
             ri->slave_master_port == ri->master->promoted_slave->addr->port)
         {
-            ri->flags &= ~SRI_RECONF_SENT;
-            ri->flags |= SRI_RECONF_INPROG;
+            ri->m_flags &= ~SRI_RECONF_SENT;
+            ri->m_flags |= SRI_RECONF_INPROG;
             sentinelEvent(LL_NOTICE,"+slave-reconf-inprog",ri,"%@");
         }
 
         /* SRI_RECONF_INPROG -> SRI_RECONF_DONE */
-        if ((ri->flags & SRI_RECONF_INPROG) &&
+        if ((ri->m_flags & SRI_RECONF_INPROG) &&
             ri->slave_master_link_status == SENTINEL_MASTER_LINK_STATUS_UP)
         {
-            ri->flags &= ~SRI_RECONF_INPROG;
-            ri->flags |= SRI_RECONF_DONE;
+            ri->m_flags &= ~SRI_RECONF_INPROG;
+            ri->m_flags |= SRI_RECONF_DONE;
             sentinelEvent(LL_NOTICE,"+slave-reconf-done",ri,"%@");
         }
     }
@@ -2266,14 +2266,14 @@ void sentinelPingReplyCallback(redisAsyncContext *c, void *reply, void *privdata
             /* Send a SCRIPT KILL command if the instance appears to be
              * down because of a busy script. */
             if (strncmp(r->str,"BUSY",4) == 0 &&
-                (ri->flags & SRI_S_DOWN) &&
-                !(ri->flags & SRI_SCRIPT_KILL_SENT))
+                (ri->m_flags & SRI_S_DOWN) &&
+                !(ri->m_flags & SRI_SCRIPT_KILL_SENT))
             {
                 if (redisAsyncCommand(ri->link->cc,
                         sentinelDiscardReplyCallback, ri,
                         "SCRIPT KILL") == C_OK)
                     ri->link->pending_commands++;
-                ri->flags |= SRI_SCRIPT_KILL_SENT;
+                ri->m_flags |= SRI_SCRIPT_KILL_SENT;
             }
         }
     }
@@ -2451,7 +2451,7 @@ int sentinelSendHello(sentinelRedisInstance *ri) {
     int retval;
     char *announce_ip;
     int announce_port;
-    sentinelRedisInstance *master = (ri->flags & SRI_MASTER) ? ri : ri->master;
+    sentinelRedisInstance *master = (ri->m_flags & SRI_MASTER) ? ri : ri->master;
     sentinelAddr *master_addr = sentinelGetCurrentMasterAddress(master);
 
     if (ri->link->disconnected) return C_ERR;
@@ -2507,7 +2507,7 @@ void sentinelForceHelloUpdateDictOfRedisInstances(dict *instances) {
  * Sentinel upgrades a configuration it is a good idea to deliever an update
  * to the other Sentinels ASAP. */
 int sentinelForceHelloUpdateForMaster(sentinelRedisInstance *master) {
-    if (!(master->flags & SRI_MASTER)) return C_ERR;
+    if (!(master->m_flags & SRI_MASTER)) return C_ERR;
     if (master->last_pub_time >= (SENTINEL_PUBLISH_PERIOD+1))
         master->last_pub_time -= (SENTINEL_PUBLISH_PERIOD+1);
     sentinelForceHelloUpdateDictOfRedisInstances(master->sentinels);
@@ -2565,8 +2565,8 @@ void sentinelSendPeriodicCommands(sentinelRedisInstance *ri) {
      * Similarly we monitor the INFO output more often if the slave reports
      * to be disconnected from the master, so that we can have a fresh
      * disconnection time figure. */
-    if ((ri->flags & SRI_SLAVE) &&
-        ((ri->master->flags & (SRI_O_DOWN|SRI_FAILOVER_IN_PROGRESS)) ||
+    if ((ri->m_flags & SRI_SLAVE) &&
+        ((ri->master->m_flags & (SRI_O_DOWN|SRI_FAILOVER_IN_PROGRESS)) ||
          (ri->master_link_down_time != 0)))
     {
         info_period = 1000;
@@ -2580,7 +2580,7 @@ void sentinelSendPeriodicCommands(sentinelRedisInstance *ri) {
     ping_period = ri->down_after_period;
     if (ping_period > SENTINEL_PING_PERIOD) ping_period = SENTINEL_PING_PERIOD;
 
-    if ((ri->flags & SRI_SENTINEL) == 0 &&
+    if ((ri->m_flags & SRI_SENTINEL) == 0 &&
         (ri->info_refresh == 0 ||
         (now - ri->info_refresh) > info_period))
     {
@@ -2638,19 +2638,19 @@ void addReplySentinelRedisInstance(client *c, sentinelRedisInstance *ri) {
     fields++;
 
     addReplyBulkCString(c,"flags");
-    if (ri->flags & SRI_S_DOWN) flags = sdscat(flags,"s_down,");
-    if (ri->flags & SRI_O_DOWN) flags = sdscat(flags,"o_down,");
-    if (ri->flags & SRI_MASTER) flags = sdscat(flags,"master,");
-    if (ri->flags & SRI_SLAVE) flags = sdscat(flags,"slave,");
-    if (ri->flags & SRI_SENTINEL) flags = sdscat(flags,"sentinel,");
+    if (ri->m_flags & SRI_S_DOWN) flags = sdscat(flags,"s_down,");
+    if (ri->m_flags & SRI_O_DOWN) flags = sdscat(flags,"o_down,");
+    if (ri->m_flags & SRI_MASTER) flags = sdscat(flags,"master,");
+    if (ri->m_flags & SRI_SLAVE) flags = sdscat(flags,"slave,");
+    if (ri->m_flags & SRI_SENTINEL) flags = sdscat(flags,"sentinel,");
     if (ri->link->disconnected) flags = sdscat(flags,"disconnected,");
-    if (ri->flags & SRI_MASTER_DOWN) flags = sdscat(flags,"master_down,");
-    if (ri->flags & SRI_FAILOVER_IN_PROGRESS)
+    if (ri->m_flags & SRI_MASTER_DOWN) flags = sdscat(flags,"master_down,");
+    if (ri->m_flags & SRI_FAILOVER_IN_PROGRESS)
         flags = sdscat(flags,"failover_in_progress,");
-    if (ri->flags & SRI_PROMOTED) flags = sdscat(flags,"promoted,");
-    if (ri->flags & SRI_RECONF_SENT) flags = sdscat(flags,"reconf_sent,");
-    if (ri->flags & SRI_RECONF_INPROG) flags = sdscat(flags,"reconf_inprog,");
-    if (ri->flags & SRI_RECONF_DONE) flags = sdscat(flags,"reconf_done,");
+    if (ri->m_flags & SRI_PROMOTED) flags = sdscat(flags,"promoted,");
+    if (ri->m_flags & SRI_RECONF_SENT) flags = sdscat(flags,"reconf_sent,");
+    if (ri->m_flags & SRI_RECONF_INPROG) flags = sdscat(flags,"reconf_inprog,");
+    if (ri->m_flags & SRI_RECONF_DONE) flags = sdscat(flags,"reconf_done,");
 
     if (sdslen(flags) != 0) sdsrange(flags,0,-2); /* remove last "," */
     addReplyBulkCString(c,flags);
@@ -2665,7 +2665,7 @@ void addReplySentinelRedisInstance(client *c, sentinelRedisInstance *ri) {
     addReplyBulkLongLong(c,ri->link->refcount);
     fields++;
 
-    if (ri->flags & SRI_FAILOVER_IN_PROGRESS) {
+    if (ri->m_flags & SRI_FAILOVER_IN_PROGRESS) {
         addReplyBulkCString(c,"failover-state");
         addReplyBulkCString(c,(char*)sentinelFailoverStateStr(ri->failover_state));
         fields++;
@@ -2684,13 +2684,13 @@ void addReplySentinelRedisInstance(client *c, sentinelRedisInstance *ri) {
     addReplyBulkLongLong(c,mstime() - ri->link->last_pong_time);
     fields++;
 
-    if (ri->flags & SRI_S_DOWN) {
+    if (ri->m_flags & SRI_S_DOWN) {
         addReplyBulkCString(c,"s-down-time");
         addReplyBulkLongLong(c,mstime()-ri->s_down_since_time);
         fields++;
     }
 
-    if (ri->flags & SRI_O_DOWN) {
+    if (ri->m_flags & SRI_O_DOWN) {
         addReplyBulkCString(c,"o-down-time");
         addReplyBulkLongLong(c,mstime()-ri->o_down_since_time);
         fields++;
@@ -2701,7 +2701,7 @@ void addReplySentinelRedisInstance(client *c, sentinelRedisInstance *ri) {
     fields++;
 
     /* Masters and Slaves */
-    if (ri->flags & (SRI_MASTER|SRI_SLAVE)) {
+    if (ri->m_flags & (SRI_MASTER|SRI_SLAVE)) {
         addReplyBulkCString(c,"info-refresh");
         addReplyBulkLongLong(c,mstime() - ri->info_refresh);
         fields++;
@@ -2717,7 +2717,7 @@ void addReplySentinelRedisInstance(client *c, sentinelRedisInstance *ri) {
     }
 
     /* Only masters */
-    if (ri->flags & SRI_MASTER) {
+    if (ri->m_flags & SRI_MASTER) {
         addReplyBulkCString(c,"config-epoch");
         addReplyBulkLongLong(c,ri->config_epoch);
         fields++;
@@ -2756,7 +2756,7 @@ void addReplySentinelRedisInstance(client *c, sentinelRedisInstance *ri) {
     }
 
     /* Only slaves */
-    if (ri->flags & SRI_SLAVE) {
+    if (ri->m_flags & SRI_SLAVE) {
         addReplyBulkCString(c,"master-link-down-time");
         addReplyBulkLongLong(c,ri->master_link_down_time);
         fields++;
@@ -2786,7 +2786,7 @@ void addReplySentinelRedisInstance(client *c, sentinelRedisInstance *ri) {
     }
 
     /* Only sentinels */
-    if (ri->flags & SRI_SENTINEL) {
+    if (ri->m_flags & SRI_SENTINEL) {
         addReplyBulkCString(c,"last-hello-message");
         addReplyBulkLongLong(c,mstime() - ri->last_hello_time);
         fields++;
@@ -2846,7 +2846,7 @@ int sentinelIsQuorumReachable(sentinelRedisInstance *master, int *usableptr) {
     while((de = dictNext(&di)) != NULL) {
         sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
 
-        if (ri->flags & (SRI_S_DOWN|SRI_O_DOWN)) continue;
+        if (ri->m_flags & (SRI_S_DOWN|SRI_O_DOWN)) continue;
         usable++;
     }
 
@@ -2920,13 +2920,13 @@ void sentinelCommand(client *c) {
 
         /* It exists? Is actually a master? Is subjectively down? It's down.
          * Note: if we are in tilt mode we always reply with "0". */
-        if (!sentinel.tilt && ri && (ri->flags & SRI_S_DOWN) &&
-                                    (ri->flags & SRI_MASTER))
+        if (!sentinel.tilt && ri && (ri->m_flags & SRI_S_DOWN) &&
+                                    (ri->m_flags & SRI_MASTER))
             isdown = 1;
 
         /* Vote for the master (or fetch the previous vote) if the request
          * includes a runid, otherwise the sender is not seeking for a vote. */
-        if (ri && ri->flags & SRI_MASTER && strcasecmp((const char*)c->argv[5]->ptr,"*")) {
+        if (ri && ri->m_flags & SRI_MASTER && strcasecmp((const char*)c->argv[5]->ptr,"*")) {
             leader = sentinelVoteLeader(ri,(uint64_t)req_epoch,
                                             (char*)c->argv[5]->ptr,
                                             &leader_epoch);
@@ -2965,7 +2965,7 @@ void sentinelCommand(client *c) {
         if (c->argc != 3) goto numargserr;
         if ((ri = sentinelGetMasterByNameOrReplyError(c,c->argv[2])) == NULL)
             return;
-        if (ri->flags & SRI_FAILOVER_IN_PROGRESS) {
+        if (ri->m_flags & SRI_FAILOVER_IN_PROGRESS) {
             addReplySds(c,sdsnew("-INPROG Failover already in progress\r\n"));
             return;
         }
@@ -2976,7 +2976,7 @@ void sentinelCommand(client *c) {
         serverLog(LL_WARNING,"Executing user requested FAILOVER of '%s'",
             ri->name);
         sentinelStartFailover(ri);
-        ri->flags |= SRI_FORCE_FAILOVER;
+        ri->m_flags |= SRI_FORCE_FAILOVER;
         addReply(c,shared.ok);
     } else if (!strcasecmp((const char*)c->argv[1]->ptr,"pending-scripts")) {
         /* SENTINEL PENDING-SCRIPTS */
@@ -3228,8 +3228,8 @@ void sentinelInfoCommand(client *c) {
             sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
             char *status = "ok";
 
-            if (ri->flags & SRI_O_DOWN) status = "odown";
-            else if (ri->flags & SRI_S_DOWN) status = "sdown";
+            if (ri->m_flags & SRI_O_DOWN) status = "odown";
+            else if (ri->m_flags & SRI_S_DOWN) status = "sdown";
             info = sdscatprintf(info,
                 "master%d:name=%s,status=%s,address=%s:%d,"
                 "slaves=%lu,sentinels=%lu\r\n",
@@ -3412,22 +3412,22 @@ void sentinelCheckSubjectivelyDown(sentinelRedisInstance *ri) {
      *    to meet the down_after_period, plus enough time to get two times
      *    INFO report from the instance. */
     if (elapsed > ri->down_after_period ||
-        (ri->flags & SRI_MASTER &&
+        (ri->m_flags & SRI_MASTER &&
          ri->role_reported == SRI_SLAVE &&
          mstime() - ri->role_reported_time >
           (ri->down_after_period+SENTINEL_INFO_PERIOD*2)))
     {
         /* Is subjectively down */
-        if ((ri->flags & SRI_S_DOWN) == 0) {
+        if ((ri->m_flags & SRI_S_DOWN) == 0) {
             sentinelEvent(LL_WARNING,"+sdown",ri,"%@");
             ri->s_down_since_time = mstime();
-            ri->flags |= SRI_S_DOWN;
+            ri->m_flags |= SRI_S_DOWN;
         }
     } else {
         /* Is subjectively up */
-        if (ri->flags & SRI_S_DOWN) {
+        if (ri->m_flags & SRI_S_DOWN) {
             sentinelEvent(LL_WARNING,"-sdown",ri,"%@");
-            ri->flags &= ~(SRI_S_DOWN|SRI_SCRIPT_KILL_SENT);
+            ri->m_flags &= ~(SRI_S_DOWN|SRI_SCRIPT_KILL_SENT);
         }
     }
 }
@@ -3442,7 +3442,7 @@ void sentinelCheckObjectivelyDown(sentinelRedisInstance *master) {
     dictEntry *de;
     unsigned int quorum = 0, odown = 0;
 
-    if (master->flags & SRI_S_DOWN) {
+    if (master->m_flags & SRI_S_DOWN) {
         /* Is down for enough sentinels? */
         quorum = 1; /* the current sentinel. */
         /* Count all the other sentinels. */
@@ -3450,23 +3450,23 @@ void sentinelCheckObjectivelyDown(sentinelRedisInstance *master) {
         while((de = dictNext(&di)) != NULL) {
             sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
 
-            if (ri->flags & SRI_MASTER_DOWN) quorum++;
+            if (ri->m_flags & SRI_MASTER_DOWN) quorum++;
         }
         if (quorum >= master->quorum) odown = 1;
     }
 
     /* Set the flag accordingly to the outcome. */
     if (odown) {
-        if ((master->flags & SRI_O_DOWN) == 0) {
+        if ((master->m_flags & SRI_O_DOWN) == 0) {
             sentinelEvent(LL_WARNING,"+odown",master,"%@ #quorum %d/%d",
                 quorum, master->quorum);
-            master->flags |= SRI_O_DOWN;
+            master->m_flags |= SRI_O_DOWN;
             master->o_down_since_time = mstime();
         }
     } else {
-        if (master->flags & SRI_O_DOWN) {
+        if (master->m_flags & SRI_O_DOWN) {
             sentinelEvent(LL_WARNING,"-odown",master,"%@");
-            master->flags &= ~SRI_O_DOWN;
+            master->m_flags &= ~SRI_O_DOWN;
         }
     }
 }
@@ -3492,9 +3492,9 @@ void sentinelReceiveIsMasterDownReply(redisAsyncContext *c, void *reply, void *p
     {
         ri->last_master_down_reply_time = mstime();
         if (r->element[0]->integer == 1) {
-            ri->flags |= SRI_MASTER_DOWN;
+            ri->m_flags |= SRI_MASTER_DOWN;
         } else {
-            ri->flags &= ~SRI_MASTER_DOWN;
+            ri->m_flags &= ~SRI_MASTER_DOWN;
         }
         if (strcmp(r->element[1]->str,"*")) {
             /* If the runid in the reply is not "*" the Sentinel actually
@@ -3528,7 +3528,7 @@ void sentinelAskMasterStateToOtherSentinels(sentinelRedisInstance *master, int f
 
         /* If the master state from other sentinel is too old, we clear it. */
         if (elapsed > SENTINEL_ASK_PERIOD*5) {
-            ri->flags &= ~SRI_MASTER_DOWN;
+            ri->m_flags &= ~SRI_MASTER_DOWN;
             sdsfree(ri->leader);
             ri->leader = NULL;
         }
@@ -3538,7 +3538,7 @@ void sentinelAskMasterStateToOtherSentinels(sentinelRedisInstance *master, int f
          * 1) We believe it is down, or there is a failover in progress.
          * 2) Sentinel is connected.
          * 3) We did not received the info within SENTINEL_ASK_PERIOD ms. */
-        if ((master->flags & SRI_S_DOWN) == 0) continue;
+        if ((master->m_flags & SRI_S_DOWN) == 0) continue;
         if (ri->link->disconnected) continue;
         if (!(flags & SENTINEL_ASK_FORCED) &&
             mstime() - ri->last_master_down_reply_time < SENTINEL_ASK_PERIOD)
@@ -3636,7 +3636,7 @@ char *sentinelGetLeader(sentinelRedisInstance *master, uint64_t epoch) {
     uint64_t leader_epoch;
     uint64_t max_votes = 0;
 
-    serverAssert(master->flags & (SRI_O_DOWN|SRI_FAILOVER_IN_PROGRESS));
+    serverAssert(master->m_flags & (SRI_O_DOWN|SRI_FAILOVER_IN_PROGRESS));
     counters = dictCreate(&leaderVotesDictType,NULL);
 
     voters = master->sentinels->dictSize()+1; /* All the other sentinels and me.*/
@@ -3761,10 +3761,10 @@ int sentinelSendSlaveOf(sentinelRedisInstance *ri, char *host, int port) {
 
 /* Setup the master state to start a failover. */
 void sentinelStartFailover(sentinelRedisInstance *master) {
-    serverAssert(master->flags & SRI_MASTER);
+    serverAssert(master->m_flags & SRI_MASTER);
 
     master->failover_state = SENTINEL_FAILOVER_STATE_WAIT_START;
-    master->flags |= SRI_FAILOVER_IN_PROGRESS;
+    master->m_flags |= SRI_FAILOVER_IN_PROGRESS;
     master->failover_epoch = ++sentinel.current_epoch;
     sentinelEvent(LL_WARNING,"+new-epoch",master,"%llu",
         (unsigned long long) sentinel.current_epoch);
@@ -3786,10 +3786,10 @@ void sentinelStartFailover(sentinelRedisInstance *master) {
  * Return non-zero if a failover was started. */
 int sentinelStartFailoverIfNeeded(sentinelRedisInstance *master) {
     /* We can't failover if the master is not in O_DOWN state. */
-    if (!(master->flags & SRI_O_DOWN)) return 0;
+    if (!(master->m_flags & SRI_O_DOWN)) return 0;
 
     /* Failover already in progress? */
-    if (master->flags & SRI_FAILOVER_IN_PROGRESS) return 0;
+    if (master->m_flags & SRI_FAILOVER_IN_PROGRESS) return 0;
 
     /* Last failover attempt started too little time ago? */
     if (mstime() - master->failover_start_time <
@@ -3882,7 +3882,7 @@ sentinelRedisInstance *sentinelSelectSlave(sentinelRedisInstance *master) {
     dictEntry *de;
     mstime_t max_master_down_time = 0;
 
-    if (master->flags & SRI_S_DOWN)
+    if (master->m_flags & SRI_S_DOWN)
         max_master_down_time += mstime() - master->s_down_since_time;
     max_master_down_time += master->down_after_period * 10;
 
@@ -3891,7 +3891,7 @@ sentinelRedisInstance *sentinelSelectSlave(sentinelRedisInstance *master) {
         sentinelRedisInstance* slave = (sentinelRedisInstance*)de->dictGetVal();
         mstime_t info_validity_time;
 
-        if (slave->flags & (SRI_S_DOWN|SRI_O_DOWN)) continue;
+        if (slave->m_flags & (SRI_S_DOWN|SRI_O_DOWN)) continue;
         if (slave->link->disconnected) continue;
         if (mstime() - slave->link->last_avail_time > SENTINEL_PING_PERIOD*5) continue;
         if (slave->slave_priority == 0) continue;
@@ -3899,7 +3899,7 @@ sentinelRedisInstance *sentinelSelectSlave(sentinelRedisInstance *master) {
         /* If the master is in SDOWN state we get INFO for slaves every second.
          * Otherwise we get it with the usual period so we need to account for
          * a larger delay. */
-        if (master->flags & SRI_S_DOWN)
+        if (master->m_flags & SRI_S_DOWN)
             info_validity_time = SENTINEL_PING_PERIOD*5;
         else
             info_validity_time = SENTINEL_INFO_PERIOD*3;
@@ -3929,7 +3929,7 @@ void sentinelFailoverWaitStart(sentinelRedisInstance *ri) {
 
     /* If I'm not the leader, and it is not a forced failover via
      * SENTINEL FAILOVER, then I can't continue with the failover. */
-    if (!isleader && !(ri->flags & SRI_FORCE_FAILOVER)) {
+    if (!isleader && !(ri->m_flags & SRI_FORCE_FAILOVER)) {
         int election_timeout = SENTINEL_ELECTION_TIMEOUT;
 
         /* The election timeout is the MIN between SENTINEL_ELECTION_TIMEOUT
@@ -3961,7 +3961,7 @@ void sentinelFailoverSelectSlave(sentinelRedisInstance *ri) {
         sentinelAbortFailover(ri);
     } else {
         sentinelEvent(LL_WARNING,"+selected-slave",slave,"%@");
-        slave->flags |= SRI_PROMOTED;
+        slave->m_flags |= SRI_PROMOTED;
         ri->promoted_slave = slave;
         ri->failover_state = SENTINEL_FAILOVER_STATE_SEND_SLAVEOF_NOONE;
         ri->failover_state_change_time = mstime();
@@ -4016,7 +4016,7 @@ void sentinelFailoverDetectEnd(sentinelRedisInstance *master) {
     /* We can't consider failover finished if the promoted slave is
      * not reachable. */
     if (master->promoted_slave == NULL ||
-        master->promoted_slave->flags & SRI_S_DOWN) return;
+        master->promoted_slave->m_flags & SRI_S_DOWN) return;
 
     /* The failover terminates once all the reachable slaves are properly
      * configured. */
@@ -4025,8 +4025,8 @@ void sentinelFailoverDetectEnd(sentinelRedisInstance *master) {
         while((de = dictNext(&di)) != NULL) {
             sentinelRedisInstance* slave = (sentinelRedisInstance*)de->dictGetVal();
 
-            if (slave->flags & (SRI_PROMOTED|SRI_RECONF_DONE)) continue;
-            if (slave->flags & SRI_S_DOWN) continue;
+            if (slave->m_flags & (SRI_PROMOTED|SRI_RECONF_DONE)) continue;
+            if (slave->m_flags & SRI_S_DOWN) continue;
             not_reconfigured++;
         }
     }
@@ -4055,7 +4055,7 @@ void sentinelFailoverDetectEnd(sentinelRedisInstance *master) {
             sentinelRedisInstance* slave = (sentinelRedisInstance*)de->dictGetVal();
             int retval;
 
-            if (slave->flags & (SRI_RECONF_DONE|SRI_RECONF_SENT)) continue;
+            if (slave->m_flags & (SRI_RECONF_DONE|SRI_RECONF_SENT)) continue;
             if (slave->link->disconnected) continue;
 
             retval = sentinelSendSlaveOf(slave,
@@ -4063,7 +4063,7 @@ void sentinelFailoverDetectEnd(sentinelRedisInstance *master) {
                     master->promoted_slave->addr->port);
             if (retval == C_OK) {
                 sentinelEvent(LL_NOTICE,"+slave-reconf-sent-be",slave,"%@");
-                slave->flags |= SRI_RECONF_SENT;
+                slave->m_flags |= SRI_RECONF_SENT;
             }
         }
     }
@@ -4080,7 +4080,7 @@ void sentinelFailoverReconfNextSlave(sentinelRedisInstance *master) {
         while((de = dictNext(&di)) != NULL) {
             sentinelRedisInstance* slave = (sentinelRedisInstance*)de->dictGetVal();
 
-            if (slave->flags & (SRI_RECONF_SENT|SRI_RECONF_INPROG))
+            if (slave->m_flags & (SRI_RECONF_SENT|SRI_RECONF_INPROG))
                 in_progress++;
         }
     }
@@ -4093,24 +4093,24 @@ void sentinelFailoverReconfNextSlave(sentinelRedisInstance *master) {
         int retval;
 
         /* Skip the promoted slave, and already configured slaves. */
-        if (slave->flags & (SRI_PROMOTED|SRI_RECONF_DONE)) continue;
+        if (slave->m_flags & (SRI_PROMOTED|SRI_RECONF_DONE)) continue;
 
         /* If too much time elapsed without the slave moving forward to
          * the next state, consider it reconfigured even if it is not.
          * Sentinels will detect the slave as misconfigured and fix its
          * configuration later. */
-        if ((slave->flags & SRI_RECONF_SENT) &&
+        if ((slave->m_flags & SRI_RECONF_SENT) &&
             (mstime() - slave->slave_reconf_sent_time) >
             SENTINEL_SLAVE_RECONF_TIMEOUT)
         {
             sentinelEvent(LL_NOTICE,"-slave-reconf-sent-timeout",slave,"%@");
-            slave->flags &= ~SRI_RECONF_SENT;
-            slave->flags |= SRI_RECONF_DONE;
+            slave->m_flags &= ~SRI_RECONF_SENT;
+            slave->m_flags |= SRI_RECONF_DONE;
         }
 
         /* Nothing to do for instances that are disconnected or already
          * in RECONF_SENT state. */
-        if (slave->flags & (SRI_RECONF_SENT|SRI_RECONF_INPROG)) continue;
+        if (slave->m_flags & (SRI_RECONF_SENT|SRI_RECONF_INPROG)) continue;
         if (slave->link->disconnected) continue;
 
         /* Send SLAVEOF <new master>. */
@@ -4118,7 +4118,7 @@ void sentinelFailoverReconfNextSlave(sentinelRedisInstance *master) {
                 master->promoted_slave->addr->ip,
                 master->promoted_slave->addr->port);
         if (retval == C_OK) {
-            slave->flags |= SRI_RECONF_SENT;
+            slave->m_flags |= SRI_RECONF_SENT;
             slave->slave_reconf_sent_time = mstime();
             sentinelEvent(LL_NOTICE,"+slave-reconf-sent",slave,"%@");
             in_progress++;
@@ -4144,9 +4144,9 @@ void sentinelFailoverSwitchToPromotedSlave(sentinelRedisInstance *master) {
 }
 
 void sentinelFailoverStateMachine(sentinelRedisInstance *ri) {
-    serverAssert(ri->flags & SRI_MASTER);
+    serverAssert(ri->m_flags & SRI_MASTER);
 
-    if (!(ri->flags & SRI_FAILOVER_IN_PROGRESS)) return;
+    if (!(ri->m_flags & SRI_FAILOVER_IN_PROGRESS)) return;
 
     switch(ri->failover_state) {
         case SENTINEL_FAILOVER_STATE_WAIT_START:
@@ -4173,14 +4173,14 @@ void sentinelFailoverStateMachine(sentinelRedisInstance *ri) {
  * the slave -> master switch. Otherwise the failover can't be aborted and
  * will reach its end (possibly by timeout). */
 void sentinelAbortFailover(sentinelRedisInstance *ri) {
-    serverAssert(ri->flags & SRI_FAILOVER_IN_PROGRESS);
+    serverAssert(ri->m_flags & SRI_FAILOVER_IN_PROGRESS);
     serverAssert(ri->failover_state <= SENTINEL_FAILOVER_STATE_WAIT_PROMOTION);
 
-    ri->flags &= ~(SRI_FAILOVER_IN_PROGRESS|SRI_FORCE_FAILOVER);
+    ri->m_flags &= ~(SRI_FAILOVER_IN_PROGRESS|SRI_FORCE_FAILOVER);
     ri->failover_state = SENTINEL_FAILOVER_STATE_NONE;
     ri->failover_state_change_time = mstime();
     if (ri->promoted_slave) {
-        ri->promoted_slave->flags &= ~SRI_PROMOTED;
+        ri->promoted_slave->m_flags &= ~SRI_PROMOTED;
         ri->promoted_slave = NULL;
     }
 }
@@ -4211,12 +4211,12 @@ void sentinelHandleRedisInstance(sentinelRedisInstance *ri) {
     sentinelCheckSubjectivelyDown(ri);
 
     /* Masters and slaves */
-    if (ri->flags & (SRI_MASTER|SRI_SLAVE)) {
+    if (ri->m_flags & (SRI_MASTER|SRI_SLAVE)) {
         /* Nothing so far. */
     }
 
     /* Only masters */
-    if (ri->flags & SRI_MASTER) {
+    if (ri->m_flags & SRI_MASTER) {
         sentinelCheckObjectivelyDown(ri);
         if (sentinelStartFailoverIfNeeded(ri))
             sentinelAskMasterStateToOtherSentinels(ri,SENTINEL_ASK_FORCED);
@@ -4237,7 +4237,7 @@ void sentinelHandleDictOfRedisInstances(dict *instances) {
         sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
 
         sentinelHandleRedisInstance(ri);
-        if (ri->flags & SRI_MASTER) {
+        if (ri->m_flags & SRI_MASTER) {
             sentinelHandleDictOfRedisInstances(ri->slaves);
             sentinelHandleDictOfRedisInstances(ri->sentinels);
             if (ri->failover_state == SENTINEL_FAILOVER_STATE_UPDATE_CONFIG) {

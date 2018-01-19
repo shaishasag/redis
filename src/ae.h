@@ -63,29 +63,36 @@ typedef void aeEventFinalizerProc(aeEventLoop*, void *clientData);
 typedef void aeBeforeSleepProc(aeEventLoop*);
 
 /* File event structure */
-typedef struct aeFileEvent {
-    int mask; /* one of AE_(READABLE|WRITABLE) */
-    aeFileProc *rfileProc;
-    aeFileProc *wfileProc;
-    void *clientData;
-} aeFileEvent;
+class aeFileEvent
+{
+public:
+    aeFileEvent();
+    int m_mask; /* one of AE_(READABLE|WRITABLE) */
+    aeFileProc *m_rfileProc;
+    aeFileProc *m_wfileProc;
+    void *m_clientData;
+};
 
 /* Time event structure */
-typedef struct aeTimeEvent {
-    long long id; /* time event identifier. */
-    long when_sec; /* seconds */
-    long when_ms; /* milliseconds */
-    aeTimeProc *timeProc;
-    aeEventFinalizerProc *finalizerProc;
-    void *clientData;
-    struct aeTimeEvent *next;
-} aeTimeEvent;
+class aeTimeEvent
+{
+public:
+    aeTimeEvent(long long in_id, long long in_milliseconds, aeTimeProc *proc, void *in_clientData, aeEventFinalizerProc *in_finalizerProc, aeTimeEvent* in_next);
+
+    long long m_id; /* time event identifier. */
+    long m_when_sec; /* seconds */
+    long m_when_ms; /* milliseconds */
+    aeTimeProc *m_timeProc;
+    aeEventFinalizerProc *m_finalizerProc;
+    void *m_clientData;
+    struct aeTimeEvent *m_next;
+};
 
 /* A fired event */
-typedef struct aeFiredEvent {
-    int fd;
-    int mask;
-} aeFiredEvent;
+struct aeFiredEvent {
+    int m_fd;
+    int m_mask;
+};
 
 /* Prototypes */
 
@@ -94,7 +101,8 @@ void aeDeleteEventLoop(aeEventLoop* eventLoop);
 int aeWait(int fd, int mask, long long milliseconds);
 
 /* State of an event based program */
-class aeEventLoop {
+class aeEventLoop
+{
     friend aeEventLoop *aeCreateEventLoop(int in_setsize);
 public:
     aeEventLoop(int setsize);

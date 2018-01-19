@@ -114,7 +114,7 @@ static redisAsyncContext *redisAsyncInitialize(redisContext *c) {
     /* The regular connect functions will always set the flag REDIS_CONNECTED.
      * For the async API, we want to wait until the first write event is
      * received up before setting this flag, so reset it here. */
-    c->flags &= ~REDIS_CONNECTED;
+    c->m_flags &= ~REDIS_CONNECTED;
 
     ac->err = 0;
     ac->errstr = NULL;
@@ -265,9 +265,9 @@ static int __redisShiftCallback(redisCallbackList *list, redisCallback *target) 
 static void __redisRunCallback(redisAsyncContext *ac, redisCallback *cb, redisReply *reply) {
     redisContext *c = &(ac->c);
     if (cb->fn != NULL) {
-        c->flags |= REDIS_IN_CALLBACK;
+        c->m_flags |= REDIS_IN_CALLBACK;
         cb->fn(ac,reply,cb->privdata);
-        c->flags &= ~REDIS_IN_CALLBACK;
+        c->m_flags &= ~REDIS_IN_CALLBACK;
     }
 }
 
@@ -304,8 +304,8 @@ static void __redisAsyncFree(redisAsyncContext *ac) {
 
     /* Execute disconnect callback. When redisAsyncFree() initiated destroying
      * this context, the status will always be REDIS_OK. */
-    if (ac->onDisconnect && (c->flags & REDIS_CONNECTED)) {
-        if (c->flags & REDIS_FREEING) {
+    if (ac->onDisconnect && (c->m_flags & REDIS_CONNECTED)) {
+        if (c->m_flags & REDIS_FREEING) {
             ac->onDisconnect(ac,REDIS_OK);
         } else {
             ac->onDisconnect(ac,(ac->err == 0) ? REDIS_OK : REDIS_ERR);
@@ -322,8 +322,8 @@ static void __redisAsyncFree(redisAsyncContext *ac) {
  * redisProcessCallbacks(). Otherwise, the context is immediately free'd. */
 void redisAsyncFree(redisAsyncContext *ac) {
     redisContext *c = &(ac->c);
-    c->flags |= REDIS_FREEING;
-    if (!(c->flags & REDIS_IN_CALLBACK))
+    c->m_flags |= REDIS_FREEING;
+    if (!(c->m_flags & REDIS_IN_CALLBACK))
         __redisAsyncFree(ac);
 }
 
@@ -340,7 +340,7 @@ static void __redisAsyncDisconnect(redisAsyncContext *ac) {
     } else {
         /* Disconnection is caused by an error, make sure that pending
          * callbacks cannot call new commands. */
-        c->flags |= REDIS_DISCONNECTING;
+        c->m_flags |= REDIS_DISCONNECTING;
     }
 
     /* For non-clean disconnects, __redisAsyncFree() will execute pending
@@ -356,8 +356,8 @@ static void __redisAsyncDisconnect(redisAsyncContext *ac) {
  * when there are no pending callbacks. */
 void redisAsyncDisconnect(redisAsyncContext *ac) {
     redisContext *c = &(ac->c);
-    c->flags |= REDIS_DISCONNECTING;
-    if (!(c->flags & REDIS_IN_CALLBACK) && ac->replies.head == NULL)
+    c->m_flags |= REDIS_DISCONNECTING;
+    if (!(c->m_flags & REDIS_IN_CALLBACK) && ac->replies.head == NULL)
         __redisAsyncDisconnect(ac);
 }
 
@@ -397,7 +397,7 @@ static int __redisGetSubscribeCallback(redisAsyncContext *ac, redisReply *reply,
                  * non-subscribe mode. */
                 assert(reply->element[2]->type == REDIS_REPLY_INTEGER);
                 if (reply->element[2]->integer == 0)
-                    c->flags &= ~REDIS_SUBSCRIBED;
+                    c->m_flags &= ~REDIS_SUBSCRIBED;
             }
         }
         sdsfree(sname);
@@ -418,14 +418,14 @@ void redisProcessCallbacks(redisAsyncContext *ac) {
         if (reply == NULL) {
             /* When the connection is being disconnected and there are
              * no more replies, this is the cue to really disconnect. */
-            if (c->flags & REDIS_DISCONNECTING && sdslen(c->obuf) == 0
+            if (c->m_flags & REDIS_DISCONNECTING && sdslen(c->obuf) == 0
                 && ac->replies.head == NULL) {
                 __redisAsyncDisconnect(ac);
                 return;
             }
 
             /* If monitor mode, repush callback */
-            if(c->flags & REDIS_MONITORING) {
+            if(c->m_flags & REDIS_MONITORING) {
                 __redisPushCallback(&ac->replies,&cb);
             }
 
@@ -460,8 +460,8 @@ void redisProcessCallbacks(redisAsyncContext *ac) {
                 return;
             }
             /* No more regular callbacks and no errors, the context *must* be subscribed or monitoring. */
-            assert((c->flags & REDIS_SUBSCRIBED || c->flags & REDIS_MONITORING));
-            if(c->flags & REDIS_SUBSCRIBED)
+            assert((c->m_flags & REDIS_SUBSCRIBED || c->m_flags & REDIS_MONITORING));
+            if(c->m_flags & REDIS_SUBSCRIBED)
                 __redisGetSubscribeCallback(ac,reply,&cb);
         }
 
@@ -470,7 +470,7 @@ void redisProcessCallbacks(redisAsyncContext *ac) {
             c->reader->fn->freeObject(reply);
 
             /* Proceed with free'ing when redisAsyncFree() was called. */
-            if (c->flags & REDIS_FREEING) {
+            if (c->m_flags & REDIS_FREEING) {
                 __redisAsyncFree(ac);
                 return;
             }
@@ -505,7 +505,7 @@ static int __redisAsyncHandleConnect(redisAsyncContext *ac) {
     }
 
     /* Mark context as connected. */
-    c->flags |= REDIS_CONNECTED;
+    c->m_flags |= REDIS_CONNECTED;
     if (ac->onConnect) ac->onConnect(ac,REDIS_OK);
     return REDIS_OK;
 }
@@ -516,12 +516,12 @@ static int __redisAsyncHandleConnect(redisAsyncContext *ac) {
 void redisAsyncHandleRead(redisAsyncContext *ac) {
     redisContext *c = &(ac->c);
 
-    if (!(c->flags & REDIS_CONNECTED)) {
+    if (!(c->m_flags & REDIS_CONNECTED)) {
         /* Abort connect was not successful. */
         if (__redisAsyncHandleConnect(ac) != REDIS_OK)
             return;
         /* Try again later when the context is still not connected. */
-        if (!(c->flags & REDIS_CONNECTED))
+        if (!(c->m_flags & REDIS_CONNECTED))
             return;
     }
 
@@ -538,12 +538,12 @@ void redisAsyncHandleWrite(redisAsyncContext *ac) {
     redisContext *c = &(ac->c);
     int done = 0;
 
-    if (!(c->flags & REDIS_CONNECTED)) {
+    if (!(c->m_flags & REDIS_CONNECTED)) {
         /* Abort connect was not successful. */
         if (__redisAsyncHandleConnect(ac) != REDIS_OK)
             return;
         /* Try again later when the context is still not connected. */
-        if (!(c->flags & REDIS_CONNECTED))
+        if (!(c->m_flags & REDIS_CONNECTED))
             return;
     }
 
@@ -591,7 +591,7 @@ static int __redisAsyncCommand(redisAsyncContext *ac, redisCallbackFn *fn, void 
     int ret;
 
     /* Don't accept new commands when the connection is about to be closed. */
-    if (c->flags & (REDIS_DISCONNECTING | REDIS_FREEING)) return REDIS_ERR;
+    if (c->m_flags & (REDIS_DISCONNECTING | REDIS_FREEING)) return REDIS_ERR;
 
     /* Setup callback */
     cb.fn = fn;
@@ -606,7 +606,7 @@ static int __redisAsyncCommand(redisAsyncContext *ac, redisCallbackFn *fn, void 
     clen -= pvariant;
 
     if (hasnext && strncasecmp(cstr,"subscribe\r\n",11) == 0) {
-        c->flags |= REDIS_SUBSCRIBED;
+        c->m_flags |= REDIS_SUBSCRIBED;
 
         /* Add every channel/pattern to the list of subscription callbacks. */
         while ((p = nextArgument(p,&astr,&alen)) != NULL) {
@@ -621,17 +621,17 @@ static int __redisAsyncCommand(redisAsyncContext *ac, redisCallbackFn *fn, void 
     } else if (strncasecmp(cstr,"unsubscribe\r\n",13) == 0) {
         /* It is only useful to call (P)UNSUBSCRIBE when the context is
          * subscribed to one or more channels or patterns. */
-        if (!(c->flags & REDIS_SUBSCRIBED)) return REDIS_ERR;
+        if (!(c->m_flags & REDIS_SUBSCRIBED)) return REDIS_ERR;
 
         /* (P)UNSUBSCRIBE does not have its own response: every channel or
          * pattern that is unsubscribed will receive a message. This means we
          * should not append a callback function for this command. */
      } else if(strncasecmp(cstr,"monitor\r\n",9) == 0) {
          /* Set monitor flag and push callback */
-         c->flags |= REDIS_MONITORING;
+         c->m_flags |= REDIS_MONITORING;
          __redisPushCallback(&ac->replies,&cb);
     } else {
-        if (c->flags & REDIS_SUBSCRIBED)
+        if (c->m_flags & REDIS_SUBSCRIBED)
             /* This will likely result in an error reply, but it needs to be
              * received and passed to the callback. */
             __redisPushCallback(&ac->sub.invalid,&cb);

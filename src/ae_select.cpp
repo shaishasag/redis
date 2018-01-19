@@ -88,13 +88,13 @@ int aeEventLoop::aeApiPoll(struct timeval *tvp) {
             int mask = 0;
             aeFileEvent *fe = &m_events[j];
 
-            if (fe->mask == AE_NONE) continue;
-            if (fe->mask & AE_READABLE && FD_ISSET(j,&state->_rfds))
+            if (fe->m_mask == AE_NONE) continue;
+            if (fe->m_mask & AE_READABLE && FD_ISSET(j,&state->_rfds))
                 mask |= AE_READABLE;
-            if (fe->mask & AE_WRITABLE && FD_ISSET(j,&state->_wfds))
+            if (fe->m_mask & AE_WRITABLE && FD_ISSET(j,&state->_wfds))
                 mask |= AE_WRITABLE;
-            m_fired[numevents].fd = j;
-            m_fired[numevents].mask = mask;
+            m_fired[numevents].m_fd = j;
+            m_fired[numevents].m_mask = mask;
             numevents++;
         }
     }

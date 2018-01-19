@@ -590,7 +590,7 @@ struct client *createFakeClient(void) {
     c->argc = 0;
     c->argv = NULL;
     c->bufpos = 0;
-    c->flags = 0;
+    c->m_flags = 0;
     c->btype = BLOCKED_NONE;
     /* We set the fake client as a slave waiting for the synchronization
      * so that Redis will not try to send replies to this client. */
@@ -743,7 +743,7 @@ int loadAppendOnlyFile(char *filename) {
         /* The fake client should not have a reply */
         serverAssert(fakeClient->bufpos == 0 && fakeClient->reply->listLength() == 0);
         /* The fake client should never get blocked */
-        serverAssert((fakeClient->flags & CLIENT_BLOCKED) == 0);
+        serverAssert((fakeClient->m_flags & CLIENT_BLOCKED) == 0);
 
         /* Clean up. Command code may have changed argv/argc so we use the
          * argv/argc of the client instead of the local variables. */
@@ -754,7 +754,7 @@ int loadAppendOnlyFile(char *filename) {
 
     /* This point can only be reached when EOF is reached without errors.
      * If the client is in the middle of a MULTI/EXEC, log error and quit. */
-    if (fakeClient->flags & CLIENT_MULTI) goto uxeof;
+    if (fakeClient->m_flags & CLIENT_MULTI) goto uxeof;
 
 loaded_ok: /* DB loaded, cleanup and return C_OK to the caller. */
     fclose(fp);

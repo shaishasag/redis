@@ -307,9 +307,9 @@ void replicationFeedMonitors(client *c, list *monitors, int dictid, robj **argv,
 
     gettimeofday(&tv,NULL);
     cmdrepr = sdscatprintf(cmdrepr,"%ld.%06ld ",(long)tv.tv_sec,(long)tv.tv_usec);
-    if (c->flags & CLIENT_LUA) {
+    if (c->m_flags & CLIENT_LUA) {
         cmdrepr = sdscatprintf(cmdrepr,"[%d lua] ",dictid);
-    } else if (c->flags & CLIENT_UNIX_SOCKET) {
+    } else if (c->m_flags & CLIENT_UNIX_SOCKET) {
         cmdrepr = sdscatprintf(cmdrepr,"[%d unix:%s] ",dictid,server.unixsocket);
     } else {
         cmdrepr = sdscatprintf(cmdrepr,"[%d %s] ",dictid,getClientPeerId(c));
@@ -425,7 +425,7 @@ int replicationSetupSlaveForFullResync(client *slave, long long offset) {
 
     /* Don't send this reply to slaves that approached us with
      * the old SYNC command. */
-    if (!(slave->flags & CLIENT_PRE_PSYNC)) {
+    if (!(slave->m_flags & CLIENT_PRE_PSYNC)) {
         buflen = snprintf(buf,sizeof(buf),"+FULLRESYNC %s %lld\r\n",
                           server.replid,offset);
         if (write(slave->fd,buf,buflen) != buflen) {
@@ -502,7 +502,7 @@ int masterTryPartialResynchronization(client *c) {
      * 1) Set client state to make it a slave.
      * 2) Inform the client we can continue with +CONTINUE
      * 3) Send the backlog data (from the offset to the end) to the slave. */
-    c->flags |= CLIENT_SLAVE;
+    c->m_flags |= CLIENT_SLAVE;
     c->replstate = SLAVE_STATE_ONLINE;
     c->repl_ack_time = server.unixtime;
     c->repl_put_online_on_ack = 0;
@@ -589,11 +589,11 @@ int startBgsaveForReplication(int mincapa) {
             client *slave = (client *)ln->listNodeValue();
 
             if (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_START) {
-                slave->flags &= ~CLIENT_SLAVE;
+                slave->m_flags &= ~CLIENT_SLAVE;
                 server.slaves->listDelNode(ln);
                 addReplyError(slave,
                     "BGSAVE failed, replication can't continue");
-                slave->flags |= CLIENT_CLOSE_AFTER_REPLY;
+                slave->m_flags |= CLIENT_CLOSE_AFTER_REPLY;
             }
         }
         return retval;
@@ -622,7 +622,7 @@ int startBgsaveForReplication(int mincapa) {
 /* SYNC and PSYNC command implemenation. */
 void syncCommand(client *c) {
     /* ignore SYNC if already slave or in monitor mode */
-    if (c->flags & CLIENT_SLAVE) return;
+    if (c->m_flags & CLIENT_SLAVE) return;
 
     /* Refuse SYNC requests if we are a slave but the link with our master
      * is not ok... */
@@ -669,7 +669,7 @@ void syncCommand(client *c) {
         /* If a slave uses SYNC, we are dealing with an old implementation
          * of the replication protocol (like redis-cli --slave). Flag the client
          * so that we don't expect to receive REPLCONF ACK feedbacks. */
-        c->flags |= CLIENT_PRE_PSYNC;
+        c->m_flags |= CLIENT_PRE_PSYNC;
     }
 
     /* Full resynchronization. */
@@ -681,7 +681,7 @@ void syncCommand(client *c) {
     if (server.repl_disable_tcp_nodelay)
         anetDisableTcpNoDelay(NULL, c->fd); /* Non critical if it fails. */
     c->repldbfd = -1;
-    c->flags |= CLIENT_SLAVE;
+    c->m_flags |= CLIENT_SLAVE;
     server.slaves->listAddNodeTail(c);
 
     /* Create the replication backlog if needed. */
@@ -808,7 +808,7 @@ void replconfCommand(client *c) {
              * internal only command that normal clients should never use. */
             long long offset;
 
-            if (!(c->flags & CLIENT_SLAVE)) return;
+            if (!(c->m_flags & CLIENT_SLAVE)) return;
             if ((getLongLongFromObject(c->argv[j+1], &offset) != C_OK))
                 return;
             if (offset > c->repl_ack_off)
@@ -1070,7 +1070,7 @@ void replicationEmptyDbCallback(void *privdata) {
  * at server.master, starting from the specified file descriptor. */
 void replicationCreateMasterClient(int fd, int dbid) {
     server.master = createClient(fd);
-    server.master->flags |= CLIENT_MASTER;
+    server.master->m_flags |= CLIENT_MASTER;
     server.master->authenticated = 1;
     server.master->reploff = server.master_initial_offset;
     server.master->read_reploff = server.master->reploff;
@@ -1079,7 +1079,7 @@ void replicationCreateMasterClient(int fd, int dbid) {
     /* If master offset is set to -1, this master is old and is not
      * PSYNC capable, so we flag it accordingly. */
     if (server.master->reploff == -1)
-        server.master->flags |= CLIENT_PRE_PSYNC;
+        server.master->m_flags |= CLIENT_PRE_PSYNC;
     if (dbid != -1) selectDb(server.master,dbid);
 }
 
@@ -2083,12 +2083,12 @@ void replicationSendAck(void) {
     client *c = server.master;
 
     if (c != NULL) {
-        c->flags |= CLIENT_MASTER_FORCE_REPLY;
+        c->m_flags |= CLIENT_MASTER_FORCE_REPLY;
         addReplyMultiBulkLen(c,3);
         addReplyBulkCString(c,"REPLCONF");
         addReplyBulkCString(c,"ACK");
         addReplyBulkLongLong(c,c->reploff);
-        c->flags &= ~CLIENT_MASTER_FORCE_REPLY;
+        c->m_flags &= ~CLIENT_MASTER_FORCE_REPLY;
     }
 }
 
@@ -2126,7 +2126,7 @@ void replicationCacheMaster(client *c) {
     sdsclear(server.master->querybuf);
     sdsclear(server.master->pending_querybuf);
     server.master->read_reploff = server.master->reploff;
-    if (c->flags & CLIENT_MULTI) discardTransaction(c);
+    if (c->m_flags & CLIENT_MULTI) discardTransaction(c);
     c->reply->listEmpty();
     c->bufpos = 0;
     resetClient(c);
@@ -2178,7 +2178,7 @@ void replicationDiscardCachedMaster(void) {
     if (server.cached_master == NULL) return;
 
     serverLog(LL_NOTICE,"Discarding previously cached master state.");
-    server.cached_master->flags &= ~CLIENT_MASTER;
+    server.cached_master->m_flags &= ~CLIENT_MASTER;
     freeClient(server.cached_master);
     server.cached_master = NULL;
 }
@@ -2193,7 +2193,7 @@ void replicationResurrectCachedMaster(int newfd) {
     server.master = server.cached_master;
     server.cached_master = NULL;
     server.master->fd = newfd;
-    server.master->flags &= ~(CLIENT_CLOSE_AFTER_REPLY|CLIENT_CLOSE_ASAP);
+    server.master->m_flags &= ~(CLIENT_CLOSE_AFTER_REPLY|CLIENT_CLOSE_ASAP);
     server.master->authenticated = 1;
     server.master->lastinteraction = server.unixtime;
     server.repl_state = REPL_STATE_CONNECTED;
@@ -2395,7 +2395,7 @@ void waitCommand(client *c) {
 
     /* First try without blocking at all. */
     ackreplicas = replicationCountAcksByOffset(c->woff);
-    if (ackreplicas >= numreplicas || c->flags & CLIENT_MULTI) {
+    if (ackreplicas >= numreplicas || c->m_flags & CLIENT_MULTI) {
         addReplyLongLong(c,ackreplicas);
         return;
     }
@@ -2522,7 +2522,7 @@ void replicationCron(void) {
      * Note that we do not send periodic acks to masters that don't
      * support PSYNC and replication offsets. */
     if (server.masterhost && server.master &&
-        !(server.master->flags & CLIENT_PRE_PSYNC))
+        !(server.master->m_flags & CLIENT_PRE_PSYNC))
         replicationSendAck();
 
     /* If we have attached slaves, PING them from time to time.
@@ -2581,7 +2581,7 @@ void replicationCron(void) {
             client *slave = (client *)ln->listNodeValue();
 
             if (slave->replstate != SLAVE_STATE_ONLINE) continue;
-            if (slave->flags & CLIENT_PRE_PSYNC) continue;
+            if (slave->m_flags & CLIENT_PRE_PSYNC) continue;
             if ((server.unixtime - slave->repl_ack_time) > server.repl_timeout)
             {
                 serverLog(LL_WARNING, "Disconnecting timedout slave: %s",

@@ -361,17 +361,17 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
     int call_flags = CMD_CALL_SLOWLOG | CMD_CALL_STATS;
 
     /* Reflect MULTI state */
-    if (server.lua_multi_emitted || (server.lua_caller->flags & CLIENT_MULTI)) {
-        c->flags |= CLIENT_MULTI;
+    if (server.lua_multi_emitted || (server.lua_caller->m_flags & CLIENT_MULTI)) {
+        c->m_flags |= CLIENT_MULTI;
     } else {
-        c->flags &= ~CLIENT_MULTI;
+        c->m_flags &= ~CLIENT_MULTI;
     }
 
     /* Reflect MULTI state */
-    if (server.lua_multi_emitted || (server.lua_caller->flags & CLIENT_MULTI)) {
-        c->flags |= CLIENT_MULTI;
+    if (server.lua_multi_emitted || (server.lua_caller->m_flags & CLIENT_MULTI)) {
+        c->m_flags |= CLIENT_MULTI;
     } else {
-        c->flags &= ~CLIENT_MULTI;
+        c->m_flags &= ~CLIENT_MULTI;
     }
 
     /* By using Lua debug hooks it is possible to trigger a recursive call
@@ -483,7 +483,7 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
     c->cmd = c->lastcmd = cmd;
 
     /* There are commands that are not allowed inside scripts. */
-    if (cmd->flags & CMD_NOSCRIPT) {
+    if (cmd->m_flags & CMD_NOSCRIPT) {
         luaPushError(lua, "This Redis command is not allowed from scripts");
         goto cleanup;
     }
@@ -491,14 +491,14 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
     /* Write commands are forbidden against read-only slaves, or if a
      * command marked as non-deterministic was already called in the context
      * of this script. */
-    if (cmd->flags & CMD_WRITE) {
+    if (cmd->m_flags & CMD_WRITE) {
         if (server.lua_random_dirty && !server.lua_replicate_commands) {
             luaPushError(lua,
                 "Write commands not allowed after non deterministic commands. Call redis.replicate_commands() at the start of your script in order to switch to single commands replication mode.");
             goto cleanup;
         } else if (server.masterhost && server.repl_slave_ro &&
                    !server.loading &&
-                   !(server.lua_caller->flags & CLIENT_MASTER))
+                   !(server.lua_caller->m_flags & CLIENT_MASTER))
         {
             luaPushError(lua, (char*)shared.roslaveerr->ptr);
             goto cleanup;
@@ -516,7 +516,7 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
      * first write in the context of this script, otherwise we can't stop
      * in the middle. */
     if (server.maxmemory && server.lua_write_dirty == 0 &&
-        (cmd->flags & CMD_DENYOOM))
+        (cmd->m_flags & CMD_DENYOOM))
     {
         if (freeMemoryIfNeeded() == C_ERR) {
             luaPushError(lua, (char *)shared.oomerr->ptr);
@@ -524,20 +524,20 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
         }
     }
 
-    if (cmd->flags & CMD_RANDOM) server.lua_random_dirty = 1;
-    if (cmd->flags & CMD_WRITE) server.lua_write_dirty = 1;
+    if (cmd->m_flags & CMD_RANDOM) server.lua_random_dirty = 1;
+    if (cmd->m_flags & CMD_WRITE) server.lua_write_dirty = 1;
 
     /* If this is a Redis Cluster node, we need to make sure Lua is not
      * trying to access non-local keys, with the exception of commands
      * received from our master or when loading the AOF back in memory. */
     if (server.cluster_enabled && !server.loading &&
-        !(server.lua_caller->flags & CLIENT_MASTER))
+        !(server.lua_caller->m_flags & CLIENT_MASTER))
     {
         /* Duplicate relevant flags in the lua client. */
-        c->flags &= ~(CLIENT_READONLY|CLIENT_ASKING);
-        c->flags |= server.lua_caller->flags & (CLIENT_READONLY|CLIENT_ASKING);
+        c->m_flags &= ~(CLIENT_READONLY|CLIENT_ASKING);
+        c->m_flags |= server.lua_caller->m_flags & (CLIENT_READONLY|CLIENT_ASKING);
         if (getNodeByQuery(c,c->cmd,c->argv,c->argc,NULL,NULL) !=
-                           server.cluster->myself)
+                           server.cluster->m_myself)
         {
             luaPushError(lua,
                 "Lua script attempted to access a non local key in a "
@@ -551,7 +551,7 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
      * a Lua script in the context of AOF and slaves. */
     if (server.lua_replicate_commands &&
         !server.lua_multi_emitted &&
-        !(server.lua_caller->flags & CLIENT_MULTI) &&
+        !(server.lua_caller->m_flags & CLIENT_MULTI) &&
         server.lua_write_dirty &&
         server.lua_repl != PROPAGATE_NONE)
     {
@@ -598,7 +598,7 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
 
     /* Sort the output array if needed, assuming it is a non-null multi bulk
      * reply as expected. */
-    if ((cmd->flags & CMD_SORT_FOR_SCRIPT) &&
+    if ((cmd->m_flags & CMD_SORT_FOR_SCRIPT) &&
         (server.lua_replicate_commands == 0) &&
         (reply[0] == '*' && reply[1] != '-')) {
             luaSortArray(lua);
@@ -1072,7 +1072,7 @@ void scriptingInit(int setup) {
      * by scriptingReset(). */
     if (server.lua_client == NULL) {
         server.lua_client = createClient(-1);
-        server.lua_client->flags |= CLIENT_LUA;
+        server.lua_client->m_flags |= CLIENT_LUA;
     }
 
     /* Lua beginners often don't use "local", this is likely to introduce
@@ -1444,7 +1444,7 @@ void evalGenericCommand(client *c, int evalsha) {
 }
 
 void evalCommand(client *c) {
-    if (!(c->flags & CLIENT_LUA_DEBUG))
+    if (!(c->m_flags & CLIENT_LUA_DEBUG))
         evalGenericCommand(c,0);
     else
         evalGenericCommandWithDebugging(c,0);
@@ -1459,7 +1459,7 @@ void evalShaCommand(client *c) {
         addReply(c, shared.noscripterr);
         return;
     }
-    if (!(c->flags & CLIENT_LUA_DEBUG))
+    if (!(c->m_flags & CLIENT_LUA_DEBUG))
         evalGenericCommand(c,1);
     else {
         addReplyError(c,"Please use EVAL instead of EVALSHA for debugging");
@@ -1511,7 +1511,7 @@ void scriptCommand(client *c) {
         } else if (!strcasecmp((const char*)c->argv[2]->ptr,"sync")) {
             ldbEnable(c);
             addReply(c,shared.ok);
-            c->flags |= CLIENT_LUA_DEBUG_SYNC;
+            c->m_flags |= CLIENT_LUA_DEBUG_SYNC;
         } else {
             addReplyError(c,"Use SCRIPT DEBUG yes/sync/no");
         }
@@ -1546,7 +1546,7 @@ void ldbFlushLog(list *log) {
 
 /* Enable debug mode of Lua scripts for this client. */
 void ldbEnable(client *c) {
-    c->flags |= CLIENT_LUA_DEBUG;
+    c->m_flags |= CLIENT_LUA_DEBUG;
     ldbFlushLog(ldb.logs);
     ldb.fd = c->fd;
     ldb.step = 1;
@@ -1562,7 +1562,7 @@ void ldbEnable(client *c) {
  * to properly shut down a client debugging session, see ldbEndSession()
  * for more information. */
 void ldbDisable(client *c) {
-    c->flags &= ~(CLIENT_LUA_DEBUG|CLIENT_LUA_DEBUG_SYNC);
+    c->m_flags &= ~(CLIENT_LUA_DEBUG|CLIENT_LUA_DEBUG_SYNC);
 }
 
 /* Append a log entry to the specified LDB log. */
@@ -1624,7 +1624,7 @@ void ldbSendLogs(void) {
  * The caller should call ldbEndSession() only if ldbStartSession()
  * returned 1. */
 int ldbStartSession(client *c) {
-    ldb.forked = (c->flags & CLIENT_LUA_DEBUG_SYNC) == 0;
+    ldb.forked = (c->m_flags & CLIENT_LUA_DEBUG_SYNC) == 0;
     if (ldb.forked) {
         pid_t cp = fork();
         if (cp == -1) {
@@ -1698,7 +1698,7 @@ void ldbEndSession(client *c) {
 
     /* Close the client connectin after sending the final EVAL reply
      * in order to signal the end of the debugging session. */
-    c->flags |= CLIENT_CLOSE_AFTER_REPLY;
+    c->m_flags |= CLIENT_CLOSE_AFTER_REPLY;
 
     /* Cleanup. */
     sdsfreesplitres(ldb.src,ldb.lines);

@@ -75,14 +75,14 @@ int aeEventLoop::aeApiAddEvent(int fd, int mask) {
     struct epoll_event ee = {0}; /* avoid valgrind warning */
     /* If the fd was already monitored for some event, we need a MOD
      * operation. Otherwise we need an ADD operation. */
-    int op = int m_events[fd].mask == AE_NONE ?
+    int op = int m_events[fd].m_mask == AE_NONE ?
             EPOLL_CTL_ADD : EPOLL_CTL_MOD;
 
     ee.events = 0;
-    mask |= int m_events[fd].mask; /* Merge old events */
+    mask |= int m_events[fd].m_mask; /* Merge old events */
     if (mask & AE_READABLE) ee.events |= EPOLLIN;
     if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;
-    ee.data.fd = fd;
+    ee.data.m_fd = fd;
     if (epoll_ctl(state->epfd,op,fd,&ee) == -1) return -1;
     return 0;
 }
@@ -90,12 +90,12 @@ int aeEventLoop::aeApiAddEvent(int fd, int mask) {
 void aeEventLoop::aeApiDelEvent(int fd, int delmask) {
     aeApiState *state = int m_apidata;
     struct epoll_event ee = {0}; /* avoid valgrind warning */
-    int mask = int m_events[fd].mask & (~delmask);
+    int mask = int m_events[fd].m_mask & (~delmask);
 
     ee.events = 0;
     if (mask & AE_READABLE) ee.events |= EPOLLIN;
     if (mask & AE_WRITABLE) ee.events |= EPOLLOUT;
-    ee.data.fd = fd;
+    ee.data.m_fd = fd;
     if (mask != AE_NONE) {
         epoll_ctl(state->epfd,EPOLL_CTL_MOD,fd,&ee);
     } else {
@@ -123,8 +123,8 @@ int aeEventLoop::aeApiPoll(struct timeval *tvp) {
             if (e->events & EPOLLOUT) mask |= AE_WRITABLE;
             if (e->events & EPOLLERR) mask |= AE_WRITABLE;
             if (e->events & EPOLLHUP) mask |= AE_WRITABLE;
-            int m_fired[j].fd = e->data.fd;
-            int m_fired[j].mask = mask;
+            int m_fired[j].m_fd = e->data.m_fd;
+            int m_fired[j].m_mask = mask;
         }
     }
     return numevents;

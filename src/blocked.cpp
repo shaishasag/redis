@@ -98,7 +98,7 @@ int getTimeoutFromObjectOrReply(client *c, robj *object, mstime_t *timeout, int 
  * flag is set client query buffer is not longer processed, but accumulated,
  * and will be processed when the client is unblocked. */
 void blockClient(client *c, int btype) {
-    c->flags |= CLIENT_BLOCKED;
+    c->m_flags |= CLIENT_BLOCKED;
     c->btype = btype;
     server.bpop_blocked_clients++;
 }
@@ -115,13 +115,13 @@ void processUnblockedClients(void) {
         serverAssert(ln != NULL);
         c = (client *)ln->listNodeValue();
         server.unblocked_clients->listDelNode(ln);
-        c->flags &= ~CLIENT_UNBLOCKED;
+        c->m_flags &= ~CLIENT_UNBLOCKED;
 
         /* Process remaining data in the input buffer, unless the client
          * is blocked again. Actually processInputBuffer() checks that the
          * client is not blocked before to proceed, but things may change and
          * the code is conceptually more correct this way. */
-        if (!(c->flags & CLIENT_BLOCKED)) {
+        if (!(c->m_flags & CLIENT_BLOCKED)) {
             if (c->querybuf && sdslen(c->querybuf) > 0) {
                 processInputBuffer(c);
             }
@@ -143,13 +143,13 @@ void unblockClient(client *c) {
     }
     /* Clear the flags, and put the client in the unblocked list so that
      * we'll process new commands in its query buffer ASAP. */
-    c->flags &= ~CLIENT_BLOCKED;
+    c->m_flags &= ~CLIENT_BLOCKED;
     c->btype = BLOCKED_NONE;
     server.bpop_blocked_clients--;
     /* The client may already be into the unblocked list because of a previous
      * blocking operation, don't add back it into the list multiple times. */
-    if (!(c->flags & CLIENT_UNBLOCKED)) {
-        c->flags |= CLIENT_UNBLOCKED;
+    if (!(c->m_flags & CLIENT_UNBLOCKED)) {
+        c->m_flags |= CLIENT_UNBLOCKED;
         server.unblocked_clients->listAddNodeTail(c);
     }
 }
@@ -183,12 +183,12 @@ void disconnectAllBlockedClients(void) {
     while((ln = li.listNext())) {
         client *c = (client *)ln->listNodeValue();
 
-        if (c->flags & CLIENT_BLOCKED) {
+        if (c->m_flags & CLIENT_BLOCKED) {
             addReplySds(c,sdsnew(
                 "-UNBLOCKED force unblock from blocking operation, "
                 "instance state changed (master -> slave?)\r\n"));
             unblockClient(c);
-            c->flags |= CLIENT_CLOSE_AFTER_REPLY;
+            c->m_flags |= CLIENT_CLOSE_AFTER_REPLY;
         }
     }
 }

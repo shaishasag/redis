@@ -441,7 +441,7 @@ void moduleFreeContext(RedisModuleCtx *ctx) {
 void moduleHandlePropagationAfterCommandCallback(RedisModuleCtx *ctx) {
     client *c = ctx->_client;
 
-    if (c->flags & CLIENT_LUA) return;
+    if (c->m_flags & CLIENT_LUA) return;
 
     /* Handle the replication of the final EXEC, since whatever a command
      * emits is always wrappered around MULTI/EXEC. */
@@ -631,7 +631,7 @@ int RM_CreateCommand(RedisModuleCtx *ctx, const char *name, RedisModuleCmdFunc c
     cp->rediscmd->name = cmdname;
     cp->rediscmd->proc = RedisModuleCommandDispatcher;
     cp->rediscmd->arity = -1;
-    cp->rediscmd->flags = flags | CMD_MODULE;
+    cp->rediscmd->m_flags = flags | CMD_MODULE;
     cp->rediscmd->getkeys_proc = (redisGetKeysProc*)(unsigned long)cp;
     cp->rediscmd->firstkey = firstkey;
     cp->rediscmd->lastkey = lastkey;
@@ -1172,7 +1172,7 @@ int RM_ReplyWithDouble(RedisModuleCtx *ctx, double d) {
 void moduleReplicateMultiIfNeeded(RedisModuleCtx *ctx) {
     /* Skip this if client explicitly wrap the command with MULTI, or if
      * the module command was called by a script. */
-    if (ctx->_client->flags & (CLIENT_MULTI|CLIENT_LUA)) return;
+    if (ctx->_client->m_flags & (CLIENT_MULTI|CLIENT_LUA)) return;
     /* If we already emitted MULTI return ASAP. */
     if (ctx->flags & REDISMODULE_CTX_MULTI_EMITTED) return;
     /* If this is a thread safe context, we do not want to wrap commands
@@ -1306,9 +1306,9 @@ int RM_GetContextFlags(RedisModuleCtx *ctx) {
     int flags = 0;
     /* Client specific flags */
     if (ctx->_client) {
-        if (ctx->_client->flags & CLIENT_LUA)
+        if (ctx->_client->m_flags & CLIENT_LUA)
          flags |= REDISMODULE_CTX_FLAGS_LUA;
-        if (ctx->_client->flags & CLIENT_MULTI)
+        if (ctx->_client->m_flags & CLIENT_MULTI)
          flags |= REDISMODULE_CTX_FLAGS_MULTI;
     }
 
@@ -2600,7 +2600,7 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
     va_end(ap);
 
     /* Setup our fake client for command execution. */
-    c->flags |= CLIENT_MODULE;
+    c->m_flags |= CLIENT_MODULE;
     c->db = ctx->_client->db;
     c->argv = argv;
     c->argc = argc;
@@ -2618,12 +2618,12 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
     /* If this is a Redis Cluster node, we need to make sure the module is not
      * trying to access non-local keys, with the exception of commands
      * received from our master. */
-    if (server.cluster_enabled && !(ctx->_client->flags & CLIENT_MASTER)) {
+    if (server.cluster_enabled && !(ctx->_client->m_flags & CLIENT_MASTER)) {
         /* Duplicate relevant flags in the module client. */
-        c->flags &= ~(CLIENT_READONLY|CLIENT_ASKING);
-        c->flags |= ctx->_client->flags & (CLIENT_READONLY|CLIENT_ASKING);
+        c->m_flags &= ~(CLIENT_READONLY|CLIENT_ASKING);
+        c->m_flags |= ctx->_client->m_flags & (CLIENT_READONLY|CLIENT_ASKING);
         if (getNodeByQuery(c,c->cmd,c->argv,c->argc,NULL,NULL) !=
-                           server.cluster->myself)
+                           server.cluster->m_myself)
         {
             errno = EPERM;
             goto cleanup;
@@ -3415,8 +3415,8 @@ void unblockClientFromModule(client *c) {
  */
 RedisModuleBlockedClient *RM_BlockClient(RedisModuleCtx *ctx, RedisModuleCmdFunc reply_callback, RedisModuleCmdFunc timeout_callback, void (*free_privdata)(void*), long long timeout_ms) {
     client *c = ctx->_client;
-    int islua = c->flags & CLIENT_LUA;
-    int ismulti = c->flags & CLIENT_MULTI;
+    int islua = c->m_flags & CLIENT_LUA;
+    int ismulti = c->m_flags & CLIENT_MULTI;
 
     c->bpop.module_blocked_handle = (RedisModuleBlockedClient*)zmalloc(sizeof(RedisModuleBlockedClient));
     RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->bpop.module_blocked_handle;
@@ -3432,7 +3432,7 @@ RedisModuleBlockedClient *RM_BlockClient(RedisModuleCtx *ctx, RedisModuleCmdFunc
     bc->free_privdata = free_privdata;
     bc->privdata = NULL;
     bc->reply_client = createClient(-1);
-    bc->reply_client->flags |= CLIENT_MODULE;
+    bc->reply_client->m_flags |= CLIENT_MODULE;
     bc->dbid = c->db->m_id;
     c->bpop.timeout = timeout_ms ? (mstime()+timeout_ms) : 0;
 
@@ -3540,9 +3540,9 @@ void moduleHandleBlockedClients(void) {
              * if there are pending replies here. This is needed since
              * during a non blocking command the client may receive output. */
             if (clientHasPendingReplies(c) &&
-                !(c->flags & CLIENT_PENDING_WRITE))
+                !(c->m_flags & CLIENT_PENDING_WRITE))
             {
-                c->flags |= CLIENT_PENDING_WRITE;
+                c->m_flags |= CLIENT_PENDING_WRITE;
                 server.clients_pending_write->listAddNodeHead(c);
             }
         }

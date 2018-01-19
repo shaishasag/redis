@@ -678,7 +678,7 @@ redisContext *redisConnect(const char *ip, int port) {
     if (c == NULL)
         return NULL;
 
-    c->flags |= REDIS_BLOCK;
+    c->m_flags |= REDIS_BLOCK;
     redisContextConnectTcp(c,ip,port,NULL);
     return c;
 }
@@ -690,7 +690,7 @@ redisContext *redisConnectWithTimeout(const char *ip, int port, const struct tim
     if (c == NULL)
         return NULL;
 
-    c->flags |= REDIS_BLOCK;
+    c->m_flags |= REDIS_BLOCK;
     redisContextConnectTcp(c,ip,port,&tv);
     return c;
 }
@@ -702,7 +702,7 @@ redisContext *redisConnectNonBlock(const char *ip, int port) {
     if (c == NULL)
         return NULL;
 
-    c->flags &= ~REDIS_BLOCK;
+    c->m_flags &= ~REDIS_BLOCK;
     redisContextConnectTcp(c,ip,port,NULL);
     return c;
 }
@@ -710,7 +710,7 @@ redisContext *redisConnectNonBlock(const char *ip, int port) {
 redisContext *redisConnectBindNonBlock(const char *ip, int port,
                                        const char *source_addr) {
     redisContext *c = redisContextInit();
-    c->flags &= ~REDIS_BLOCK;
+    c->m_flags &= ~REDIS_BLOCK;
     redisContextConnectBindTcp(c,ip,port,NULL,source_addr);
     return c;
 }
@@ -718,8 +718,8 @@ redisContext *redisConnectBindNonBlock(const char *ip, int port,
 redisContext *redisConnectBindNonBlockWithReuse(const char *ip, int port,
                                                 const char *source_addr) {
     redisContext *c = redisContextInit();
-    c->flags &= ~REDIS_BLOCK;
-    c->flags |= REDIS_REUSEADDR;
+    c->m_flags &= ~REDIS_BLOCK;
+    c->m_flags |= REDIS_REUSEADDR;
     redisContextConnectBindTcp(c,ip,port,NULL,source_addr);
     return c;
 }
@@ -731,7 +731,7 @@ redisContext *redisConnectUnix(const char *path) {
     if (c == NULL)
         return NULL;
 
-    c->flags |= REDIS_BLOCK;
+    c->m_flags |= REDIS_BLOCK;
     redisContextConnectUnix(c,path,NULL);
     return c;
 }
@@ -743,7 +743,7 @@ redisContext *redisConnectUnixWithTimeout(const char *path, const struct timeval
     if (c == NULL)
         return NULL;
 
-    c->flags |= REDIS_BLOCK;
+    c->m_flags |= REDIS_BLOCK;
     redisContextConnectUnix(c,path,&tv);
     return c;
 }
@@ -755,7 +755,7 @@ redisContext *redisConnectUnixNonBlock(const char *path) {
     if (c == NULL)
         return NULL;
 
-    c->flags &= ~REDIS_BLOCK;
+    c->m_flags &= ~REDIS_BLOCK;
     redisContextConnectUnix(c,path,NULL);
     return c;
 }
@@ -768,13 +768,13 @@ redisContext *redisConnectFd(int fd) {
         return NULL;
 
     c->fd = fd;
-    c->flags |= REDIS_BLOCK | REDIS_CONNECTED;
+    c->m_flags |= REDIS_BLOCK | REDIS_CONNECTED;
     return c;
 }
 
 /* Set read/write timeout on a blocking socket. */
 int redisSetTimeout(redisContext *c, const struct timeval tv) {
-    if (c->flags & REDIS_BLOCK)
+    if (c->m_flags & REDIS_BLOCK)
         return redisContextSetTimeout(c,tv);
     return REDIS_ERR;
 }
@@ -801,7 +801,7 @@ int redisBufferRead(redisContext *c) {
 
     nread = read(c->fd,buf,sizeof(buf));
     if (nread == -1) {
-        if ((errno == EAGAIN && !(c->flags & REDIS_BLOCK)) || (errno == EINTR)) {
+        if ((errno == EAGAIN && !(c->m_flags & REDIS_BLOCK)) || (errno == EINTR)) {
             /* Try again later */
         } else {
             __redisSetError(c,REDIS_ERR_IO,NULL);
@@ -838,7 +838,7 @@ int redisBufferWrite(redisContext *c, int *done) {
     if (sdslen(c->obuf) > 0) {
         nwritten = write(c->fd,c->obuf,sdslen(c->obuf));
         if (nwritten == -1) {
-            if ((errno == EAGAIN && !(c->flags & REDIS_BLOCK)) || (errno == EINTR)) {
+            if ((errno == EAGAIN && !(c->m_flags & REDIS_BLOCK)) || (errno == EINTR)) {
                 /* Try again later */
             } else {
                 __redisSetError(c,REDIS_ERR_IO,NULL);
@@ -876,7 +876,7 @@ int redisGetReply(redisContext *c, void **reply) {
         return REDIS_ERR;
 
     /* For the blocking context, flush output buffer and read reply */
-    if (aux == NULL && c->flags & REDIS_BLOCK) {
+    if (aux == NULL && c->m_flags & REDIS_BLOCK) {
         /* Write until done */
         do {
             if (redisBufferWrite(c,&wdone) == REDIS_ERR)
@@ -991,7 +991,7 @@ int redisAppendCommandArgv(redisContext *c, int argc, const char **argv, const s
 static void *__redisBlockForReply(redisContext *c) {
     void *reply;
 
-    if (c->flags & REDIS_BLOCK) {
+    if (c->m_flags & REDIS_BLOCK) {
         if (redisGetReply(c,&reply) != REDIS_OK)
             return NULL;
         return reply;

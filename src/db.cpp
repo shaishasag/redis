@@ -119,7 +119,7 @@ robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags) {
         if (server.current_client &&
             server.current_client != server.master &&
             server.current_client->cmd &&
-            server.current_client->cmd->flags & CMD_READONLY)
+            server.current_client->cmd->m_flags & CMD_READONLY)
         {
             return NULL;
         }
@@ -1049,7 +1049,7 @@ void setExpire(client *c, redisDb *db, robj *key, long long when) {
     de->dictSetSignedIntegerVal(when);
 
     int writable_slave = server.masterhost && server.repl_slave_ro == 0;
-    if (c && writable_slave && !(c->flags & CLIENT_MASTER))
+    if (c && writable_slave && !(c->m_flags & CLIENT_MASTER))
         rememberSlaveKeyWithExpire(db,key);
 }
 
@@ -1153,7 +1153,7 @@ int *getKeysUsingCommandTable(struct redisCommand *cmd,robj **argv, int argc, in
              * we need to handle the case where the user passed an invalid
              * number of arguments here. In this case we return no keys
              * and expect the module command to report an arity error. */
-            if (cmd->flags & CMD_MODULE) {
+            if (cmd->m_flags & CMD_MODULE) {
                 zfree(keys);
                 *numkeys = 0;
                 return NULL;
@@ -1179,9 +1179,9 @@ int *getKeysUsingCommandTable(struct redisCommand *cmd,robj **argv, int argc, in
  * This function uses the command table if a command-specific helper function
  * is not required, otherwise it calls the command-specific function. */
 int *getKeysFromCommand(struct redisCommand *cmd, robj **argv, int argc, int *numkeys) {
-    if (cmd->flags & CMD_MODULE_GETKEYS) {
+    if (cmd->m_flags & CMD_MODULE_GETKEYS) {
         return moduleGetCommandKeysViaAPI(cmd,argv,argc,numkeys);
-    } else if (!(cmd->flags & CMD_MODULE) && cmd->getkeys_proc) {
+    } else if (!(cmd->m_flags & CMD_MODULE) && cmd->getkeys_proc) {
         return cmd->getkeys_proc(cmd,argv,argc,numkeys);
     } else {
         return getKeysUsingCommandTable(cmd,argv,argc,numkeys);
@@ -1370,15 +1370,15 @@ void slotToKeyUpdateKey(robj *key, int add) {
     unsigned char *indexed = buf;
     size_t keylen = sdslen((sds)key->ptr);
 
-    server.cluster->slots_keys_count[hashslot] += add ? 1 : -1;
+    server.cluster->m_slots_keys_count[hashslot] += add ? 1 : -1;
     if (keylen+2 > 64) indexed = (unsigned char*)zmalloc(keylen+2);
     indexed[0] = (hashslot >> 8) & 0xff;
     indexed[1] = hashslot & 0xff;
     memcpy(indexed+2,key->ptr,keylen);
     if (add) {
-        raxInsert(server.cluster->slots_to_keys,indexed,keylen+2,NULL,NULL);
+        raxInsert(server.cluster->m_slots_to_keys,indexed,keylen+2,NULL,NULL);
     } else {
-        raxRemove(server.cluster->slots_to_keys,indexed,keylen+2,NULL);
+        raxRemove(server.cluster->m_slots_to_keys,indexed,keylen+2,NULL);
     }
     if (indexed != buf) zfree(indexed);
 }
@@ -1392,10 +1392,10 @@ void slotToKeyDel(robj *key) {
 }
 
 void slotToKeyFlush(void) {
-    raxFree(server.cluster->slots_to_keys);
-    server.cluster->slots_to_keys = raxNew();
-    memset(server.cluster->slots_keys_count,0,
-           sizeof(server.cluster->slots_keys_count));
+    raxFree(server.cluster->m_slots_to_keys);
+    server.cluster->m_slots_to_keys = raxNew();
+    memset(server.cluster->m_slots_keys_count,0,
+           sizeof(server.cluster->m_slots_keys_count));
 }
 
 /* Pupulate the specified array of objects with keys in the specified slot.
@@ -1408,7 +1408,7 @@ unsigned int getKeysInSlot(unsigned int hashslot, robj **keys, unsigned int coun
 
     indexed[0] = (hashslot >> 8) & 0xff;
     indexed[1] = hashslot & 0xff;
-    raxStart(&iter,server.cluster->slots_to_keys);
+    raxStart(&iter,server.cluster->m_slots_to_keys);
     raxSeek(&iter,">=",indexed,2);
     while(count-- && raxNext(&iter)) {
         if (iter.key[0] != indexed[0] || iter.key[1] != indexed[1]) break;
@@ -1427,8 +1427,8 @@ unsigned int delKeysInSlot(unsigned int hashslot) {
 
     indexed[0] = (hashslot >> 8) & 0xff;
     indexed[1] = hashslot & 0xff;
-    raxStart(&iter,server.cluster->slots_to_keys);
-    while(server.cluster->slots_keys_count[hashslot]) {
+    raxStart(&iter,server.cluster->m_slots_to_keys);
+    while(server.cluster->m_slots_keys_count[hashslot]) {
         raxSeek(&iter,">=",indexed,2);
         raxNext(&iter);
 
@@ -1442,5 +1442,5 @@ unsigned int delKeysInSlot(unsigned int hashslot) {
 }
 
 unsigned int countKeysInSlot(unsigned int hashslot) {
-    return server.cluster->slots_keys_count[hashslot];
+    return server.cluster->m_slots_keys_count[hashslot];
 }

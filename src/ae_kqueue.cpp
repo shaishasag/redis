@@ -127,8 +127,8 @@ int aeEventLoop::aeApiPoll(struct timeval *tvp) {
 
             if (e->filter == EVFILT_READ) mask |= AE_READABLE;
             if (e->filter == EVFILT_WRITE) mask |= AE_WRITABLE;
-            m_fired[j].fd = e->ident;
-            m_fired[j].mask = mask;
+            m_fired[j].m_fd = e->ident;
+            m_fired[j].m_mask = mask;
         }
     }
     return numevents;

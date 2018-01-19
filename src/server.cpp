@@ -784,16 +784,16 @@ int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
     time_t now = now_ms/1000;
 
     if (server.maxidletime &&
-        !(c->flags & CLIENT_SLAVE) &&    /* no timeout for slaves */
-        !(c->flags & CLIENT_MASTER) &&   /* no timeout for masters */
-        !(c->flags & CLIENT_BLOCKED) &&  /* no timeout for BLPOP */
-        !(c->flags & CLIENT_PUBSUB) &&   /* no timeout for Pub/Sub clients */
+        !(c->m_flags & CLIENT_SLAVE) &&    /* no timeout for slaves */
+        !(c->m_flags & CLIENT_MASTER) &&   /* no timeout for masters */
+        !(c->m_flags & CLIENT_BLOCKED) &&  /* no timeout for BLPOP */
+        !(c->m_flags & CLIENT_PUBSUB) &&   /* no timeout for Pub/Sub clients */
         (now - c->lastinteraction > server.maxidletime))
     {
         serverLog(LL_VERBOSE,"Closing idle client");
         freeClient(c);
         return 1;
-    } else if (c->flags & CLIENT_BLOCKED) {
+    } else if (c->m_flags & CLIENT_BLOCKED) {
         /* Blocked OPS timeout is handled with milliseconds resolution.
          * However note that the actual resolution is limited by
          * server.hz. */
@@ -1978,19 +1978,19 @@ void populateCommandTable(void) {
 
         while(*f != '\0') {
             switch(*f) {
-            case 'w': c->flags |= CMD_WRITE; break;
-            case 'r': c->flags |= CMD_READONLY; break;
-            case 'm': c->flags |= CMD_DENYOOM; break;
-            case 'a': c->flags |= CMD_ADMIN; break;
-            case 'p': c->flags |= CMD_PUBSUB; break;
-            case 's': c->flags |= CMD_NOSCRIPT; break;
-            case 'R': c->flags |= CMD_RANDOM; break;
-            case 'S': c->flags |= CMD_SORT_FOR_SCRIPT; break;
-            case 'l': c->flags |= CMD_LOADING; break;
-            case 't': c->flags |= CMD_STALE; break;
-            case 'M': c->flags |= CMD_SKIP_MONITOR; break;
-            case 'k': c->flags |= CMD_ASKING; break;
-            case 'F': c->flags |= CMD_FAST; break;
+            case 'w': c->m_flags |= CMD_WRITE; break;
+            case 'r': c->m_flags |= CMD_READONLY; break;
+            case 'm': c->m_flags |= CMD_DENYOOM; break;
+            case 'a': c->m_flags |= CMD_ADMIN; break;
+            case 'p': c->m_flags |= CMD_PUBSUB; break;
+            case 's': c->m_flags |= CMD_NOSCRIPT; break;
+            case 'R': c->m_flags |= CMD_RANDOM; break;
+            case 'S': c->m_flags |= CMD_SORT_FOR_SCRIPT; break;
+            case 'l': c->m_flags |= CMD_LOADING; break;
+            case 't': c->m_flags |= CMD_STALE; break;
+            case 'M': c->m_flags |= CMD_SKIP_MONITOR; break;
+            case 'k': c->m_flags |= CMD_ASKING; break;
+            case 'F': c->m_flags |= CMD_FAST; break;
             default: serverPanic("Unsupported command flag"); break;
             }
             f++;
@@ -2133,25 +2133,25 @@ void alsoPropagate(struct redisCommand *cmd, int dbid, robj **argv, int argc,
  * Redis command implementation in order to to force the propagation of a
  * specific command execution into AOF / Replication. */
 void forceCommandPropagation(client *c, int flags) {
-    if (flags & PROPAGATE_REPL) c->flags |= CLIENT_FORCE_REPL;
-    if (flags & PROPAGATE_AOF) c->flags |= CLIENT_FORCE_AOF;
+    if (flags & PROPAGATE_REPL) c->m_flags |= CLIENT_FORCE_REPL;
+    if (flags & PROPAGATE_AOF) c->m_flags |= CLIENT_FORCE_AOF;
 }
 
 /* Avoid that the executed command is propagated at all. This way we
  * are free to just propagate what we want using the alsoPropagate()
  * API. */
 void preventCommandPropagation(client *c) {
-    c->flags |= CLIENT_PREVENT_PROP;
+    c->m_flags |= CLIENT_PREVENT_PROP;
 }
 
 /* AOF specific version of preventCommandPropagation(). */
 void preventCommandAOF(client *c) {
-    c->flags |= CLIENT_PREVENT_AOF_PROP;
+    c->m_flags |= CLIENT_PREVENT_AOF_PROP;
 }
 
 /* Replication specific version of preventCommandPropagation(). */
 void preventCommandReplication(client *c) {
-    c->flags |= CLIENT_PREVENT_REPL_PROP;
+    c->m_flags |= CLIENT_PREVENT_REPL_PROP;
 }
 
 /* Call() is the core of Redis execution of a command.
@@ -2193,20 +2193,20 @@ void preventCommandReplication(client *c) {
  */
 void call(client *c, int flags) {
     long long dirty, start, duration;
-    int client_old_flags = c->flags;
+    int client_old_flags = c->m_flags;
 
     /* Sent the command to clients in MONITOR mode, only if the commands are
      * not generated from reading an AOF. */
     if (server.monitors->listLength() &&
         !server.loading &&
-        !(c->cmd->flags & (CMD_SKIP_MONITOR|CMD_ADMIN)))
+        !(c->cmd->m_flags & (CMD_SKIP_MONITOR|CMD_ADMIN)))
     {
         replicationFeedMonitors(c,server.monitors,c->db->m_id,c->argv,c->argc);
     }
 
     /* Initialization: clear the flags that must be set by the command on
      * demand, and initialize the array for additional commands propagation. */
-    c->flags &= ~(CLIENT_FORCE_AOF|CLIENT_FORCE_REPL|CLIENT_PREVENT_PROP);
+    c->m_flags &= ~(CLIENT_FORCE_AOF|CLIENT_FORCE_REPL|CLIENT_PREVENT_PROP);
     redisOpArray prev_also_propagate = server.also_propagate;
     redisOpArrayInit(&server.also_propagate);
 
@@ -2220,23 +2220,23 @@ void call(client *c, int flags) {
 
     /* When EVAL is called loading the AOF we don't want commands called
      * from Lua to go into the slowlog or to populate statistics. */
-    if (server.loading && c->flags & CLIENT_LUA)
+    if (server.loading && c->m_flags & CLIENT_LUA)
         flags &= ~(CMD_CALL_SLOWLOG | CMD_CALL_STATS);
 
     /* If the caller is Lua, we want to force the EVAL caller to propagate
      * the script if the command flag or client flag are forcing the
      * propagation. */
-    if (c->flags & CLIENT_LUA && server.lua_caller) {
-        if (c->flags & CLIENT_FORCE_REPL)
-            server.lua_caller->flags |= CLIENT_FORCE_REPL;
-        if (c->flags & CLIENT_FORCE_AOF)
-            server.lua_caller->flags |= CLIENT_FORCE_AOF;
+    if (c->m_flags & CLIENT_LUA && server.lua_caller) {
+        if (c->m_flags & CLIENT_FORCE_REPL)
+            server.lua_caller->m_flags |= CLIENT_FORCE_REPL;
+        if (c->m_flags & CLIENT_FORCE_AOF)
+            server.lua_caller->m_flags |= CLIENT_FORCE_AOF;
     }
 
     /* Log the command into the Slow log if needed, and populate the
      * per-command statistics that we show in INFO commandstats. */
     if (flags & CMD_CALL_SLOWLOG && c->cmd->proc != execCommand) {
-        const char *latency_event = (c->cmd->flags & CMD_FAST) ?
+        const char *latency_event = (c->cmd->m_flags & CMD_FAST) ?
                               "fast-command" : "command";
         latencyAddSampleIfNeeded(latency_event,duration/1000);
         slowlogPushEntryIfNeeded(c,c->argv,c->argc,duration);
@@ -2248,7 +2248,7 @@ void call(client *c, int flags) {
 
     /* Propagate the command into the AOF and replication link */
     if (flags & CMD_CALL_PROPAGATE &&
-        (c->flags & CLIENT_PREVENT_PROP) != CLIENT_PREVENT_PROP)
+        (c->m_flags & CLIENT_PREVENT_PROP) != CLIENT_PREVENT_PROP)
     {
         int propagate_flags = PROPAGATE_NONE;
 
@@ -2258,30 +2258,30 @@ void call(client *c, int flags) {
 
         /* If the client forced AOF / replication of the command, set
          * the flags regardless of the command effects on the data set. */
-        if (c->flags & CLIENT_FORCE_REPL) propagate_flags |= PROPAGATE_REPL;
-        if (c->flags & CLIENT_FORCE_AOF) propagate_flags |= PROPAGATE_AOF;
+        if (c->m_flags & CLIENT_FORCE_REPL) propagate_flags |= PROPAGATE_REPL;
+        if (c->m_flags & CLIENT_FORCE_AOF) propagate_flags |= PROPAGATE_AOF;
 
         /* However prevent AOF / replication propagation if the command
          * implementatino called preventCommandPropagation() or similar,
          * or if we don't have the call() flags to do so. */
-        if (c->flags & CLIENT_PREVENT_REPL_PROP ||
+        if (c->m_flags & CLIENT_PREVENT_REPL_PROP ||
             !(flags & CMD_CALL_PROPAGATE_REPL))
                 propagate_flags &= ~PROPAGATE_REPL;
-        if (c->flags & CLIENT_PREVENT_AOF_PROP ||
+        if (c->m_flags & CLIENT_PREVENT_AOF_PROP ||
             !(flags & CMD_CALL_PROPAGATE_AOF))
                 propagate_flags &= ~PROPAGATE_AOF;
 
         /* Call propagate() only if at least one of AOF / replication
          * propagation is needed. Note that modules commands handle replication
          * in an explicit way, so we never replicate them automatically. */
-        if (propagate_flags != PROPAGATE_NONE && !(c->cmd->flags & CMD_MODULE))
+        if (propagate_flags != PROPAGATE_NONE && !(c->cmd->m_flags & CMD_MODULE))
             propagate(c->cmd,c->db->m_id,c->argv,c->argc,propagate_flags);
     }
 
     /* Restore the old replication flags, since call() can be executed
      * recursively. */
-    c->flags &= ~(CLIENT_FORCE_AOF|CLIENT_FORCE_REPL|CLIENT_PREVENT_PROP);
-    c->flags |= client_old_flags &
+    c->m_flags &= ~(CLIENT_FORCE_AOF|CLIENT_FORCE_REPL|CLIENT_PREVENT_PROP);
+    c->m_flags |= client_old_flags &
         (CLIENT_FORCE_AOF|CLIENT_FORCE_REPL|CLIENT_PREVENT_PROP);
 
     /* Handle the alsoPropagate() API to handle commands that want to propagate
@@ -2323,7 +2323,7 @@ int processCommand(client *c) {
      * a regular command proc. */
     if (!strcasecmp((const char*)c->argv[0]->ptr,"quit")) {
         addReply(c,shared.ok);
-        c->flags |= CLIENT_CLOSE_AFTER_REPLY;
+        c->m_flags |= CLIENT_CLOSE_AFTER_REPLY;
         return C_ERR;
     }
 
@@ -2356,9 +2356,9 @@ int processCommand(client *c) {
      * 1) The sender of this command is our master.
      * 2) The command has no key arguments. */
     if (server.cluster_enabled &&
-        !(c->flags & CLIENT_MASTER) &&
-        !(c->flags & CLIENT_LUA &&
-          server.lua_caller->flags & CLIENT_MASTER) &&
+        !(c->m_flags & CLIENT_MASTER) &&
+        !(c->m_flags & CLIENT_LUA &&
+          server.lua_caller->m_flags & CLIENT_MASTER) &&
         !(c->cmd->getkeys_proc == NULL && c->cmd->firstkey == 0 &&
           c->cmd->proc != execCommand))
     {
@@ -2366,7 +2366,7 @@ int processCommand(client *c) {
         int error_code;
         clusterNode *n = getNodeByQuery(c,c->cmd,c->argv,c->argc,
                                         &hashslot,&error_code);
-        if (n == NULL || n != server.cluster->myself) {
+        if (n == NULL || n != server.cluster->m_myself) {
             if (c->cmd->proc == execCommand) {
                 discardTransaction(c);
             } else {
@@ -2390,7 +2390,7 @@ int processCommand(client *c) {
 
         /* It was impossible to free enough memory, and the command the client
          * is trying to execute is denied during OOM conditions? Error. */
-        if ((c->cmd->flags & CMD_DENYOOM) && retval == C_ERR) {
+        if ((c->cmd->m_flags & CMD_DENYOOM) && retval == C_ERR) {
             flagTransaction(c);
             addReply(c, shared.oomerr);
             return C_OK;
@@ -2404,7 +2404,7 @@ int processCommand(client *c) {
           server.lastbgsave_status == C_ERR) ||
           server.aof_last_write_status == C_ERR) &&
         server.masterhost == NULL &&
-        (c->cmd->flags & CMD_WRITE ||
+        (c->cmd->m_flags & CMD_WRITE ||
          c->cmd->proc == pingCommand))
     {
         flagTransaction(c);
@@ -2423,7 +2423,7 @@ int processCommand(client *c) {
     if (server.masterhost == NULL &&
         server.repl_min_slaves_to_write &&
         server.repl_min_slaves_max_lag &&
-        c->cmd->flags & CMD_WRITE &&
+        c->cmd->m_flags & CMD_WRITE &&
         server.repl_good_slaves_count < server.repl_min_slaves_to_write)
     {
         flagTransaction(c);
@@ -2434,15 +2434,15 @@ int processCommand(client *c) {
     /* Don't accept write commands if this is a read only slave. But
      * accept write commands if this is our master. */
     if (server.masterhost && server.repl_slave_ro &&
-        !(c->flags & CLIENT_MASTER) &&
-        c->cmd->flags & CMD_WRITE)
+        !(c->m_flags & CLIENT_MASTER) &&
+        c->cmd->m_flags & CMD_WRITE)
     {
         addReply(c, shared.roslaveerr);
         return C_OK;
     }
 
     /* Only allow SUBSCRIBE and UNSUBSCRIBE in the context of Pub/Sub */
-    if (c->flags & CLIENT_PUBSUB &&
+    if (c->m_flags & CLIENT_PUBSUB &&
         c->cmd->proc != pingCommand &&
         c->cmd->proc != subscribeCommand &&
         c->cmd->proc != unsubscribeCommand &&
@@ -2456,7 +2456,7 @@ int processCommand(client *c) {
      * we are a slave with a broken link with master. */
     if (server.masterhost && server.repl_state != REPL_STATE_CONNECTED &&
         server.repl_serve_stale_data == 0 &&
-        !(c->cmd->flags & CMD_STALE))
+        !(c->cmd->m_flags & CMD_STALE))
     {
         flagTransaction(c);
         addReply(c, shared.masterdownerr);
@@ -2465,7 +2465,7 @@ int processCommand(client *c) {
 
     /* Loading DB? Return an error if the command has not the
      * CMD_LOADING flag. */
-    if (server.loading && !(c->cmd->flags & CMD_LOADING)) {
+    if (server.loading && !(c->cmd->m_flags & CMD_LOADING)) {
         addReply(c, shared.loadingerr);
         return C_OK;
     }
@@ -2487,7 +2487,7 @@ int processCommand(client *c) {
     }
 
     /* Exec the command */
-    if (c->flags & CLIENT_MULTI &&
+    if (c->m_flags & CLIENT_MULTI &&
         c->cmd->proc != execCommand && c->cmd->proc != discardCommand &&
         c->cmd->proc != multiCommand && c->cmd->proc != watchCommand)
     {
@@ -2657,7 +2657,7 @@ void pingCommand(client *c) {
         return;
     }
 
-    if (c->flags & CLIENT_PUBSUB) {
+    if (c->m_flags & CLIENT_PUBSUB) {
         addReply(c,shared.mbulkhdr[2]);
         addReplyBulkCBuffer(c,"pong",4);
         if (c->argc == 1)
@@ -2689,7 +2689,7 @@ void timeCommand(client *c) {
 
 /* Helper function for addReplyCommand() to output flags. */
 int addReplyCommandFlag(client *c, struct redisCommand *cmd, int f, char *reply) {
-    if (cmd->flags & f) {
+    if (cmd->m_flags & f) {
         addReplyStatus(c, reply);
         return 1;
     }
@@ -2721,8 +2721,8 @@ void addReplyCommand(client *c, struct redisCommand *cmd) {
         flagcount += addReplyCommandFlag(c,cmd,CMD_SKIP_MONITOR, "skip_monitor");
         flagcount += addReplyCommandFlag(c,cmd,CMD_ASKING, "asking");
         flagcount += addReplyCommandFlag(c,cmd,CMD_FAST, "fast");
-        if ((cmd->getkeys_proc && !(cmd->flags & CMD_MODULE)) ||
-            cmd->flags & CMD_MODULE_GETKEYS)
+        if ((cmd->getkeys_proc && !(cmd->m_flags & CMD_MODULE)) ||
+            cmd->m_flags & CMD_MODULE_GETKEYS)
         {
             addReplyStatus(c, "movablekeys");
             flagcount += 1;
@@ -3332,9 +3332,9 @@ void infoCommand(client *c) {
 
 void monitorCommand(client *c) {
     /* ignore MONITOR if already slave or in monitor mode */
-    if (c->flags & CLIENT_SLAVE) return;
+    if (c->m_flags & CLIENT_SLAVE) return;
 
-    c->flags |= (CLIENT_SLAVE|CLIENT_MONITOR);
+    c->m_flags |= (CLIENT_SLAVE|CLIENT_MONITOR);
     server.monitors->listAddNodeTail(c);
     addReply(c,shared.ok);
 }

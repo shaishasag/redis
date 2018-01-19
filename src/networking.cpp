@@ -105,8 +105,8 @@ client *createClient(int fd) {
     c->multibulklen = 0;
     c->bulklen = -1;
     c->sentlen = 0;
-    c->flags = 0;
-    c->ctime = c->lastinteraction = server.unixtime;
+    c->m_flags = 0;
+    c->m_ctime = c->lastinteraction = server.unixtime;
     c->authenticated = 0;
     c->replstate = REPL_STATE_NONE;
     c->repl_put_online_on_ack = 0;
@@ -165,15 +165,15 @@ client *createClient(int fd) {
 int prepareClientToWrite(client *c) {
     /* If it's the Lua client we always return ok without installing any
      * handler since there is no socket at all. */
-    if (c->flags & (CLIENT_LUA|CLIENT_MODULE)) return C_OK;
+    if (c->m_flags & (CLIENT_LUA|CLIENT_MODULE)) return C_OK;
 
     /* CLIENT REPLY OFF / SKIP handling: don't send replies. */
-    if (c->flags & (CLIENT_REPLY_OFF|CLIENT_REPLY_SKIP)) return C_ERR;
+    if (c->m_flags & (CLIENT_REPLY_OFF|CLIENT_REPLY_SKIP)) return C_ERR;
 
     /* Masters don't receive replies, unless CLIENT_MASTER_FORCE_REPLY flag
      * is set. */
-    if ((c->flags & CLIENT_MASTER) &&
-        !(c->flags & CLIENT_MASTER_FORCE_REPLY)) return C_ERR;
+    if ((c->m_flags & CLIENT_MASTER) &&
+        !(c->m_flags & CLIENT_MASTER_FORCE_REPLY)) return C_ERR;
 
     if (c->fd <= 0) return C_ERR; /* Fake client for AOF loading. */
 
@@ -182,7 +182,7 @@ int prepareClientToWrite(client *c) {
      * was yet not flagged), and, for slaves, if the slave can actually
      * receive writes at this stage. */
     if (!clientHasPendingReplies(c) &&
-        !(c->flags & CLIENT_PENDING_WRITE) &&
+        !(c->m_flags & CLIENT_PENDING_WRITE) &&
         (c->replstate == REPL_STATE_NONE ||
          (c->replstate == SLAVE_STATE_ONLINE && !c->repl_put_online_on_ack)))
     {
@@ -192,7 +192,7 @@ int prepareClientToWrite(client *c) {
          * loop, we can try to directly write to the client sockets avoiding
          * a system call. We'll only really install the write handler if
          * we'll not be able to write the whole reply at once. */
-        c->flags |= CLIENT_PENDING_WRITE;
+        c->m_flags |= CLIENT_PENDING_WRITE;
         server.clients_pending_write->listAddNodeHead(c);
     }
 
@@ -207,7 +207,7 @@ int prepareClientToWrite(client *c) {
 int _addReplyToBuffer(client *c, const char *s, size_t len) {
     size_t available = sizeof(c->buf)-c->bufpos;
 
-    if (c->flags & CLIENT_CLOSE_AFTER_REPLY) return C_OK;
+    if (c->m_flags & CLIENT_CLOSE_AFTER_REPLY) return C_OK;
 
     /* If there already are entries in the reply list, we cannot
      * add anything more to the static buffer. */
@@ -222,7 +222,7 @@ int _addReplyToBuffer(client *c, const char *s, size_t len) {
 }
 
 void _addReplyObjectToList(client *c, robj *o) {
-    if (c->flags & CLIENT_CLOSE_AFTER_REPLY) return;
+    if (c->m_flags & CLIENT_CLOSE_AFTER_REPLY) return;
 
     if (c->reply->listLength() == 0) {
         sds s = sdsdup((sds)o->ptr);
@@ -250,7 +250,7 @@ void _addReplyObjectToList(client *c, robj *o) {
 /* This method takes responsibility over the sds. When it is no longer
  * needed it will be free'd, otherwise it ends up in a robj. */
 void _addReplySdsToList(client *c, sds s) {
-    if (c->flags & CLIENT_CLOSE_AFTER_REPLY) {
+    if (c->m_flags & CLIENT_CLOSE_AFTER_REPLY) {
         sdsfree(s);
         return;
     }
@@ -278,7 +278,7 @@ void _addReplySdsToList(client *c, sds s) {
 }
 
 void _addReplyStringToList(client *c, const char *s, size_t len) {
-    if (c->flags & CLIENT_CLOSE_AFTER_REPLY) return;
+    if (c->m_flags & CLIENT_CLOSE_AFTER_REPLY) return;
 
     if (c->reply->listLength() == 0) {
         sds node = sdsnewlen(s,len);
@@ -669,7 +669,7 @@ static void acceptCommonHandler(int fd, int flags, char *ip) {
     }
 
     server.stat_numconnections++;
-    c->flags |= flags;
+    c->m_flags |= flags;
 }
 
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
@@ -755,20 +755,20 @@ void unlinkClient(client *c) {
     }
 
     /* Remove from the list of pending writes if needed. */
-    if (c->flags & CLIENT_PENDING_WRITE) {
+    if (c->m_flags & CLIENT_PENDING_WRITE) {
         ln = server.clients_pending_write->listSearchKey(c);
         serverAssert(ln != NULL);
         server.clients_pending_write->listDelNode(ln);
-        c->flags &= ~CLIENT_PENDING_WRITE;
+        c->m_flags &= ~CLIENT_PENDING_WRITE;
     }
 
     /* When client was just unblocked because of a blocking operation,
      * remove it from the list of unblocked clients. */
-    if (c->flags & CLIENT_UNBLOCKED) {
+    if (c->m_flags & CLIENT_UNBLOCKED) {
         ln = server.unblocked_clients->listSearchKey(c);
         serverAssert(ln != NULL);
         server.unblocked_clients->listDelNode(ln);
-        c->flags &= ~CLIENT_UNBLOCKED;
+        c->m_flags &= ~CLIENT_UNBLOCKED;
     }
 }
 
@@ -780,9 +780,9 @@ void freeClient(client *c) {
      *
      * Note that before doing this we make sure that the client is not in
      * some unexpected state, by checking its flags. */
-    if (server.master && c->flags & CLIENT_MASTER) {
+    if (server.master && c->m_flags & CLIENT_MASTER) {
         serverLog(LL_WARNING,"Connection with master lost.");
-        if (!(c->flags & (CLIENT_CLOSE_AFTER_REPLY|
+        if (!(c->m_flags & (CLIENT_CLOSE_AFTER_REPLY|
                           CLIENT_CLOSE_ASAP|
                           CLIENT_BLOCKED|
                           CLIENT_UNBLOCKED)))
@@ -793,7 +793,7 @@ void freeClient(client *c) {
     }
 
     /* Log link disconnection with slave */
-    if ((c->flags & CLIENT_SLAVE) && !(c->flags & CLIENT_MONITOR)) {
+    if ((c->m_flags & CLIENT_SLAVE) && !(c->m_flags & CLIENT_MONITOR)) {
         serverLog(LL_WARNING,"Connection with slave %s lost.",
             replicationGetSlaveName(c));
     }
@@ -804,7 +804,7 @@ void freeClient(client *c) {
     c->querybuf = NULL;
 
     /* Deallocate structures used to block on blocking ops. */
-    if (c->flags & CLIENT_BLOCKED) unblockClient(c);
+    if (c->m_flags & CLIENT_BLOCKED) unblockClient(c);
     dictRelease(c->bpop.keys);
 
     /* UNWATCH all the keys */
@@ -828,30 +828,30 @@ void freeClient(client *c) {
 
     /* Master/slave cleanup Case 1:
      * we lost the connection with a slave. */
-    if (c->flags & CLIENT_SLAVE) {
+    if (c->m_flags & CLIENT_SLAVE) {
         if (c->replstate == SLAVE_STATE_SEND_BULK) {
             if (c->repldbfd != -1) close(c->repldbfd);
             if (c->replpreamble) sdsfree(c->replpreamble);
         }
-        list *l = (c->flags & CLIENT_MONITOR) ? server.monitors : server.slaves;
+        list *l = (c->m_flags & CLIENT_MONITOR) ? server.monitors : server.slaves;
         ln = l->listSearchKey(c);
         serverAssert(ln != NULL);
         l->listDelNode(ln);
         /* We need to remember the time when we started to have zero
          * attached slaves, as after some time we'll free the replication
          * backlog. */
-        if (c->flags & CLIENT_SLAVE && server.slaves->listLength() == 0)
+        if (c->m_flags & CLIENT_SLAVE && server.slaves->listLength() == 0)
             server.repl_no_slaves_since = server.unixtime;
         refreshGoodSlavesCount();
     }
 
     /* Master/slave cleanup Case 2:
      * we lost the connection with the master. */
-    if (c->flags & CLIENT_MASTER) replicationHandleMasterDisconnection();
+    if (c->m_flags & CLIENT_MASTER) replicationHandleMasterDisconnection();
 
     /* If this client was scheduled for async freeing we need to remove it
      * from the queue. */
-    if (c->flags & CLIENT_CLOSE_ASAP) {
+    if (c->m_flags & CLIENT_CLOSE_ASAP) {
         ln = server.clients_to_close->listSearchKey(c);
         serverAssert(ln != NULL);
         server.clients_to_close->listDelNode(ln);
@@ -871,8 +871,8 @@ void freeClient(client *c) {
  * a context where calling freeClient() is not possible, because the client
  * should be valid for the continuation of the flow of the program. */
 void freeClientAsync(client *c) {
-    if (c->flags & CLIENT_CLOSE_ASAP || c->flags & CLIENT_LUA) return;
-    c->flags |= CLIENT_CLOSE_ASAP;
+    if (c->m_flags & CLIENT_CLOSE_ASAP || c->m_flags & CLIENT_LUA) return;
+    c->m_flags |= CLIENT_CLOSE_ASAP;
     server.clients_to_close->listAddNodeTail(c);
 }
 
@@ -881,7 +881,7 @@ void freeClientsInAsyncFreeQueue(void) {
         listNode *ln = server.clients_to_close->listFirst();
         client *c = (client *)ln->listNodeValue();
 
-        c->flags &= ~CLIENT_CLOSE_ASAP;
+        c->m_flags &= ~CLIENT_CLOSE_ASAP;
         freeClient(c);
         server.clients_to_close->listDelNode(ln);
     }
@@ -960,14 +960,14 @@ int writeToClient(int fd, client *c, int handler_installed) {
          * as an interaction, since we always send REPLCONF ACK commands
          * that take some time to just fill the socket output buffer.
          * We just rely on data / pings received for timeout detection. */
-        if (!(c->flags & CLIENT_MASTER)) c->lastinteraction = server.unixtime;
+        if (!(c->m_flags & CLIENT_MASTER)) c->lastinteraction = server.unixtime;
     }
     if (!clientHasPendingReplies(c)) {
         c->sentlen = 0;
         if (handler_installed) server.el->aeDeleteFileEvent(c->fd,AE_WRITABLE);
 
         /* Close connection after entire reply has been sent. */
-        if (c->flags & CLIENT_CLOSE_AFTER_REPLY) {
+        if (c->m_flags & CLIENT_CLOSE_AFTER_REPLY) {
             freeClient(c);
             return C_ERR;
         }
@@ -993,7 +993,7 @@ int handleClientsWithPendingWrites(void) {
     listIter li(server.clients_pending_write);
     while((ln = li.listNext())) {
         client *c = (client *)ln->listNodeValue();
-        c->flags &= ~CLIENT_PENDING_WRITE;
+        c->m_flags &= ~CLIENT_PENDING_WRITE;
         server.clients_pending_write->listDelNode(ln);
 
         /* Try to write buffers to the client socket. */
@@ -1022,16 +1022,16 @@ void resetClient(client *c) {
 
     /* We clear the ASKING flag as well if we are not inside a MULTI, and
      * if what we just executed is not the ASKING command itself. */
-    if (!(c->flags & CLIENT_MULTI) && prevcmd != askingCommand)
-        c->flags &= ~CLIENT_ASKING;
+    if (!(c->m_flags & CLIENT_MULTI) && prevcmd != askingCommand)
+        c->m_flags &= ~CLIENT_ASKING;
 
     /* Remove the CLIENT_REPLY_SKIP flag if any so that the reply
      * to the next command will be sent, but set the flag if the command
      * we just processed was "CLIENT REPLY SKIP". */
-    c->flags &= ~CLIENT_REPLY_SKIP;
-    if (c->flags & CLIENT_REPLY_SKIP_NEXT) {
-        c->flags |= CLIENT_REPLY_SKIP;
-        c->flags &= ~CLIENT_REPLY_SKIP_NEXT;
+    c->m_flags &= ~CLIENT_REPLY_SKIP;
+    if (c->m_flags & CLIENT_REPLY_SKIP_NEXT) {
+        c->m_flags |= CLIENT_REPLY_SKIP;
+        c->m_flags &= ~CLIENT_REPLY_SKIP_NEXT;
     }
 }
 
@@ -1078,7 +1078,7 @@ int processInlineBuffer(client *c) {
     /* Newline from slaves can be used to refresh the last ACK time.
      * This is useful for a slave to ping back while loading a big
      * RDB file. */
-    if (querylen == 0 && c->flags & CLIENT_SLAVE)
+    if (querylen == 0 && c->m_flags & CLIENT_SLAVE)
         c->repl_ack_time = server.unixtime;
 
     /* Leave data after the first line of the query in the buffer */
@@ -1130,7 +1130,7 @@ static void setProtocolError(const char *errstr, client *c, int pos) {
             "Protocol error (%s) from client: %s. %s", errstr, client, buf);
         sdsfree(client);
     }
-    c->flags |= CLIENT_CLOSE_AFTER_REPLY;
+    c->m_flags |= CLIENT_CLOSE_AFTER_REPLY;
     sdsrange(c->querybuf,pos,-1);
 }
 
@@ -1292,17 +1292,17 @@ void processInputBuffer(client *c) {
     /* Keep processing while there is something in the input buffer */
     while(sdslen((sds)c->querybuf)) {
         /* Return if clients are paused. */
-        if (!(c->flags & CLIENT_SLAVE) && clientsArePaused()) break;
+        if (!(c->m_flags & CLIENT_SLAVE) && clientsArePaused()) break;
 
         /* Immediately abort if the client is in the middle of something. */
-        if (c->flags & CLIENT_BLOCKED) break;
+        if (c->m_flags & CLIENT_BLOCKED) break;
 
         /* CLIENT_CLOSE_AFTER_REPLY closes the connection once the reply is
          * written to the client. Make sure to not let the reply grow after
          * this flag has been set (i.e. don't process more commands).
          *
          * The same applies for clients we want to terminate ASAP. */
-        if (c->flags & (CLIENT_CLOSE_AFTER_REPLY|CLIENT_CLOSE_ASAP)) break;
+        if (c->m_flags & (CLIENT_CLOSE_AFTER_REPLY|CLIENT_CLOSE_ASAP)) break;
 
         /* Determine request type when unknown. */
         if (!c->reqtype) {
@@ -1327,7 +1327,7 @@ void processInputBuffer(client *c) {
         } else {
             /* Only reset the client when the command was executed. */
             if (processCommand(c) == C_OK) {
-                if (c->flags & CLIENT_MASTER && !(c->flags & CLIENT_MULTI)) {
+                if (c->m_flags & CLIENT_MASTER && !(c->m_flags & CLIENT_MULTI)) {
                     /* Update the applied replication offset of our master. */
                     c->reploff = c->read_reploff - sdslen((sds)c->querybuf);
                 }
@@ -1336,7 +1336,7 @@ void processInputBuffer(client *c) {
                  * module blocking command, so that the reply callback will
                  * still be able to access the client argv and argc field.
                  * The client will be reset in unblockClientFromModule(). */
-                if (!(c->flags & CLIENT_BLOCKED) || c->btype != BLOCKED_MODULE)
+                if (!(c->m_flags & CLIENT_BLOCKED) || c->btype != BLOCKED_MODULE)
                     resetClient(c);
             }
             /* freeMemoryIfNeeded may flush slave output buffers. This may
@@ -1386,7 +1386,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
         serverLog(LL_VERBOSE, "Client closed connection");
         freeClient(c);
         return;
-    } else if (c->flags & CLIENT_MASTER) {
+    } else if (c->m_flags & CLIENT_MASTER) {
         /* Append the query buffer to the pending (not applied) buffer
          * of the master. We'll use this buffer later in order to have a
          * copy of the string applied by the last command executed. */
@@ -1396,7 +1396,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
 
     sdsIncrLen(c->querybuf,nread);
     c->lastinteraction = server.unixtime;
-    if (c->flags & CLIENT_MASTER) c->read_reploff += nread;
+    if (c->m_flags & CLIENT_MASTER) c->read_reploff += nread;
     server.stat_net_input_bytes += nread;
     if (sdslen(c->querybuf) > server.client_max_querybuf_len) {
         sds ci = catClientInfoString(sdsempty(),c), bytes = sdsempty();
@@ -1415,7 +1415,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
      * was actually applied to the master state: this quantity, and its
      * corresponding part of the replication stream, will be propagated to
      * the sub-slaves and to the replication backlog. */
-    if (!(c->flags & CLIENT_MASTER)) {
+    if (!(c->m_flags & CLIENT_MASTER)) {
         processInputBuffer(c);
     } else {
         size_t prev_offset = c->reploff;
@@ -1459,7 +1459,7 @@ void getClientsMaxBuffers(unsigned long *longest_output_list,
  * anyway (see anetPeerToString implementation for more info). */
 void genClientPeerId(client *client, char *peerid,
                             size_t peerid_len) {
-    if (client->flags & CLIENT_UNIX_SOCKET) {
+    if (client->m_flags & CLIENT_UNIX_SOCKET) {
         /* Unix socket client. */
         snprintf(peerid,peerid_len,"%s:0",server.unixsocket);
     } else {
@@ -1489,21 +1489,21 @@ sds catClientInfoString(sds s, client *client) {
     int emask;
 
     p = flags;
-    if (client->flags & CLIENT_SLAVE) {
-        if (client->flags & CLIENT_MONITOR)
+    if (client->m_flags & CLIENT_SLAVE) {
+        if (client->m_flags & CLIENT_MONITOR)
             *p++ = 'O';
         else
             *p++ = 'S';
     }
-    if (client->flags & CLIENT_MASTER) *p++ = 'M';
-    if (client->flags & CLIENT_MULTI) *p++ = 'x';
-    if (client->flags & CLIENT_BLOCKED) *p++ = 'b';
-    if (client->flags & CLIENT_DIRTY_CAS) *p++ = 'd';
-    if (client->flags & CLIENT_CLOSE_AFTER_REPLY) *p++ = 'c';
-    if (client->flags & CLIENT_UNBLOCKED) *p++ = 'u';
-    if (client->flags & CLIENT_CLOSE_ASAP) *p++ = 'A';
-    if (client->flags & CLIENT_UNIX_SOCKET) *p++ = 'U';
-    if (client->flags & CLIENT_READONLY) *p++ = 'r';
+    if (client->m_flags & CLIENT_MASTER) *p++ = 'M';
+    if (client->m_flags & CLIENT_MULTI) *p++ = 'x';
+    if (client->m_flags & CLIENT_BLOCKED) *p++ = 'b';
+    if (client->m_flags & CLIENT_DIRTY_CAS) *p++ = 'd';
+    if (client->m_flags & CLIENT_CLOSE_AFTER_REPLY) *p++ = 'c';
+    if (client->m_flags & CLIENT_UNBLOCKED) *p++ = 'u';
+    if (client->m_flags & CLIENT_CLOSE_ASAP) *p++ = 'A';
+    if (client->m_flags & CLIENT_UNIX_SOCKET) *p++ = 'U';
+    if (client->m_flags & CLIENT_READONLY) *p++ = 'r';
     if (p == flags) *p++ = 'N';
     *p++ = '\0';
 
@@ -1518,13 +1518,13 @@ sds catClientInfoString(sds s, client *client) {
         getClientPeerId(client),
         client->fd,
         client->name ? (char*)client->name->ptr : "",
-        (long long)(server.unixtime - client->ctime),
+        (long long)(server.unixtime - client->m_ctime),
         (long long)(server.unixtime - client->lastinteraction),
         flags,
         client->db->m_id,
         (int) client->pubsub_channels->dictSize(),
         (int) client->pubsub_patterns->listLength(),
-        (client->flags & CLIENT_MULTI) ? client->mstate.count : -1,
+        (client->m_flags & CLIENT_MULTI) ? client->mstate.m_count : -1,
         (unsigned long long) sdslen(client->querybuf),
         (unsigned long long) sdsavail(client->querybuf),
         (unsigned long long) client->bufpos,
@@ -1559,13 +1559,13 @@ void clientCommand(client *c) {
     } else if (!strcasecmp((const char*)c->argv[1]->ptr,"reply") && c->argc == 3) {
         /* CLIENT REPLY ON|OFF|SKIP */
         if (!strcasecmp((const char*)c->argv[2]->ptr,"on")) {
-            c->flags &= ~(CLIENT_REPLY_SKIP|CLIENT_REPLY_OFF);
+            c->m_flags &= ~(CLIENT_REPLY_SKIP|CLIENT_REPLY_OFF);
             addReply(c,shared.ok);
         } else if (!strcasecmp((const char*)c->argv[2]->ptr,"off")) {
-            c->flags |= CLIENT_REPLY_OFF;
+            c->m_flags |= CLIENT_REPLY_OFF;
         } else if (!strcasecmp((const char*)c->argv[2]->ptr,"skip")) {
-            if (!(c->flags & CLIENT_REPLY_OFF))
-                c->flags |= CLIENT_REPLY_SKIP_NEXT;
+            if (!(c->m_flags & CLIENT_REPLY_OFF))
+                c->m_flags |= CLIENT_REPLY_SKIP_NEXT;
         } else {
             addReply(c,shared.syntaxerr);
             return;
@@ -1655,7 +1655,7 @@ void clientCommand(client *c) {
 
         /* If this client has to be closed, flag it as CLOSE_AFTER_REPLY
          * only after we queued the reply to its output buffers. */
-        if (close_this_client) c->flags |= CLIENT_CLOSE_AFTER_REPLY;
+        if (close_this_client) c->m_flags |= CLIENT_CLOSE_AFTER_REPLY;
     } else if (!strcasecmp((const char*)c->argv[1]->ptr,"setname") && c->argc == 3) {
         int j;
         int len = sdslen((sds)c->argv[2]->ptr);
@@ -1823,10 +1823,10 @@ unsigned long getClientOutputBufferMemoryUsage(client *c) {
  * CLIENT_TYPE_MASTER -> The client representing our replication master.
  */
 int getClientType(client *c) {
-    if (c->flags & CLIENT_MASTER) return CLIENT_TYPE_MASTER;
-    if ((c->flags & CLIENT_SLAVE) && !(c->flags & CLIENT_MONITOR))
+    if (c->m_flags & CLIENT_MASTER) return CLIENT_TYPE_MASTER;
+    if ((c->m_flags & CLIENT_SLAVE) && !(c->m_flags & CLIENT_MONITOR))
         return CLIENT_TYPE_SLAVE;
-    if (c->flags & CLIENT_PUBSUB) return CLIENT_TYPE_PUBSUB;
+    if (c->m_flags & CLIENT_PUBSUB) return CLIENT_TYPE_PUBSUB;
     return CLIENT_TYPE_NORMAL;
 }
 
@@ -1903,7 +1903,7 @@ int checkClientOutputBufferLimits(client *c) {
  * lower level functions pushing data inside the client output buffers. */
 void asyncCloseClientOnOutputBufferLimitReached(client *c) {
     serverAssert(c->reply_bytes < SIZE_MAX-(1024*64));
-    if (c->reply_bytes == 0 || c->flags & CLIENT_CLOSE_ASAP) return;
+    if (c->reply_bytes == 0 || c->m_flags & CLIENT_CLOSE_ASAP) return;
     if (checkClientOutputBufferLimits(c)) {
         sds client = catClientInfoString(sdsempty(),c);
 
@@ -1983,8 +1983,8 @@ int clientsArePaused(void) {
 
             /* Don't touch slaves and blocked clients. The latter pending
              * requests be processed when unblocked. */
-            if (c->flags & (CLIENT_SLAVE|CLIENT_BLOCKED)) continue;
-            c->flags |= CLIENT_UNBLOCKED;
+            if (c->m_flags & (CLIENT_SLAVE|CLIENT_BLOCKED)) continue;
+            c->m_flags |= CLIENT_UNBLOCKED;
             server.unblocked_clients->listAddNodeTail(c);
         }
     }

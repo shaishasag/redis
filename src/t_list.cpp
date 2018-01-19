@@ -922,7 +922,7 @@ void blockingPopGenericCommand(client *c, int where) {
 
     /* If we are inside a MULTI/EXEC and the list is empty the only thing
      * we can do is treating it as a timeout (even with timeout 0). */
-    if (c->flags & CLIENT_MULTI) {
+    if (c->m_flags & CLIENT_MULTI) {
         addReply(c,shared.nullmultibulk);
         return;
     }
@@ -948,7 +948,7 @@ void brpoplpushCommand(client *c) {
     robj *key = lookupKeyWrite(c->db, c->argv[1]);
 
     if (key == NULL) {
-        if (c->flags & CLIENT_MULTI) {
+        if (c->m_flags & CLIENT_MULTI) {
             /* Blocking against an empty list in a multi state
              * returns immediately. */
             addReply(c, shared.nullbulk);

@@ -268,8 +268,8 @@ static int _redisContextConnectTcp(redisContext *c, const char *addr, int port,
     int s, rv, n;
     char _port[6];  /* strlen("65535"); */
     struct addrinfo hints, *servinfo, *bservinfo, *p, *b;
-    int blocking = (c->flags & REDIS_BLOCK);
-    int reuseaddr = (c->flags & REDIS_REUSEADDR);
+    int blocking = (c->m_flags & REDIS_BLOCK);
+    int reuseaddr = (c->m_flags & REDIS_REUSEADDR);
     int reuses = 0;
     long timeout_msec = -1;
 
@@ -397,7 +397,7 @@ addrretry:
         if (redisSetTcpNoDelay(c) != REDIS_OK)
             goto error;
 
-        c->flags |= REDIS_CONNECTED;
+        c->m_flags |= REDIS_CONNECTED;
         rv = REDIS_OK;
         goto end;
     }
@@ -427,7 +427,7 @@ int redisContextConnectBindTcp(redisContext *c, const char *addr, int port,
 }
 
 int redisContextConnectUnix(redisContext *c, const char *path, const struct timeval *timeout) {
-    int blocking = (c->flags & REDIS_BLOCK);
+    int blocking = (c->m_flags & REDIS_BLOCK);
     struct sockaddr_un sa;
     long timeout_msec = -1;
 
@@ -471,6 +471,6 @@ int redisContextConnectUnix(redisContext *c, const char *path, const struct time
     if (blocking && redisSetBlocking(c,1) != REDIS_OK)
         return REDIS_ERR;
 
-    c->flags |= REDIS_CONNECTED;
+    c->m_flags |= REDIS_CONNECTED;
     return REDIS_OK;
 }

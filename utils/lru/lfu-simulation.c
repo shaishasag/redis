@@ -77,7 +77,7 @@ void show_entry(long pos, struct entry *e) {
 
     printf("%ld] <%s> frequency:%d decrtime:%d [%lu hits | age:%ld sec]\n",
         pos, tag, e->counter, e->decrtime, (unsigned long)e->hits,
-            time(NULL) - e->ctime);
+            time(NULL) - e->m_ctime);
 }
 
 int main(void) {
