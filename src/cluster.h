@@ -43,6 +43,8 @@ public:
     clusterLink(clusterNode *in_node, int in_fd=-1);
     ~clusterLink();
 
+    void clusterSendMessage(unsigned char *msg, size_t msglen);
+
     mstime_t m_ctime;             /* Link creation time */
     int m_fd;                     /* TCP socket file descriptor */
     sds m_sndbuf;                 /* Packet send buffer */
@@ -105,6 +107,15 @@ public:
     clusterNode(char *nodename, int flags=-1);
     ~clusterNode();
 
+    // previously free functions
+    int clusterNodeSetSlotBit(int slot);
+    int clusterNodeGetSlotBit(int slot);
+    int clusterDelNodeSlots();
+    void clusterSetNodeAsMaster();
+    int clusterNodeAddSlave(clusterNode *slave);
+    int clusterAddSlot(int slot);
+
+    // previously macros
     inline int nodeIsMaster()    { return m_flags & CLUSTER_NODE_MASTER; }
     inline int nodeIsSlave()     { return m_flags & CLUSTER_NODE_SLAVE; }
     inline int nodeInHandshake() { return m_flags & CLUSTER_NODE_HANDSHAKE; }
@@ -113,6 +124,7 @@ public:
     inline int nodeTimedOut()    { return m_flags & CLUSTER_NODE_PFAIL; }
     inline int nodeFailed()      { return m_flags & CLUSTER_NODE_FAIL; }
 
+    // members
     mstime_t m_ctime; /* Node object creation time. */
     char m_name[CLUSTER_NAMELEN]; /* Node name, hex string, sha1-size */
     int m_flags;      /* CLUSTER_NODE_... */

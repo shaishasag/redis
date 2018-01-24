@@ -48,34 +48,28 @@
 clusterNode *myself = NULL;
 
 clusterNode *createClusterNode(char *nodename, int flags);
-int clusterAddNode(clusterNode *node);
+int clusterAddNode(clusterNode *node); //!
 void clusterAcceptHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 void clusterReadHandler(aeEventLoop *el, int fd, void *privdata, int mask);
-void clusterSendPing(clusterLink *link, int type);
+void clusterSendPing(clusterLink *link, int type); //!
 void clusterSendFail(char *nodename);
-void clusterSendFailoverAuthIfNeeded(clusterNode *node, clusterMsg *request);
+void clusterSendFailoverAuthIfNeeded(clusterNode *node, clusterMsg *request); //!
 void clusterUpdateState(void);
-int clusterNodeGetSlotBit(clusterNode *n, int slot);
 sds clusterGenNodesDescription(int filter);
 clusterNode *clusterLookupNode(const char *name);
-int clusterNodeAddSlave(clusterNode *master, clusterNode *slave);
-int clusterAddSlot(clusterNode *n, int slot);
 int clusterDelSlot(int slot);
-int clusterDelNodeSlots(clusterNode *node);
-int clusterNodeSetSlotBit(clusterNode *n, int slot);
-void clusterSetMaster(clusterNode *n);
+void clusterSetMaster(clusterNode *n); //!
 void clusterHandleSlaveFailover(void);
 void clusterHandleSlaveMigration(int max_slaves);
 int bitmapTestBit(unsigned char *bitmap, int pos);
 void clusterDoBeforeSleep(int flags);
 void clusterSendUpdate(clusterLink *link, clusterNode *node);
-void resetManualFailover(void);
-void clusterCloseAllSlots(void);
-void clusterSetNodeAsMaster(clusterNode *n);
+void resetManualFailover();
+void clusterCloseAllSlots();
 void clusterDelNode(clusterNode *delnode);
 sds representClusterNodeFlags(sds ci, uint16_t flags);
-uint64_t clusterGetMaxEpoch(void);
-int clusterBumpConfigEpochWithoutConsensus(void);
+uint64_t clusterGetMaxEpoch();
+int clusterBumpConfigEpochWithoutConsensus();
 
 /* -----------------------------------------------------------------------------
  * Initialization
@@ -219,7 +213,7 @@ int clusterLoadConfig(char *filename) {
                 clusterAddNode(master);
             }
             n->m_slaveof = master;
-            clusterNodeAddSlave(master,n);
+            master->clusterNodeAddSlave(n);
         }
 
         /* Set ping sent / pong received timestamps */
@@ -266,7 +260,7 @@ int clusterLoadConfig(char *filename) {
             }
             if (start < 0 || start >= CLUSTER_SLOTS) goto fmterr;
             if (stop < 0 || stop >= CLUSTER_SLOTS) goto fmterr;
-            while(start <= stop) clusterAddSlot(n, start++);
+            while(start <= stop) n->clusterAddSlot(start++);
         }
 
         sdsfreesplitres(argv,argc);
@@ -515,7 +509,7 @@ void clusterReset(int hard) {
 
     /* Turn into master. */
     if (myself->nodeIsSlave()) {
-        clusterSetNodeAsMaster(myself);
+        myself->clusterSetNodeAsMaster();
         replicationUnsetMaster();
         emptyDb(-1,EMPTYDB_NO_FLAGS,NULL);
     }
@@ -837,17 +831,18 @@ int clusterNodeRemoveSlave(clusterNode *master, clusterNode *slave) {
     return C_ERR;
 }
 
-int clusterNodeAddSlave(clusterNode *master, clusterNode *slave) {
+int clusterNode::clusterNodeAddSlave(clusterNode *slave)
+{
     int j;
 
     /* If it's already a slave, don't add it again. */
-    for (j = 0; j < master->m_numslaves; j++)
-        if (master->m_slaves[j] == slave) return C_ERR;
-    master->m_slaves = (clusterNode **)zrealloc(master->m_slaves,
-        sizeof(clusterNode*)*(master->m_numslaves+1));
-    master->m_slaves[master->m_numslaves] = slave;
-    master->m_numslaves++;
-    master->m_flags |= CLUSTER_NODE_MIGRATE_TO;
+    for (j = 0; j < m_numslaves; j++)
+        if (m_slaves[j] == slave) return C_ERR;
+    m_slaves = (clusterNode **)zrealloc(m_slaves,
+        sizeof(clusterNode*)*(m_numslaves+1));
+    m_slaves[m_numslaves] = slave;
+    m_numslaves++;
+    m_flags |= CLUSTER_NODE_MIGRATE_TO;
     return C_OK;
 }
 
@@ -966,7 +961,7 @@ void clusterRenameNode(clusterNode *node, char *newname) {
 
 /* Return the greatest configEpoch found in the cluster, or the current
  * epoch if greater than any node configEpoch. */
-uint64_t clusterGetMaxEpoch(void) {
+uint64_t clusterGetMaxEpoch() {
     uint64_t max = 0;
     dictEntry *de;
 
@@ -1495,16 +1490,17 @@ int nodeUpdateAddressIfNeeded(clusterNode *node, clusterLink *link,
 /* Reconfigure the specified node 'n' as a master. This function is called when
  * a node that we believed to be a slave is now acting as master in order to
  * update the state of the node. */
-void clusterSetNodeAsMaster(clusterNode *n) {
-    if (n->nodeIsMaster()) return;
+void clusterNode::clusterSetNodeAsMaster()
+{
+    if (nodeIsMaster()) return;
 
-    if (n->m_slaveof) {
-        clusterNodeRemoveSlave(n->m_slaveof,n);
-        if (n != myself) n->m_flags |= CLUSTER_NODE_MIGRATE_TO;
+    if (m_slaveof) {
+        clusterNodeRemoveSlave(m_slaveof,this);
+        if (this != myself) m_flags |= CLUSTER_NODE_MIGRATE_TO;
     }
-    n->m_flags &= ~CLUSTER_NODE_SLAVE;
-    n->m_flags |= CLUSTER_NODE_MASTER;
-    n->m_slaveof = NULL;
+    m_flags &= ~CLUSTER_NODE_SLAVE;
+    m_flags |= CLUSTER_NODE_MASTER;
+    m_slaveof = NULL;
 
     /* Update config and state. */
     clusterDoBeforeSleep(CLUSTER_TODO_SAVE_CONFIG|
@@ -1576,7 +1572,7 @@ void clusterUpdateSlotsConfigWith(clusterNode *sender, uint64_t senderConfigEpoc
                 if (server.cluster->m_slots[j] == curmaster)
                     newmaster = sender;
                 clusterDelSlot(j);
-                clusterAddSlot(sender,j);
+                sender->clusterAddSlot(j);
                 clusterDoBeforeSleep(CLUSTER_TODO_SAVE_CONFIG|
                                      CLUSTER_TODO_UPDATE_STATE|
                                      CLUSTER_TODO_FSYNC_CONFIG);
@@ -1857,14 +1853,14 @@ int clusterProcessPacket(clusterLink *link) {
                 sizeof(hdr->m_slaveof)))
             {
                 /* Node is a master. */
-                clusterSetNodeAsMaster(sender);
+                sender->clusterSetNodeAsMaster();
             } else {
                 /* Node is a slave. */
                 clusterNode *master = clusterLookupNode(hdr->m_slaveof);
 
                 if (sender->nodeIsMaster()) {
                     /* Master turned into a slave! Reconfigure the node. */
-                    clusterDelNodeSlots(sender);
+                    sender->clusterDelNodeSlots();
                     sender->m_flags &= ~(CLUSTER_NODE_MASTER|
                                        CLUSTER_NODE_MIGRATE_TO);
                     sender->m_flags |= CLUSTER_NODE_SLAVE;
@@ -1878,7 +1874,7 @@ int clusterProcessPacket(clusterLink *link) {
                 if (master && sender->m_slaveof != master) {
                     if (sender->m_slaveof)
                         clusterNodeRemoveSlave(sender->m_slaveof,sender);
-                    clusterNodeAddSlave(master,sender);
+                    master->clusterNodeAddSlave(sender);
                     sender->m_slaveof = master;
 
                     /* Update config. */
@@ -2049,7 +2045,7 @@ int clusterProcessPacket(clusterLink *link) {
         if (n->m_configEpoch >= reportedConfigEpoch) return 1; /* Nothing new. */
 
         /* If in our current config the node is a slave, set it as a master. */
-        if (n->nodeIsSlave()) clusterSetNodeAsMaster(n);
+        if (n->nodeIsSlave()) n->clusterSetNodeAsMaster();
 
         /* Update the node's configEpoch. */
         n->m_configEpoch = reportedConfigEpoch;
@@ -2168,12 +2164,13 @@ void clusterReadHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
  * It is guaranteed that this function will never have as a side effect
  * the link to be invalidated, so it is safe to call this function
  * from event handlers that will do stuff with the same link later. */
-void clusterSendMessage(clusterLink *link, unsigned char *msg, size_t msglen) {
-    if (sdslen(link->m_sndbuf) == 0 && msglen != 0)
-        server.el->aeCreateFileEvent(link->m_fd,AE_WRITABLE,
-                    clusterWriteHandler,link);
+void clusterLink::clusterSendMessage(unsigned char *msg, size_t msglen)
+{
+    if (sdslen(m_sndbuf) == 0 && msglen != 0)
+        server.el->aeCreateFileEvent(m_fd,AE_WRITABLE,
+                    clusterWriteHandler,this);
 
-    link->m_sndbuf = sdscatlen(link->m_sndbuf, msg, msglen);
+    m_sndbuf = sdscatlen(m_sndbuf, msg, msglen);
 
     /* Populate sent messages stats. */
     clusterMsg *hdr = (clusterMsg*) msg;
@@ -2198,7 +2195,7 @@ void clusterBroadcastMessage(void *buf, size_t len) {
         if (!node->m_link) continue;
         if (node->m_flags & (CLUSTER_NODE_MYSELF|CLUSTER_NODE_HANDSHAKE))
             continue;
-        clusterSendMessage(node->m_link, (unsigned char *)buf,len);
+        node->m_link->clusterSendMessage((unsigned char *)buf,len);
     }
 }
 
@@ -2429,7 +2426,7 @@ void clusterSendPing(clusterLink *link, int type) {
     totlen += (sizeof(clusterMsgDataGossip)*gossipcount);
     hdr->m_count = htons(gossipcount);
     hdr->m_totlen = htonl(totlen);
-    clusterSendMessage(link,buf,totlen);
+    link->clusterSendMessage(buf,totlen);
     zfree(buf);
 }
 
@@ -2503,7 +2500,7 @@ void clusterSendPublish(clusterLink *link, robj *channel, robj *message) {
         message->ptr,sdslen((sds)message->ptr));
 
     if (link)
-        clusterSendMessage(link,payload,totlen);
+        link->clusterSendMessage(payload,totlen);
     else
         clusterBroadcastMessage(payload,totlen);
 
@@ -2538,7 +2535,7 @@ void clusterSendUpdate(clusterLink *link, clusterNode *node) {
     memcpy(hdr->m_data.update.nodecfg.nodename,node->m_name,CLUSTER_NAMELEN);
     hdr->m_data.update.nodecfg.configEpoch = htonu64(node->m_configEpoch);
     memcpy(hdr->m_data.update.nodecfg.slots,node->m_slots,sizeof(node->m_slots));
-    clusterSendMessage(link,buf,ntohl(hdr->m_totlen));
+    link->clusterSendMessage(buf,ntohl(hdr->m_totlen));
 }
 
 /* -----------------------------------------------------------------------------
@@ -2587,7 +2584,7 @@ void clusterSendFailoverAuth(clusterNode *node) {
     clusterBuildMessageHdr(hdr,CLUSTERMSG_TYPE_FAILOVER_AUTH_ACK);
     totlen = sizeof(clusterMsg)-sizeof(union clusterMsgData);
     hdr->m_totlen = htonl(totlen);
-    clusterSendMessage(node->m_link,buf,totlen);
+    node->m_link->clusterSendMessage(buf,totlen);
 }
 
 /* Send a MFSTART message to the specified node. */
@@ -2600,7 +2597,7 @@ void clusterSendMFStart(clusterNode *node) {
     clusterBuildMessageHdr(hdr,CLUSTERMSG_TYPE_MFSTART);
     totlen = sizeof(clusterMsg)-sizeof(union clusterMsgData);
     hdr->m_totlen = htonl(totlen);
-    clusterSendMessage(node->m_link,buf,totlen);
+    node->m_link->clusterSendMessage(buf,totlen);
 }
 
 /* Vote for the node asking for our vote if there are the conditions. */
@@ -2811,14 +2808,14 @@ void clusterFailoverReplaceYourMaster(void) {
     if (myself->nodeIsMaster() || oldmaster == NULL) return;
 
     /* 1) Turn this node into a master. */
-    clusterSetNodeAsMaster(myself);
+    myself->clusterSetNodeAsMaster();
     replicationUnsetMaster();
 
     /* 2) Claim all the slots assigned to our master. */
     for (j = 0; j < CLUSTER_SLOTS; j++) {
-        if (clusterNodeGetSlotBit(oldmaster,j)) {
+        if (oldmaster->clusterNodeGetSlotBit(j)) {
             clusterDelSlot(j);
-            clusterAddSlot(myself,j);
+            myself->clusterAddSlot(j);
         }
     }
 
@@ -3002,7 +2999,7 @@ void clusterHandleSlaveFailover(void) {
                 (unsigned long long) myself->m_configEpoch);
         }
 
-        /* Take responsability for the cluster slots. */
+        /* Take responsibility for the cluster slots. */
         clusterFailoverReplaceYourMaster();
     } else {
         clusterLogCantFailover(CLUSTER_CANT_FAILOVER_WAITING_VOTES);
@@ -3154,7 +3151,7 @@ void clusterHandleSlaveMigration(int max_slaves) {
  *
  * The function can be used both to initialize the manual failover state at
  * startup or to abort a manual failover in progress. */
-void resetManualFailover(void) {
+void resetManualFailover() {
     if (server.cluster->m_mf_end && clientsArePaused()) {
         server.clients_pause_end_time = 0;
         clientsArePaused(); /* Just use the side effect of the function. */
@@ -3547,11 +3544,12 @@ int clusterMastersHaveSlaves(void) {
 }
 
 /* Set the slot bit and return the old value. */
-int clusterNodeSetSlotBit(clusterNode *n, int slot) {
-    int old = bitmapTestBit(n->m_slots,slot);
-    bitmapSetBit(n->m_slots,slot);
+int clusterNode::clusterNodeSetSlotBit(int slot)
+{
+    int old = bitmapTestBit(m_slots,slot);
+    bitmapSetBit(m_slots,slot);
     if (!old) {
-        n->m_numslots++;
+        m_numslots++;
         /* When a master gets its first slot, even if it has no slaves,
          * it gets flagged with MIGRATE_TO, that is, the master is a valid
          * target for replicas migration, if and only if at least one of
@@ -3565,8 +3563,8 @@ int clusterNodeSetSlotBit(clusterNode *n, int slot) {
          * migration tagets if the rest of the cluster is not a slave-less.
          *
          * See https://github.com/antirez/redis/issues/3043 for more info. */
-        if (n->m_numslots == 1 && clusterMastersHaveSlaves())
-            n->m_flags |= CLUSTER_NODE_MIGRATE_TO;
+        if (m_numslots == 1 && clusterMastersHaveSlaves())
+            m_flags |= CLUSTER_NODE_MIGRATE_TO;
     }
     return old;
 }
@@ -3580,18 +3578,18 @@ int clusterNodeClearSlotBit(clusterNode *n, int slot) {
 }
 
 /* Return the slot bit from the cluster node structure. */
-int clusterNodeGetSlotBit(clusterNode *n, int slot) {
-    return bitmapTestBit(n->m_slots,slot);
+int clusterNode::clusterNodeGetSlotBit(int slot) {
+    return bitmapTestBit(m_slots,slot);
 }
 
 /* Add the specified slot to the list of slots that node 'n' will
  * serve. Return C_OK if the operation ended with success.
  * If the slot is already assigned to another instance this is considered
  * an error and C_ERR is returned. */
-int clusterAddSlot(clusterNode *n, int slot) {
+int clusterNode::clusterAddSlot(int slot) {
     if (server.cluster->m_slots[slot]) return C_ERR;
-    clusterNodeSetSlotBit(n,slot);
-    server.cluster->m_slots[slot] = n;
+    clusterNodeSetSlotBit(slot);
+    server.cluster->m_slots[slot] = this;
     return C_OK;
 }
 
@@ -3609,11 +3607,11 @@ int clusterDelSlot(int slot) {
 
 /* Delete all the slots associated with the specified node.
  * The number of deleted slots is returned. */
-int clusterDelNodeSlots(clusterNode *node) {
+int clusterNode::clusterDelNodeSlots() {
     int deleted = 0, j;
 
     for (j = 0; j < CLUSTER_SLOTS; j++) {
-        if (clusterNodeGetSlotBit(node,j)) {
+        if (clusterNodeGetSlotBit(j)) {
             clusterDelSlot(j);
             deleted++;
         }
@@ -3623,7 +3621,7 @@ int clusterDelNodeSlots(clusterNode *node) {
 
 /* Clear the migrating / importing state for all the slots.
  * This is useful at initialization and when turning a master into slave. */
-void clusterCloseAllSlots(void) {
+void clusterCloseAllSlots() {
     memset(server.cluster->m_migrating_slots_to,0,
         sizeof(server.cluster->m_migrating_slots_to));
     memset(server.cluster->m_importing_slots_from,0,
@@ -3790,7 +3788,7 @@ int verifyClusterConfigWithData(void) {
         if (server.cluster->m_slots[j] == NULL) {
             serverLog(LL_WARNING, "I have keys for unassigned slot %d. "
                                     "Taking responsibility for it.",j);
-            clusterAddSlot(myself,j);
+            myself->clusterAddSlot(j);
         } else {
             serverLog(LL_WARNING, "I have keys for slot %d, but the slot is "
                                     "assigned to another node. "
@@ -3821,7 +3819,7 @@ void clusterSetMaster(clusterNode *n) {
             clusterNodeRemoveSlave(myself->m_slaveof,myself);
     }
     myself->m_slaveof = n;
-    clusterNodeAddSlave(n,myself);
+    n->clusterNodeAddSlave(myself);
     replicationSetMaster(n->m_ip, n->m_port);
     resetManualFailover();
 }
@@ -3897,7 +3895,7 @@ sds clusterGenNodeDescription(clusterNode *node) {
     for (j = 0; j < CLUSTER_SLOTS; j++) {
         int bit;
 
-        if ((bit = clusterNodeGetSlotBit(node,j)) != 0) {
+        if ((bit = node->clusterNodeGetSlotBit(j)) != 0) {
             if (start == -1) start = j;
         }
         if (start != -1 && (!bit || j == CLUSTER_SLOTS-1)) {
@@ -4017,7 +4015,7 @@ void clusterReplyMultiBulkSlots(client *c) {
         for (j = 0; j < CLUSTER_SLOTS; j++) {
             int bit, i;
 
-            if ((bit = clusterNodeGetSlotBit(node,j)) != 0) {
+            if ((bit = node->clusterNodeGetSlotBit(j)) != 0) {
                 if (start == -1) start = j;
             }
             if (start != -1 && (!bit || j == CLUSTER_SLOTS-1)) {
@@ -4117,7 +4115,7 @@ void clusterCommand(client *c) {
             addReplyError(c,"DB must be empty to perform CLUSTER FLUSHSLOTS.");
             return;
         }
-        clusterDelNodeSlots(myself);
+        myself->clusterDelNodeSlots();
         clusterDoBeforeSleep(CLUSTER_TODO_UPDATE_STATE|CLUSTER_TODO_SAVE_CONFIG);
         addReply(c,shared.ok);
     } else if ((!strcasecmp((const char*)c->argv[1]->ptr,"addslots") ||
@@ -4163,7 +4161,7 @@ void clusterCommand(client *c) {
                     server.cluster->m_importing_slots_from[j] = NULL;
 
                 retval = del ? clusterDelSlot(j) :
-                               clusterAddSlot(myself,j);
+                               myself->clusterAddSlot(j);
                 serverAssertWithInfo(c,NULL,retval == C_OK);
             }
         }
@@ -4259,7 +4257,7 @@ void clusterCommand(client *c) {
                 server.cluster->m_importing_slots_from[slot] = NULL;
             }
             clusterDelSlot(slot);
-            clusterAddSlot(n,slot);
+            n->clusterAddSlot(slot);
         } else {
             addReplyError(c,
                 "Invalid CLUSTER SETSLOT action or number of arguments");
