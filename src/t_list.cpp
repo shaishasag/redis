@@ -126,11 +126,11 @@ int listTypeNext(listTypeIterator *li, listTypeEntry *entry) {
 robj *listTypeGet(listTypeEntry *entry) {
     robj *value = NULL;
     if (entry->li->encoding == OBJ_ENCODING_QUICKLIST) {
-        if (entry->entry.value) {
-            value = createStringObject((char *)entry->entry.value,
-                                       entry->entry.sz);
+        if (entry->entry.m_value) {
+            value = createStringObject((char *)entry->entry.m_value,
+                                       entry->entry.m_size);
         } else {
-            value = createStringObjectFromLongLong(entry->entry.longval);
+            value = createStringObjectFromLongLong(entry->entry.m_longval);
         }
     } else {
         serverPanic("Unknown list encoding");
@@ -144,10 +144,10 @@ void listTypeInsert(listTypeEntry *entry, robj *value, int where) {
         sds str = (sds)value->ptr;
         size_t len = sdslen(str);
         if (where == LIST_TAIL) {
-            quicklistInsertAfter((quicklist *)entry->entry.quicklist,
+            quicklistInsertAfter((quicklist *)entry->entry.m_quicklist,
                                  &entry->entry, str, len);
         } else if (where == LIST_HEAD) {
-            quicklistInsertBefore((quicklist *)entry->entry.quicklist,
+            quicklistInsertBefore((quicklist *)entry->entry.m_quicklist,
                                   &entry->entry, str, len);
         }
         decrRefCount(value);
@@ -160,7 +160,7 @@ void listTypeInsert(listTypeEntry *entry, robj *value, int where) {
 int listTypeEqual(listTypeEntry *entry, robj *o) {
     if (entry->li->encoding == OBJ_ENCODING_QUICKLIST) {
         serverAssertWithInfo(NULL,o,sdsEncodedObject(o));
-        return quicklistCompare((unsigned char *)entry->entry.zi,(unsigned char *)o->ptr,sdslen((sds)o->ptr));
+        return quicklistCompare((unsigned char *)entry->entry.m_zip_list,(unsigned char *)o->ptr,sdslen((sds)o->ptr));
     } else {
         serverPanic("Unknown list encoding");
     }
@@ -322,11 +322,11 @@ void lindexCommand(client *c) {
 
     if (o->encoding == OBJ_ENCODING_QUICKLIST) {
         quicklistEntry entry;
-        if (quicklistIndex((quicklist *)o->ptr, index, &entry)) {
-            if (entry.value) {
-                value = createStringObject((char*)entry.value,entry.sz);
+        if (entry.quicklistIndex((quicklist *)o->ptr, index)) {
+            if (entry.m_value) {
+                value = createStringObject((char*)entry.m_value,entry.m_size);
             } else {
-                value = createStringObjectFromLongLong(entry.longval);
+                value = createStringObjectFromLongLong(entry.m_longval);
             }
             addReplyBulk(c,value);
             decrRefCount(value);
@@ -429,10 +429,10 @@ void lrangeCommand(client *c) {
             listTypeEntry entry;
             listTypeNext(iter, &entry);
             quicklistEntry *qe = &entry.entry;
-            if (qe->value) {
-                addReplyBulkCBuffer(c,qe->value,qe->sz);
+            if (qe->m_value) {
+                addReplyBulkCBuffer(c,qe->m_value,qe->m_size);
             } else {
-                addReplyBulkLongLong(c,qe->longval);
+                addReplyBulkLongLong(c,qe->m_longval);
             }
         }
         listTypeReleaseIterator(iter);

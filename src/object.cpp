@@ -720,12 +720,12 @@ size_t objectComputeSize(robj *o, size_t sample_size) {
     } else if (o->type == OBJ_LIST) {
         if (o->encoding == OBJ_ENCODING_QUICKLIST) {
             quicklist *ql = (quicklist *)o->ptr;
-            quicklistNode *node = ql->head;
+            quicklistNode *node = ql->m_head_ql_node;
             asize = sizeof(*o)+sizeof(quicklist);
             do {
-                elesize += sizeof(quicklistNode)+ziplistBlobLen((unsigned char *)node->zl);
+                elesize += sizeof(quicklistNode)+ziplistBlobLen((unsigned char *)node->m_ql_LZF);
                 samples++;
-            } while ((node = node->next) && samples < sample_size);
+            } while ((node = node->m_next_ql_node) && samples < sample_size);
             asize += (double)elesize/samples*listTypeLength(o);
         } else if (o->encoding == OBJ_ENCODING_ZIPLIST) {
             asize = sizeof(*o)+ziplistBlobLen((unsigned char *)o->ptr);

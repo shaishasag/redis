@@ -378,27 +378,27 @@ void debugCommand(client *c) {
             int remaining = sizeof(extra);
             quicklist *ql = (quicklist *)val->ptr;
             /* Add number of quicklist nodes */
-            int used = snprintf(nextra, remaining, " ql_nodes:%lu", ql->len);
+            int used = snprintf(nextra, remaining, " ql_nodes:%lu", ql->m_num_ql_nodes);
             nextra += used;
             remaining -= used;
             /* Add average quicklist fill factor */
-            double avg = (double)ql->count/ql->len;
+            double avg = (double)ql->m_count_total_entries/ql->m_num_ql_nodes;
             used = snprintf(nextra, remaining, " ql_avg_node:%.2f", avg);
             nextra += used;
             remaining -= used;
             /* Add quicklist fill level / max ziplist size */
-            used = snprintf(nextra, remaining, " ql_ziplist_max:%d", ql->fill);
+            used = snprintf(nextra, remaining, " ql_ziplist_max:%d", ql->m_fill_factor);
             nextra += used;
             remaining -= used;
             /* Add isCompressed? */
-            int compressed = ql->compress != 0;
+            int compressed = ql->m_compress_depth != 0;
             used = snprintf(nextra, remaining, " ql_compressed:%d", compressed);
             nextra += used;
             remaining -= used;
             /* Add total uncompressed size */
             unsigned long sz = 0;
-            for (quicklistNode *node = ql->head; node; node = node->next) {
-                sz += node->sz;
+            for (quicklistNode *node = ql->m_head_ql_node; node; node = node->m_next_ql_node) {
+                sz += node->m_zip_list_size;
             }
             used = snprintf(nextra, remaining, " ql_uncompressed_size:%lu", sz);
             nextra += used;

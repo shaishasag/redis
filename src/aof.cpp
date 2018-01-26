@@ -844,10 +844,10 @@ int rewriteListObject(rio *r, robj *key, robj *o) {
                 if (rioWriteBulkObject(r,key) == 0) return 0;
             }
 
-            if (entry.value) {
-                if (rioWriteBulkString(r, (const char *)entry.value,entry.sz) == 0) return 0;
+            if (entry.m_value) {
+                if (rioWriteBulkString(r, (const char *)entry.m_value,entry.m_size) == 0) return 0;
             } else {
-                if (rioWriteBulkLongLong(r,entry.longval) == 0) return 0;
+                if (rioWriteBulkLongLong(r,entry.m_longval) == 0) return 0;
             }
             if (++count == AOF_REWRITE_ITEMS_PER_CMD) count = 0;
             items--;

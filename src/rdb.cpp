@@ -651,22 +651,22 @@ ssize_t rdbSaveObject(rio *rdb, robj *o) {
         /* Save a list value */
         if (o->encoding == OBJ_ENCODING_QUICKLIST) {
             quicklist* ql = (quicklist*)o->ptr;
-            quicklistNode *node = ql->head;
+            quicklistNode *node = ql->m_head_ql_node;
 
-            if ((n = rdbSaveLen(rdb,ql->len)) == -1) return -1;
+            if ((n = rdbSaveLen(rdb,ql->m_num_ql_nodes)) == -1) return -1;
             nwritten += n;
 
             while(node) {
                 if (quicklistNodeIsCompressed(node)) {
                     void *data;
                     size_t compress_len = quicklistGetLzf(node, &data);
-                    if ((n = rdbSaveLzfBlob(rdb,data,compress_len,node->sz)) == -1) return -1;
+                    if ((n = rdbSaveLzfBlob(rdb,data,compress_len,node->m_zip_list_size)) == -1) return -1;
                     nwritten += n;
                 } else {
-                    if ((n = rdbSaveRawString(rdb,node->zl,node->sz)) == -1) return -1;
+                    if ((n = rdbSaveRawString(rdb,node->m_ql_LZF,node->m_zip_list_size)) == -1) return -1;
                     nwritten += n;
                 }
-                node = node->next;
+                node = node->m_next_ql_node;
             }
         } else {
             serverPanic("Unknown list encoding");

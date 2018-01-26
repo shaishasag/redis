@@ -31,7 +31,7 @@ size_t lazyfreeGetPendingObjectsCount(void) {
 size_t lazyfreeGetFreeEffort(robj *obj) {
     if (obj->type == OBJ_LIST) {
         quicklist *ql = (quicklist *)obj->ptr;
-        return ql->len;
+        return ql->m_num_ql_nodes;
     } else if (obj->type == OBJ_SET && obj->encoding == OBJ_ENCODING_HT) {
         dict *ht = (dict *)obj->ptr;
         return ht->dictSize();
