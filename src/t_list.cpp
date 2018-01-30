@@ -115,7 +115,10 @@ int listTypeNext(listTypeIterator *li, listTypeEntry *entry) {
 
     entry->li = li;
     if (li->encoding == OBJ_ENCODING_QUICKLIST) {
-        return quicklistNext(li->iter, &entry->entry);
+        if (li->iter)
+            return li->iter->quicklistNext(entry->m_ql_entry);
+        else
+            return 0;
     } else {
         serverPanic("Unknown list encoding");
     }
@@ -126,11 +129,11 @@ int listTypeNext(listTypeIterator *li, listTypeEntry *entry) {
 robj *listTypeGet(listTypeEntry *entry) {
     robj *value = NULL;
     if (entry->li->encoding == OBJ_ENCODING_QUICKLIST) {
-        if (entry->entry.m_value) {
-            value = createStringObject((char *)entry->entry.m_value,
-                                       entry->entry.m_size);
+        if (entry->m_ql_entry.m_value) {
+            value = createStringObject((char *)entry->m_ql_entry.m_value,
+                                       entry->m_ql_entry.m_size);
         } else {
-            value = createStringObjectFromLongLong(entry->entry.m_longval);
+            value = createStringObjectFromLongLong(entry->m_ql_entry.m_longval);
         }
     } else {
         serverPanic("Unknown list encoding");
@@ -144,11 +147,11 @@ void listTypeInsert(listTypeEntry *entry, robj *value, int where) {
         sds str = (sds)value->ptr;
         size_t len = sdslen(str);
         if (where == LIST_TAIL) {
-            quicklistInsertAfter((quicklist *)entry->entry.m_quicklist,
-                                 &entry->entry, str, len);
+            quicklistInsertAfter((quicklist *)entry->m_ql_entry.m_quicklist,
+                                 &entry->m_ql_entry, str, len);
         } else if (where == LIST_HEAD) {
-            quicklistInsertBefore((quicklist *)entry->entry.m_quicklist,
-                                  &entry->entry, str, len);
+            quicklistInsertBefore((quicklist *)entry->m_ql_entry.m_quicklist,
+                                  &entry->m_ql_entry, str, len);
         }
         decrRefCount(value);
     } else {
@@ -160,7 +163,7 @@ void listTypeInsert(listTypeEntry *entry, robj *value, int where) {
 int listTypeEqual(listTypeEntry *entry, robj *o) {
     if (entry->li->encoding == OBJ_ENCODING_QUICKLIST) {
         serverAssertWithInfo(NULL,o,sdsEncodedObject(o));
-        return quicklistCompare((unsigned char *)entry->entry.m_zip_list,(unsigned char *)o->ptr,sdslen((sds)o->ptr));
+        return quicklistCompare((unsigned char *)entry->m_ql_entry.m_zip_list,(unsigned char *)o->ptr,sdslen((sds)o->ptr));
     } else {
         serverPanic("Unknown list encoding");
     }
@@ -169,7 +172,7 @@ int listTypeEqual(listTypeEntry *entry, robj *o) {
 /* Delete the element pointed to. */
 void listTypeDelete(listTypeIterator *iter, listTypeEntry *entry) {
     if (entry->li->encoding == OBJ_ENCODING_QUICKLIST) {
-        quicklistDelEntry(iter->iter, &entry->entry);
+        iter->iter->quicklistDelEntry(&entry->m_ql_entry);
     } else {
         serverPanic("Unknown list encoding");
     }
@@ -428,7 +431,7 @@ void lrangeCommand(client *c) {
         while(rangelen--) {
             listTypeEntry entry;
             listTypeNext(iter, &entry);
-            quicklistEntry *qe = &entry.entry;
+            quicklistEntry *qe = &entry.m_ql_entry;
             if (qe->m_value) {
                 addReplyBulkCBuffer(c,qe->m_value,qe->m_size);
             } else {

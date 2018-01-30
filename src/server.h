@@ -1259,7 +1259,7 @@ struct listTypeIterator {
 /* Structure for an entry while iterating over a list. */
 struct listTypeEntry {
     listTypeIterator *li;
-    quicklistEntry entry; /* Entry in quicklist */
+    quicklistEntry m_ql_entry; /* Entry in quicklist */
 };
 
 /* Structure to hold set iteration abstraction. */

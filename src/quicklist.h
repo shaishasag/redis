@@ -33,9 +33,6 @@
 
 /* Node, quicklist, and Iterator are the only data structures used currently. */
 
-#include "../../../../Applications/Xcode7.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/cstddef"
-#include "../../../../Applications/Xcode7.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/cstdio"
-
 /* quicklistNode is a 32 byte struct describing a ziplist for a quicklist.
  * We use bit fields keep the quicklistNode at 32 bytes.
  * m_count_items: 16 bits, max 65536 (max zl bytes is 65k, so max count actually < 32k).
@@ -47,8 +44,13 @@
 class quicklistNode
 {
 public:
-    struct quicklistNode *m_prev_ql_node;
-    struct quicklistNode *m_next_ql_node;
+    quicklistNode();
+
+    int __quicklistCompressNode();
+    int __quicklistDecompressNode();
+
+    quicklistNode *m_prev_ql_node;
+    quicklistNode *m_next_ql_node;
     unsigned char *m_ql_LZF;
     unsigned int m_zip_list_size;             /* ziplist size in bytes */
     unsigned int m_item_count : 16;     /* count of items in ziplist */
@@ -79,6 +81,10 @@ struct quicklistLZF
 class quicklist
 {
 public:
+    static void quicklistDecompressNode(quicklistNode* in_node);
+    static void quicklistDecompressNodeForUse(quicklistNode* in_node);
+    static void quicklistCompressNode(quicklistNode* in_node);
+
     quicklistNode *m_head_ql_node;
     quicklistNode *m_tail_ql_node;
     unsigned long m_count_total_entries;        /* total count of all entries in all ziplists */
@@ -87,9 +93,17 @@ public:
     unsigned int m_compress_depth : 16; /* depth of end nodes not to compress;0=off */
 };
 
+class quicklistEntry;
 class quicklistIter
 {
+friend quicklistIter *quicklistGetIteratorAtIdx(const quicklist *in_ql, int in_direction, const long long in_idx);
 public:
+    quicklistIter(const quicklist *in_ql, int in_direction);
+    ~quicklistIter();
+    int quicklistNext(quicklistEntry& entry);
+    void quicklistDelEntry(quicklistEntry *in_entry);
+
+private:
     const quicklist *m_quicklist;
     quicklistNode *m_current;
     unsigned char *m_zip_list;
@@ -105,7 +119,6 @@ public:
     void initEntry();
 
     int quicklistIndex(const quicklist *in_ql, const long long in_index);
-
 
     const quicklist *m_quicklist;
     quicklistNode *m_node;
@@ -148,12 +161,10 @@ quicklist *quicklistAppendValuesFromZiplist(quicklist *in_ql, unsigned char *in_
 quicklist *quicklistCreateFromZiplist(int in_fill, int in_compress, unsigned char *in_ziplist);
 void quicklistInsertAfter(quicklist *in_ql, quicklistEntry *in_node, void *in_value, const size_t in_size);
 void quicklistInsertBefore(quicklist *in_ql, quicklistEntry *in_node, void *in_value, const size_t in_size);
-void quicklistDelEntry(quicklistIter *in_iter, quicklistEntry *in_entry);
 int quicklistReplaceAtIndex(quicklist *in_ql, long in_index, void *in_data, int in_size);
 int quicklistDelRange(quicklist *in_ql, const long in_start, const long in_stop);
 quicklistIter *quicklistGetIterator(const quicklist *in_ql, int in_direction);
 quicklistIter *quicklistGetIteratorAtIdx(const quicklist *in_ql, int in_direction, const long long in_idx);
-int quicklistNext(quicklistIter *in_iter, quicklistEntry *in_node);
 void quicklistReleaseIterator(quicklistIter *in_iter);
 quicklist *quicklistDup(quicklist *in_orig);
 void quicklistRewind(quicklist *in_ql, quicklistIter *in_ql_iter);

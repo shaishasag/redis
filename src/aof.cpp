@@ -832,10 +832,10 @@ int rewriteListObject(rio *r, robj *key, robj *o) {
 
     if (o->encoding == OBJ_ENCODING_QUICKLIST) {
         quicklist* list = (quicklist*)o->ptr;
-        quicklistIter *li = quicklistGetIterator(list, AL_START_HEAD);
+        quicklistIter li(list, AL_START_HEAD);
         quicklistEntry entry;
 
-        while (quicklistNext(li,&entry)) {
+        while (li.quicklistNext(entry)) {
             if (count == 0) {
                 int cmd_items = (items > AOF_REWRITE_ITEMS_PER_CMD) ?
                     AOF_REWRITE_ITEMS_PER_CMD : items;
@@ -852,7 +852,6 @@ int rewriteListObject(rio *r, robj *key, robj *o) {
             if (++count == AOF_REWRITE_ITEMS_PER_CMD) count = 0;
             items--;
         }
-        quicklistReleaseIterator(li);
     } else {
         serverPanic("Unknown list encoding");
     }
