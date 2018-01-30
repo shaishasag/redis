@@ -491,15 +491,15 @@ typedef void (*moduleTypeFreeFunc)(void *value);
 /* The module type, which is referenced in each value of a given type, defines
  * the methods and links to the module exporting the type. */
 struct RedisModuleType {
-    uint64_t id; /* Higher 54 bits of type ID + 10 lower bits of encoding ver. */
-    RedisModule *module;
-    moduleTypeLoadFunc rdb_load;
-    moduleTypeSaveFunc rdb_save;
-    moduleTypeRewriteFunc aof_rewrite;
-    moduleTypeMemUsageFunc mem_usage;
-    moduleTypeDigestFunc digest;
-    moduleTypeFreeFunc free;
-    char name[10]; /* 9 bytes name + null term. Charset: A-Z a-z 0-9 _- */
+    uint64_t m_id; /* Higher 54 bits of type ID + 10 lower bits of encoding ver. */
+    RedisModule *m_module;
+    moduleTypeLoadFunc m_rdb_load;
+    moduleTypeSaveFunc m_rdb_save;
+    moduleTypeRewriteFunc m_aof_rewrite;
+    moduleTypeMemUsageFunc m_mem_usage;
+    moduleTypeDigestFunc m_digest;
+    moduleTypeFreeFunc m_free;
+    char m_name[10]; /* 9 bytes name + null term. Charset: A-Z a-z 0-9 _- */
 };
 typedef RedisModuleType moduleType;
 
@@ -519,33 +519,34 @@ typedef RedisModuleType moduleType;
  *  }
  */
 struct moduleValue {
-    moduleType *type;
-    void *value;
+    moduleType *m_type;
+    void *m_value;
 };
 
 /* This is a wrapper for the 'rio' streams used inside rdb.c in Redis, so that
  * the user does not have to take the total count of the written bytes nor
  * to care about error conditions. */
-struct RedisModuleIO {
-    size_t bytes;       /* Bytes read / written so far. */
-    rio *rio;           /* Rio stream. */
-    moduleType *type;   /* Module type doing the operation. */
-    int error;          /* True if error condition happened. */
-    int ver;            /* Module serialization version: 1 (old),
+struct RedisModuleIO
+{
+    RedisModuleIO(moduleType* in_mtype, rio* in_rioptr)
+    : m_bytes((size_t)0)
+    , m_rio(in_rioptr)
+    , m_type(in_mtype)
+    , m_error(0)
+    , m_ver(0)
+    , m_ctx(NULL)
+    {
+    }
+
+    size_t m_bytes;       /* Bytes read / written so far. */
+    rio *m_rio;           /* Rio stream. */
+    moduleType *m_type;   /* Module type doing the operation. */
+    int m_error;          /* True if error condition happened. */
+    int m_ver;            /* Module serialization version: 1 (old),
                          * 2 (current version with opcodes annotation). */
-    RedisModuleCtx *ctx; /* Optional context, see RM_GetContextFromIO()*/
+    RedisModuleCtx *m_ctx; /* Optional context, see RM_GetContextFromIO()*/
 };
 
-/* Macro to initialize an IO context. Note that the 'ver' field is populated
- * inside rdb.c according to the version of the value to load. */
-#define moduleInitIOContext(iovar,mtype,rioptr) do { \
-    iovar.rio = rioptr; \
-    iovar.type = mtype; \
-    iovar.bytes = 0; \
-    iovar.error = 0; \
-    iovar.ver = 0; \
-    iovar.ctx = NULL; \
-} while(0);
 
 /* This is a structure used to export DEBUG DIGEST capabilities to Redis
  * modules. We want to capture both the ordered and unordered elements of

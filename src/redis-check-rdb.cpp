@@ -108,7 +108,7 @@ void rdbCheckError(const char *fmt, ...) {
     printf("--- RDB ERROR DETECTED ---\n");
     printf("[offset %llu] %s\n",
         (unsigned long long) (rdbstate.rio ?
-            rdbstate.rio->processed_bytes : 0), msg);
+            rdbstate.rio->m_processed_bytes : 0), msg);
     printf("[additional info] While doing: %s\n",
         rdb_check_doing_string[rdbstate.doing]);
     if (rdbstate.key)
@@ -134,7 +134,7 @@ void rdbCheckInfo(const char *fmt, ...) {
 
     printf("[offset %llu] %s\n",
         (unsigned long long) (rdbstate.rio ?
-            rdbstate.rio->processed_bytes : 0), msg);
+            rdbstate.rio->m_processed_bytes : 0), msg);
 }
 
 /* Used inside rdb.c in order to log specific errors happening inside
@@ -188,8 +188,8 @@ int redis_check_rdb(char *rdbfilename, FILE *fp) {
 
     rioInitWithFile(&rdb,fp);
     rdbstate.rio = &rdb;
-    rdb.update_cksum = rdbLoadProgressCallback;
-    if (rioRead(&rdb,buf,9) == 0) goto eoferr;
+    rdb.m_update_cksum_func = rdbLoadProgressCallback;
+    if (rdb.rioRead(buf,9) == 0) goto eoferr;
     buf[9] = '\0';
     if (memcmp(buf,"REDIS",5) != 0) {
         rdbCheckError("Wrong signature trying to load DB from file");
@@ -298,10 +298,10 @@ int redis_check_rdb(char *rdbfilename, FILE *fp) {
     }
     /* Verify the checksum if RDB version is >= 5 */
     if (rdbver >= 5 && server.rdb_checksum) {
-        uint64_t cksum, expected = rdb.cksum;
+        uint64_t cksum, expected = rdb.m_checksum;
 
         rdbstate.doing = RDB_CHECK_DOING_CHECK_SUM;
-        if (rioRead(&rdb,&cksum,8) == 0) goto eoferr;
+        if (rdb.rioRead(&cksum,8) == 0) goto eoferr;
         memrev64ifbe(&cksum);
         if (cksum == 0) {
             rdbCheckInfo("RDB file was saved with checksum disabled: no check performed.");

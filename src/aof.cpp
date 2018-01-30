@@ -813,13 +813,14 @@ fmterr: /* Format error. */
 
 /* Delegate writing an object to writing a bulk string or bulk long long.
  * This is not placed in rio.c since that adds the server.h dependency. */
-int rioWriteBulkObject(rio *r, robj *obj) {
+int rio::rioWriteBulkObject(robj *obj)
+{
     /* Avoid using getDecodedObject to help copy-on-write (we are often
      * in a child process when this function is called). */
     if (obj->encoding == OBJ_ENCODING_INT) {
-        return rioWriteBulkLongLong(r,(long)obj->ptr);
+        return rioWriteBulkLongLong((long)obj->ptr);
     } else if (sdsEncodedObject(obj)) {
-        return rioWriteBulkString(r, (const char *)obj->ptr,sdslen((sds)obj->ptr));
+        return rioWriteBulkString((const char *)obj->ptr,sdslen((sds)obj->ptr));
     } else {
         serverPanic("Unknown string encoding");
     }
@@ -839,15 +840,15 @@ int rewriteListObject(rio *r, robj *key, robj *o) {
             if (count == 0) {
                 int cmd_items = (items > AOF_REWRITE_ITEMS_PER_CMD) ?
                     AOF_REWRITE_ITEMS_PER_CMD : items;
-                if (rioWriteBulkCount(r,'*',2+cmd_items) == 0) return 0;
-                if (rioWriteBulkString(r,"RPUSH",5) == 0) return 0;
-                if (rioWriteBulkObject(r,key) == 0) return 0;
+                if (r->rioWriteBulkCount('*',2+cmd_items) == 0) return 0;
+                if (r->rioWriteBulkString("RPUSH",5) == 0) return 0;
+                if (r->rioWriteBulkObject(key) == 0) return 0;
             }
 
             if (entry.m_value) {
-                if (rioWriteBulkString(r, (const char *)entry.m_value,entry.m_size) == 0) return 0;
+                if (r->rioWriteBulkString((const char *)entry.m_value,entry.m_size) == 0) return 0;
             } else {
-                if (rioWriteBulkLongLong(r,entry.m_longval) == 0) return 0;
+                if (r->rioWriteBulkLongLong(entry.m_longval) == 0) return 0;
             }
             if (++count == AOF_REWRITE_ITEMS_PER_CMD) count = 0;
             items--;
@@ -872,11 +873,11 @@ int rewriteSetObject(rio *r, robj *key, robj *o) {
                 int cmd_items = (items > AOF_REWRITE_ITEMS_PER_CMD) ?
                     AOF_REWRITE_ITEMS_PER_CMD : items;
 
-                if (rioWriteBulkCount(r,'*',2+cmd_items) == 0) return 0;
-                if (rioWriteBulkString(r,"SADD",4) == 0) return 0;
-                if (rioWriteBulkObject(r,key) == 0) return 0;
+                if (r->rioWriteBulkCount('*',2+cmd_items) == 0) return 0;
+                if (r->rioWriteBulkString("SADD",4) == 0) return 0;
+                if (r->rioWriteBulkObject(key) == 0) return 0;
             }
-            if (rioWriteBulkLongLong(r,llval) == 0) return 0;
+            if (r->rioWriteBulkLongLong(llval) == 0) return 0;
             if (++count == AOF_REWRITE_ITEMS_PER_CMD) count = 0;
             items--;
         }
@@ -890,11 +891,11 @@ int rewriteSetObject(rio *r, robj *key, robj *o) {
                 int cmd_items = (items > AOF_REWRITE_ITEMS_PER_CMD) ?
                     AOF_REWRITE_ITEMS_PER_CMD : items;
 
-                if (rioWriteBulkCount(r,'*',2+cmd_items) == 0) return 0;
-                if (rioWriteBulkString(r,"SADD",4) == 0) return 0;
-                if (rioWriteBulkObject(r,key) == 0) return 0;
+                if (r->rioWriteBulkCount('*',2+cmd_items) == 0) return 0;
+                if (r->rioWriteBulkString("SADD",4) == 0) return 0;
+                if (r->rioWriteBulkObject(key) == 0) return 0;
             }
-            if (rioWriteBulkString(r,ele,sdslen(ele)) == 0) return 0;
+            if (r->rioWriteBulkString(ele,sdslen(ele)) == 0) return 0;
             if (++count == AOF_REWRITE_ITEMS_PER_CMD) count = 0;
             items--;
         }
@@ -930,15 +931,15 @@ int rewriteSortedSetObject(rio *r, robj *key, robj *o) {
                 int cmd_items = (items > AOF_REWRITE_ITEMS_PER_CMD) ?
                     AOF_REWRITE_ITEMS_PER_CMD : items;
 
-                if (rioWriteBulkCount(r,'*',2+cmd_items*2) == 0) return 0;
-                if (rioWriteBulkString(r,"ZADD",4) == 0) return 0;
-                if (rioWriteBulkObject(r,key) == 0) return 0;
+                if (r->rioWriteBulkCount('*',2+cmd_items*2) == 0) return 0;
+                if (r->rioWriteBulkString("ZADD",4) == 0) return 0;
+                if (r->rioWriteBulkObject(key) == 0) return 0;
             }
-            if (rioWriteBulkDouble(r,score) == 0) return 0;
+            if (r->rioWriteBulkDouble(score) == 0) return 0;
             if (vstr != NULL) {
-                if (rioWriteBulkString(r, (const char *)vstr,vlen) == 0) return 0;
+                if (r->rioWriteBulkString((const char *)vstr,vlen) == 0) return 0;
             } else {
-                if (rioWriteBulkLongLong(r,vll) == 0) return 0;
+                if (r->rioWriteBulkLongLong(vll) == 0) return 0;
             }
             zzlNext(zl,&eptr,&sptr);
             if (++count == AOF_REWRITE_ITEMS_PER_CMD) count = 0;
@@ -957,12 +958,12 @@ int rewriteSortedSetObject(rio *r, robj *key, robj *o) {
                 int cmd_items = (items > AOF_REWRITE_ITEMS_PER_CMD) ?
                     AOF_REWRITE_ITEMS_PER_CMD : items;
 
-                if (rioWriteBulkCount(r,'*',2+cmd_items*2) == 0) return 0;
-                if (rioWriteBulkString(r,"ZADD",4) == 0) return 0;
-                if (rioWriteBulkObject(r,key) == 0) return 0;
+                if (r->rioWriteBulkCount('*',2+cmd_items*2) == 0) return 0;
+                if (r->rioWriteBulkString("ZADD",4) == 0) return 0;
+                if (r->rioWriteBulkObject(key) == 0) return 0;
             }
-            if (rioWriteBulkDouble(r,*score) == 0) return 0;
-            if (rioWriteBulkString(r,ele,sdslen(ele)) == 0) return 0;
+            if (r->rioWriteBulkDouble(*score) == 0) return 0;
+            if (r->rioWriteBulkString(ele,sdslen(ele)) == 0) return 0;
             if (++count == AOF_REWRITE_ITEMS_PER_CMD) count = 0;
             items--;
         }
@@ -986,12 +987,12 @@ static int rioWriteHashIteratorCursor(rio *r, hashTypeIterator *hi, int what) {
 
         hashTypeCurrentFromZiplist(hi, what, &vstr, &vlen, &vll);
         if (vstr)
-            return rioWriteBulkString(r, (char*)vstr, vlen);
+            return r->rioWriteBulkString((char*)vstr, vlen);
         else
-            return rioWriteBulkLongLong(r, vll);
+            return r->rioWriteBulkLongLong(vll);
     } else if (hi->encoding == OBJ_ENCODING_HT) {
         sds value = hashTypeCurrentFromHashTable(hi, what);
-        return rioWriteBulkString(r, value, sdslen(value));
+        return r->rioWriteBulkString(value, sdslen(value));
     }
 
     serverPanic("Unknown hash encoding");
@@ -1010,9 +1011,9 @@ int rewriteHashObject(rio *r, robj *key, robj *o) {
             int cmd_items = (items > AOF_REWRITE_ITEMS_PER_CMD) ?
                 AOF_REWRITE_ITEMS_PER_CMD : items;
 
-            if (rioWriteBulkCount(r,'*',2+cmd_items*2) == 0) return 0;
-            if (rioWriteBulkString(r,"HMSET",5) == 0) return 0;
-            if (rioWriteBulkObject(r,key) == 0) return 0;
+            if (r->rioWriteBulkCount('*',2+cmd_items*2) == 0) return 0;
+            if (r->rioWriteBulkString("HMSET",5) == 0) return 0;
+            if (r->rioWriteBulkObject(key) == 0) return 0;
         }
 
         if (rioWriteHashIteratorCursor(r, hi, OBJ_HASH_KEY) == 0) return 0;
@@ -1030,16 +1031,15 @@ int rewriteHashObject(rio *r, robj *key, robj *o) {
  * that is exported by a module and is not handled by Redis itself.
  * The function returns 0 on error, 1 on success. */
 int rewriteModuleObject(rio *r, robj *key, robj *o) {
-    RedisModuleIO io;
     moduleValue* mv = (moduleValue*)o->ptr;
-    moduleType *mt = mv->type;
-    moduleInitIOContext(io,mt,r);
-    mt->aof_rewrite(&io,key,mv->value);
-    if (io.ctx) {
-        moduleFreeContext(io.ctx);
-        zfree(io.ctx);
+    moduleType *mt = mv->m_type;
+    RedisModuleIO io(mt,r);
+    mt->m_aof_rewrite(&io,key,mv->m_value);
+    if (io.m_ctx) {
+        moduleFreeContext(io.m_ctx);
+        zfree(io.m_ctx);
     }
-    return io.error ? 0 : 1;
+    return io.m_error ? 0 : 1;
 }
 
 /* This function is called by the child rewriting the AOF file to read
@@ -1070,8 +1070,8 @@ int rewriteAppendOnlyFileRio(rio *aof) {
         if (d->dictSize() == 0) continue;
 
         /* SELECT the new DB */
-        if (rioWrite(aof,selectcmd,sizeof(selectcmd)-1) == 0) goto werr;
-        if (rioWriteBulkLongLong(aof,j) == 0) goto werr;
+        if (aof->rioWrite(selectcmd,sizeof(selectcmd)-1) == 0) goto werr;
+        if (aof->rioWriteBulkLongLong(j) == 0) goto werr;
 
         /* Iterate this DB writing every entry */
         dictIterator di(d, 1);
@@ -1093,10 +1093,10 @@ int rewriteAppendOnlyFileRio(rio *aof) {
             if (o->type == OBJ_STRING) {
                 /* Emit a SET command */
                 char cmd[]="*3\r\n$3\r\nSET\r\n";
-                if (rioWrite(aof,cmd,sizeof(cmd)-1) == 0) goto werr;
+                if (aof->rioWrite(cmd,sizeof(cmd)-1) == 0) goto werr;
                 /* Key and value */
-                if (rioWriteBulkObject(aof,&key) == 0) goto werr;
-                if (rioWriteBulkObject(aof,o) == 0) goto werr;
+                if (aof->rioWriteBulkObject(&key) == 0) goto werr;
+                if (aof->rioWriteBulkObject(o) == 0) goto werr;
             } else if (o->type == OBJ_LIST) {
                 if (rewriteListObject(aof,&key,o) == 0) goto werr;
             } else if (o->type == OBJ_SET) {
@@ -1113,13 +1113,13 @@ int rewriteAppendOnlyFileRio(rio *aof) {
             /* Save the expire time */
             if (expiretime != -1) {
                 char cmd[]="*3\r\n$9\r\nPEXPIREAT\r\n";
-                if (rioWrite(aof,cmd,sizeof(cmd)-1) == 0) goto werr;
-                if (rioWriteBulkObject(aof,&key) == 0) goto werr;
-                if (rioWriteBulkLongLong(aof,expiretime) == 0) goto werr;
+                if (aof->rioWrite(cmd,sizeof(cmd)-1) == 0) goto werr;
+                if (aof->rioWriteBulkObject(&key) == 0) goto werr;
+                if (aof->rioWriteBulkLongLong(expiretime) == 0) goto werr;
             }
             /* Read some diff from the parent process from time to time. */
-            if (aof->processed_bytes > processed+AOF_READ_DIFF_INTERVAL_BYTES) {
-                processed = aof->processed_bytes;
+            if (aof->m_processed_bytes > processed+AOF_READ_DIFF_INTERVAL_BYTES) {
+                processed = aof->m_processed_bytes;
                 aofReadDiffFromParent();
             }
         }
@@ -1158,7 +1158,7 @@ int rewriteAppendOnlyFile(char *filename) {
     rioInitWithFile(&aof,fp);
 
     if (server.aof_rewrite_incremental_fsync)
-        rioSetAutoSync(&aof,AOF_AUTOSYNC_BYTES);
+        aof.rioSetAutoSync(AOF_AUTOSYNC_BYTES);
 
     if (server.aof_use_rdb_preamble) {
         int error;
@@ -1210,7 +1210,7 @@ int rewriteAppendOnlyFile(char *filename) {
     serverLog(LL_NOTICE,
         "Concatenating %.2f MB of AOF diff received from parent.",
         (double) sdslen(server.aof_child_diff) / (1024*1024));
-    if (rioWrite(&aof,server.aof_child_diff,sdslen(server.aof_child_diff)) == 0)
+    if (aof.rioWrite(server.aof_child_diff,sdslen(server.aof_child_diff)) == 0)
         goto werr;
 
     /* Make sure data will not remain on the OS's output buffers */

@@ -69,7 +69,7 @@ void rdbCheckThenExit(int linenum, char *reason, ...) {
 }
 
 static int rdbWriteRaw(rio *rdb, void *p, size_t len) {
-    if (rdb && rioWrite(rdb,p,len) == 0)
+    if (rdb && rdb->rioWrite(p,len) == 0)
         return -1;
     return len;
 }
@@ -83,13 +83,13 @@ int rdbSaveType(rio *rdb, unsigned char type) {
  * "types" like the end-of-file type, the EXPIRE type, and so forth. */
 int rdbLoadType(rio *rdb) {
     unsigned char type;
-    if (rioRead(rdb,&type,1) == 0) return -1;
+    if (rdb->rioRead(&type,1) == 0) return -1;
     return type;
 }
 
 time_t rdbLoadTime(rio *rdb) {
     int32_t t32;
-    if (rioRead(rdb,&t32,4) == 0) return -1;
+    if (rdb->rioRead(&t32,4) == 0) return -1;
     return (time_t)t32;
 }
 
@@ -100,7 +100,7 @@ int rdbSaveMillisecondTime(rio *rdb, long long t) {
 
 long long rdbLoadMillisecondTime(rio *rdb) {
     int64_t t64;
-    if (rioRead(rdb,&t64,8) == 0) return -1;
+    if (rdb->rioRead(&t64,8) == 0) return -1;
     return (long long)t64;
 }
 
@@ -155,7 +155,7 @@ int rdbLoadLenByRef(rio *rdb, int *isencoded, uint64_t *lenptr) {
     int type;
 
     if (isencoded) *isencoded = 0;
-    if (rioRead(rdb,buf,1) == 0) return -1;
+    if (rdb->rioRead(buf,1) == 0) return -1;
     type = (buf[0]&0xC0)>>6;
     if (type == RDB_ENCVAL) {
         /* Read a 6 bit encoding type. */
@@ -166,17 +166,17 @@ int rdbLoadLenByRef(rio *rdb, int *isencoded, uint64_t *lenptr) {
         *lenptr = buf[0]&0x3F;
     } else if (type == RDB_14BITLEN) {
         /* Read a 14 bit len. */
-        if (rioRead(rdb,buf+1,1) == 0) return -1;
+        if (rdb->rioRead(buf+1,1) == 0) return -1;
         *lenptr = ((buf[0]&0x3F)<<8)|buf[1];
     } else if (buf[0] == RDB_32BITLEN) {
         /* Read a 32 bit len. */
         uint32_t len;
-        if (rioRead(rdb,&len,4) == 0) return -1;
+        if (rdb->rioRead(&len,4) == 0) return -1;
         *lenptr = ntohl(len);
     } else if (buf[0] == RDB_64BITLEN) {
         /* Read a 64 bit len. */
         uint64_t len;
-        if (rioRead(rdb,&len,8) == 0) return -1;
+        if (rdb->rioRead(&len,8) == 0) return -1;
         *lenptr = ntohu64(len);
     } else {
         rdbExitReportCorruptRDB(
@@ -234,16 +234,16 @@ void *rdbLoadIntegerObject(rio *rdb, int enctype, int flags, size_t *lenptr) {
     long long val;
 
     if (enctype == RDB_ENC_INT8) {
-        if (rioRead(rdb,enc,1) == 0) return NULL;
+        if (rdb->rioRead(enc,1) == 0) return NULL;
         val = (signed char)enc[0];
     } else if (enctype == RDB_ENC_INT16) {
         uint16_t v;
-        if (rioRead(rdb,enc,2) == 0) return NULL;
+        if (rdb->rioRead(enc,2) == 0) return NULL;
         v = enc[0]|(enc[1]<<8);
         val = (int16_t)v;
     } else if (enctype == RDB_ENC_INT32) {
         uint32_t v;
-        if (rioRead(rdb,enc,4) == 0) return NULL;
+        if (rdb->rioRead(enc,4) == 0) return NULL;
         v = enc[0]|(enc[1]<<8)|(enc[2]<<16)|(enc[3]<<24);
         val = (int32_t)v;
     } else {
@@ -349,7 +349,7 @@ void *rdbLoadLzfStringObject(rio *rdb, int flags, size_t *lenptr) {
     }
 
     /* Load the compressed representation and uncompress it to target. */
-    if (rioRead(rdb,c,clen) == 0) goto err;
+    if (rdb->rioRead(c,clen) == 0) goto err;
     if (lzf_decompress(c,clen,val,len) == 0) {
         if (rdbCheckMode) rdbCheckSetError("Invalid LZF compressed string");
         goto err;
@@ -473,7 +473,7 @@ void *rdbGenericLoadStringObject(rio *rdb, int flags, size_t *lenptr) {
     if (plain || _sds) {
         void *buf = plain ? zmalloc(len) : sdsnewlen(NULL,len);
         if (lenptr) *lenptr = len;
-        if (len && rioRead(rdb,buf,len) == 0) {
+        if (len && rdb->rioRead(buf,len) == 0) {
             if (plain)
                 zfree(buf);
             else
@@ -484,7 +484,7 @@ void *rdbGenericLoadStringObject(rio *rdb, int flags, size_t *lenptr) {
     } else {
         robj *o = encode ? createStringObject(NULL,len) :
                            createRawStringObject(NULL,len);
-        if (len && rioRead(rdb,o->ptr,len) == 0) {
+        if (len && rdb->rioRead(o->ptr,len) == 0) {
             decrRefCount(o);
             return NULL;
         }
@@ -547,13 +547,13 @@ int rdbLoadDoubleValue(rio *rdb, double *val) {
     char buf[256];
     unsigned char len;
 
-    if (rioRead(rdb,&len,1) == 0) return -1;
+    if (rdb->rioRead(&len,1) == 0) return -1;
     switch(len) {
     case 255: *val = R_NegInf; return 0;
     case 254: *val = R_PosInf; return 0;
     case 253: *val = R_Nan; return 0;
     default:
-        if (rioRead(rdb,buf,len) == 0) return -1;
+        if (rdb->rioRead(buf,len) == 0) return -1;
         buf[len] = '\0';
         sscanf(buf, "%lg", val);
         return 0;
@@ -573,7 +573,7 @@ int rdbSaveBinaryDoubleValue(rio *rdb, double val) {
 /* Loads a double from RDB 8 or greater. See rdbSaveBinaryDoubleValue() for
  * more info. On error -1 is returned, otherwise 0. */
 int rdbLoadBinaryDoubleValue(rio *rdb, double *val) {
-    if (rioRead(rdb,val,sizeof(*val)) == 0) return -1;
+    if (rdb->rioRead(val,sizeof(*val)) == 0) return -1;
     memrev64ifbe(val);
     return 0;
 }
@@ -586,7 +586,7 @@ int rdbSaveBinaryFloatValue(rio *rdb, float val) {
 
 /* Like rdbLoadBinaryDoubleValue() but single precision. */
 int rdbLoadBinaryFloatValue(rio *rdb, float *val) {
-    if (rioRead(rdb,val,sizeof(*val)) == 0) return -1;
+    if (rdb->rioRead(val,sizeof(*val)) == 0) return -1;
     memrev32ifbe(val);
     return 0;
 }
@@ -764,28 +764,27 @@ ssize_t rdbSaveObject(rio *rdb, robj *o) {
 
     } else if (o->type == OBJ_MODULE) {
         /* Save a module-specific value. */
-        RedisModuleIO io;
         moduleValue* mv = (moduleValue*)o->ptr;
-        moduleType *mt = mv->type;
-        moduleInitIOContext(io,mt,rdb);
+        moduleType *mt = mv->m_type;
+        RedisModuleIO io(mt,rdb);
 
         /* Write the "module" identifier as prefix, so that we'll be able
          * to call the right module during loading. */
-        int retval = rdbSaveLen(rdb,mt->id);
+        int retval = rdbSaveLen(rdb,mt->m_id);
         if (retval == -1) return -1;
-        io.bytes += retval;
+        io.m_bytes += retval;
 
         /* Then write the module-specific representation + EOF marker. */
-        mt->rdb_save(&io,mv->value);
+        mt->m_rdb_save(&io,mv->m_value);
         retval = rdbSaveLen(rdb,RDB_MODULE_OPCODE_EOF);
         if (retval == -1) return -1;
-        io.bytes += retval;
+        io.m_bytes += retval;
 
-        if (io.ctx) {
-            moduleFreeContext(io.ctx);
-            zfree(io.ctx);
+        if (io.m_ctx) {
+            moduleFreeContext(io.m_ctx);
+            zfree(io.m_ctx);
         }
-        return io.error ? -1 : (ssize_t)io.bytes;
+        return io.m_error ? -1 : (ssize_t)io.m_bytes;
     } else {
         serverPanic("Unknown object type");
     }
@@ -887,7 +886,7 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
     size_t processed = 0;
 
     if (server.rdb_checksum)
-        rdb->update_cksum = rioGenericUpdateChecksum;
+        rdb->m_update_cksum_func = rio::rioGenericUpdateChecksum;
     snprintf(magic,sizeof(magic),"REDIS%04d",RDB_VERSION);
     if (rdbWriteRaw(rdb,magic,9) == -1) goto werr;
     if (rdbSaveInfoAuxFields(rdb,flags,rsi) == -1) goto werr;
@@ -932,9 +931,9 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
              * accumulated diff from parent to child while rewriting in
              * order to have a smaller final write. */
             if (flags & RDB_SAVE_AOF_PREAMBLE &&
-                rdb->processed_bytes > processed+AOF_READ_DIFF_INTERVAL_BYTES)
+                rdb->m_processed_bytes > processed+AOF_READ_DIFF_INTERVAL_BYTES)
             {
-                processed = rdb->processed_bytes;
+                processed = rdb->m_processed_bytes;
                 aofReadDiffFromParent();
             }
         }
@@ -972,9 +971,9 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
 
     /* CRC64 checksum. It will be zero if checksum computation is disabled, the
      * loading code skips the check in this case. */
-    cksum = rdb->cksum;
+    cksum = rdb->m_checksum;
     memrev64ifbe(&cksum);
-    if (rioWrite(rdb,&cksum,8) == 0) goto werr;
+    if (rdb->rioWrite(&cksum,8) == 0) goto werr;
     return C_OK;
 
 werr:
@@ -995,11 +994,11 @@ int rdbSaveRioWithEOFMark(rio *rdb, int *error, rdbSaveInfo *rsi) {
 
     getRandomHexChars(eofmark,RDB_EOF_MARK_SIZE);
     if (error) *error = 0;
-    if (rioWrite(rdb,"$EOF:",5) == 0) goto werr;
-    if (rioWrite(rdb,eofmark,RDB_EOF_MARK_SIZE) == 0) goto werr;
-    if (rioWrite(rdb,"\r\n",2) == 0) goto werr;
+    if (rdb->rioWrite("$EOF:",5) == 0) goto werr;
+    if (rdb->rioWrite(eofmark,RDB_EOF_MARK_SIZE) == 0) goto werr;
+    if (rdb->rioWrite("\r\n",2) == 0) goto werr;
     if (rdbSaveRio(rdb,error,RDB_SAVE_NONE,rsi) == C_ERR) goto werr;
-    if (rioWrite(rdb,eofmark,RDB_EOF_MARK_SIZE) == 0) goto werr;
+    if (rdb->rioWrite(eofmark,RDB_EOF_MARK_SIZE) == 0) goto werr;
     return C_OK;
 
 werr: /* Write error. */
@@ -1431,19 +1430,18 @@ robj *rdbLoadObject(int rdbtype, rio *rdb) {
             serverLog(LL_WARNING,"The RDB file contains module data I can't load: no matching module '%s'", name);
             exit(1);
         }
-        RedisModuleIO io;
-        moduleInitIOContext(io,mt,rdb);
-        io.ver = (rdbtype == RDB_TYPE_MODULE) ? 1 : 2;
+        RedisModuleIO io(mt,rdb);
+        io.m_ver = (rdbtype == RDB_TYPE_MODULE) ? 1 : 2;
         /* Call the rdb_load method of the module providing the 10 bit
          * encoding version in the lower 10 bits of the module ID. */
-        void *ptr = mt->rdb_load(&io,moduleid&1023);
-        if (io.ctx) {
-            moduleFreeContext(io.ctx);
-            zfree(io.ctx);
+        void *ptr = mt->m_rdb_load(&io,moduleid&1023);
+        if (io.m_ctx) {
+            moduleFreeContext(io.m_ctx);
+            zfree(io.m_ctx);
         }
 
         /* Module v2 serialization has an EOF mark at the end. */
-        if (io.ver == 2) {
+        if (io.m_ver == 2) {
             uint64_t eof = rdbLoadLen(rdb,NULL);
             if (eof != RDB_MODULE_OPCODE_EOF) {
                 serverLog(LL_WARNING,"The RDB file contains module data for the module '%s' that is not terminated by the proper module value EOF marker", name);
@@ -1495,9 +1493,9 @@ void stopLoading(void) {
    and if needed calculate rdb checksum  */
 void rdbLoadProgressCallback(rio *r, const void *buf, size_t len) {
     if (server.rdb_checksum)
-        rioGenericUpdateChecksum(r, buf, len);
+        rio::rioGenericUpdateChecksum(r, buf, len);
     if (server.loading_process_events_interval_bytes &&
-        (r->processed_bytes + len)/server.loading_process_events_interval_bytes > r->processed_bytes/server.loading_process_events_interval_bytes)
+        (r->m_processed_bytes + len)/server.loading_process_events_interval_bytes > r->m_processed_bytes/server.loading_process_events_interval_bytes)
     {
         /* The DB can take some non trivial amount of time to load. Update
          * our cached time since it is used to create and update the last
@@ -1505,7 +1503,7 @@ void rdbLoadProgressCallback(rio *r, const void *buf, size_t len) {
         updateCachedTime();
         if (server.masterhost && server.repl_state == REPL_STATE_TRANSFER)
             replicationSendNewlineToMaster();
-        loadingProgress(r->processed_bytes);
+        loadingProgress(r->m_processed_bytes);
         processEventsWhileBlocked();
     }
 }
@@ -1519,9 +1517,9 @@ int rdbLoadRio(rio *rdb, rdbSaveInfo *rsi) {
     char buf[1024];
     long long expiretime, now = mstime();
 
-    rdb->update_cksum = rdbLoadProgressCallback;
-    rdb->max_processing_chunk = server.loading_process_events_interval_bytes;
-    if (rioRead(rdb,buf,9) == 0) goto eoferr;
+    rdb->m_update_cksum_func = rdbLoadProgressCallback;
+    rdb->m_max_processing_chunk = server.loading_process_events_interval_bytes;
+    if (rdb->rioRead(buf,9) == 0) goto eoferr;
     buf[9] = '\0';
     if (memcmp(buf,"REDIS",5) != 0) {
         serverLog(LL_WARNING,"Wrong signature trying to load DB from file");
@@ -1655,9 +1653,9 @@ int rdbLoadRio(rio *rdb, rdbSaveInfo *rsi) {
     }
     /* Verify the checksum if RDB version is >= 5 */
     if (rdbver >= 5 && server.rdb_checksum) {
-        uint64_t cksum, expected = rdb->cksum;
+        uint64_t cksum, expected = rdb->m_checksum;
 
-        if (rioRead(rdb,&cksum,8) == 0) goto eoferr;
+        if (rdb->rioRead(&cksum,8) == 0) goto eoferr;
         memrev64ifbe(&cksum);
         if (cksum == 0) {
             serverLog(LL_WARNING,"RDB file was saved with checksum disabled: no check performed.");
@@ -1899,7 +1897,7 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
         redisSetProcTitle("redis-rdb-to-slaves");
 
         retval = rdbSaveRioWithEOFMark(&slave_sockets,NULL,rsi);
-        if (retval == C_OK && rioFlush(&slave_sockets) == 0)
+        if (retval == C_OK && slave_sockets.rioFlush() == 0)
             retval = C_ERR;
 
         if (retval == C_OK) {

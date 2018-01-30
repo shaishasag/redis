@@ -242,10 +242,10 @@ void computeDatasetDigest(unsigned char *final) {
             } else if (o->type == OBJ_MODULE) {
                 RedisModuleDigest md;
                 moduleValue* mv = (moduleValue*)o->ptr;
-                moduleType *mt = mv->type;
+                moduleType *mt = mv->m_type;
                 moduleInitDigestContext(md);
-                if (mt->digest) {
-                    mt->digest(&md,mv->value);
+                if (mt->m_digest) {
+                    mt->m_digest(&md,mv->m_value);
                     xorDigest(digest,md.x,sizeof(md.x));
                 }
             } else {

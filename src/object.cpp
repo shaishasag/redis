@@ -234,8 +234,8 @@ robj *createZsetZiplistObject(void) {
 
 robj *createModuleObject(moduleType *mt, void *value) {
     moduleValue* mv = (moduleValue*)zmalloc(sizeof(*mv));
-    mv->type = mt;
-    mv->value = value;
+    mv->m_type = mt;
+    mv->m_value = value;
     return createObject(OBJ_MODULE,mv);
 }
 
@@ -299,7 +299,7 @@ void freeHashObject(robj *o) {
 
 void freeModuleObject(robj *o) {
     moduleValue* mv = (moduleValue*)o->ptr;
-    mv->type->free(mv->value);
+    mv->m_type->m_free(mv->m_value);
     zfree(mv);
 }
 
@@ -788,9 +788,9 @@ size_t objectComputeSize(robj *o, size_t sample_size) {
         }
     } else if (o->type == OBJ_MODULE) {
         moduleValue* mv = (moduleValue*)o->ptr;
-        moduleType *mt = mv->type;
-        if (mt->mem_usage != NULL) {
-            asize = mt->mem_usage(mv->value);
+        moduleType *mt = mv->m_type;
+        if (mt->m_mem_usage != NULL) {
+            asize = mt->m_mem_usage(mv->m_value);
         } else {
             asize = 0;
         }

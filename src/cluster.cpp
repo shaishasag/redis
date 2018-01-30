@@ -4965,9 +4965,9 @@ try_again:
     /* Send the SELECT command if the current DB is not already selected. */
     int select = cs->last_dbid != dbid; /* Should we emit SELECT? */
     if (select) {
-        serverAssertWithInfo(c,NULL,rioWriteBulkCount(&cmd,'*',2));
-        serverAssertWithInfo(c,NULL,rioWriteBulkString(&cmd,"SELECT",6));
-        serverAssertWithInfo(c,NULL,rioWriteBulkLongLong(&cmd,dbid));
+        serverAssertWithInfo(c,NULL,cmd.rioWriteBulkCount('*',2));
+        serverAssertWithInfo(c,NULL,cmd.rioWriteBulkString("SELECT",6));
+        serverAssertWithInfo(c,NULL,cmd.rioWriteBulkLongLong(dbid));
     }
 
     /* Create RESTORE payload and generate the protocol to call the command. */
@@ -4979,29 +4979,29 @@ try_again:
             ttl = expireat-mstime();
             if (ttl < 1) ttl = 1;
         }
-        serverAssertWithInfo(c,NULL,rioWriteBulkCount(&cmd,'*',replace ? 5 : 4));
+        serverAssertWithInfo(c,NULL,cmd.rioWriteBulkCount('*',replace ? 5 : 4));
         if (server.cluster_enabled)
             serverAssertWithInfo(c,NULL,
-                rioWriteBulkString(&cmd,"RESTORE-ASKING",14));
+                cmd.rioWriteBulkString("RESTORE-ASKING",14));
         else
-            serverAssertWithInfo(c,NULL,rioWriteBulkString(&cmd,"RESTORE",7));
+            serverAssertWithInfo(c,NULL,cmd.rioWriteBulkString("RESTORE",7));
         serverAssertWithInfo(c,NULL,sdsEncodedObject(kv[j]));
-        serverAssertWithInfo(c,NULL,rioWriteBulkString(&cmd, (char*)kv[j]->ptr,
+        serverAssertWithInfo(c,NULL,cmd.rioWriteBulkString((char*)kv[j]->ptr,
                 sdslen((sds)kv[j]->ptr)));
-        serverAssertWithInfo(c,NULL,rioWriteBulkLongLong(&cmd,ttl));
+        serverAssertWithInfo(c,NULL,cmd.rioWriteBulkLongLong(ttl));
 
         /* Emit the payload argument, that is the serialized object using
          * the DUMP format. */
         createDumpPayload(&payload,ov[j]);
         serverAssertWithInfo(c,NULL,
-            rioWriteBulkString(&cmd,payload.io.buffer.ptr,
+            cmd.rioWriteBulkString(payload.io.buffer.ptr,
                                sdslen(payload.io.buffer.ptr)));
         sdsfree(payload.io.buffer.ptr);
 
         /* Add the REPLACE option to the RESTORE command if it was specified
          * as a MIGRATE option. */
         if (replace)
-            serverAssertWithInfo(c,NULL,rioWriteBulkString(&cmd,"REPLACE",7));
+            serverAssertWithInfo(c,NULL,cmd.rioWriteBulkString("REPLACE",7));
     }
 
     /* Transfer the query to the other node in 64K chunks. */

@@ -799,7 +799,7 @@ void typeCommand(client *c) {
         case OBJ_HASH: type = "hash"; break;
         case OBJ_MODULE: {
             moduleValue* mv = (moduleValue*)o->ptr;
-            type = mv->type->name;
+            type = mv->m_type->m_name;
         }; break;
         default: type = "unknown"; break;
         }

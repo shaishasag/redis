@@ -41,14 +41,14 @@
  * -------------------------------------------------------------------------- */
 
 /* This structure represents a module inside the system. */
-struct RedisModule {
-    void *handle;   /* Module dlopen() handle. */
-    char *name;     /* Module name. */
-    int ver;        /* Module version. We use just progressive integers. */
-    int apiver;     /* Module API version as requested during initialization.*/
-    list *types;    /* Module data types. */
+struct RedisModule
+{
+    void *m_handle;   /* Module dlopen() handle. */
+    char *m_name;     /* Module name. */
+    int m_ver;        /* Module version. We use just progressive integers. */
+    int m_apiver;     /* Module API version as requested during initialization.*/
+    list *m_types;    /* Module data types. */
 };
-typedef struct RedisModule RedisModule;
 
 static dict *modules; /* Hash table of modules. SDS -> RedisModule ptr.*/
 
@@ -431,7 +431,7 @@ void moduleFreeContext(RedisModuleCtx *ctx) {
             "RedisModule_ReplyWithArray(REDISMODULE_POSTPONED_ARRAY_LEN) "
             "not matched by the same number of RedisModule_SetReplyArrayLen() "
             "calls.",
-            ctx->module->name);
+            ctx->module->m_name);
     }
     if (ctx->flags & REDISMODULE_CTX_THREAD_SAFE) freeClient(ctx->_client);
 }
@@ -652,10 +652,10 @@ void RM_SetModuleAttribs(RedisModuleCtx *ctx, const char *name, int ver, int api
 
     if (ctx->module != NULL) return;
     module = (RedisModule *)zmalloc(sizeof(*module));
-    module->name = sdsnew((char*)name);
-    module->ver = ver;
-    module->apiver = apiver;
-    module->types = listCreate();
+    module->m_name = sdsnew((char*)name);
+    module->m_ver = ver;
+    module->m_apiver = apiver;
+    module->m_types = listCreate();
     ctx->module = module;
 }
 
@@ -1091,7 +1091,7 @@ void RM_ReplySetArrayLength(RedisModuleCtx *ctx, long len) {
             "API misuse detected in module %s: "
             "RedisModule_ReplySetArrayLength() called without previous "
             "RedisModule_ReplyWithArray(ctx,REDISMODULE_POSTPONED_ARRAY_LEN) "
-            "call.", ctx->module->name);
+            "call.", ctx->module->m_name);
             return;
     }
     ctx->postponed_arrays_count--;
@@ -2736,10 +2736,10 @@ moduleType *moduleTypeLookupModuleByName(const char *name) {
         struct RedisModule* module = (RedisModule*)de->dictGetVal();
         listNode *ln;
 
-        listIter li(module->types);
+        listIter li(module->m_types);
         while((ln = li.listNext())) {
             moduleType *mt = (moduleType *)ln->listNodeValue();
-            if (memcmp(name,mt->name,sizeof(mt->name)) == 0) {
+            if (memcmp(name,mt->m_name,sizeof(mt->m_name)) == 0) {
                 return mt;
             }
         }
@@ -2772,12 +2772,12 @@ moduleType *moduleTypeLookupModuleByID(uint64_t id) {
         struct RedisModule* module = (RedisModule*)de->dictGetVal();
         listNode *ln;
 
-        listIter li(module->types);
+        listIter li(module->m_types);
         while((ln = li.listNext())) {
             moduleType *this_mt = (moduleType *)ln->listNodeValue();
             /* Compare only the 54 bit module identifier and not the
              * encoding version. */
-            if (this_mt->id >> 10 == id >> 10) {
+            if (this_mt->m_id >> 10 == id >> 10) {
                 mt = this_mt;
                 break;
             }
@@ -2891,16 +2891,16 @@ moduleType *RM_CreateDataType(RedisModuleCtx *ctx, const char *name, int encver,
     } *tms = (struct typemethods*) typemethods_ptr;
 
     moduleType *mt = (moduleType *)zcalloc(sizeof(*mt));
-    mt->id = id;
-    mt->module = ctx->module;
-    mt->rdb_load = tms->rdb_load;
-    mt->rdb_save = tms->rdb_save;
-    mt->aof_rewrite = tms->aof_rewrite;
-    mt->mem_usage = tms->mem_usage;
-    mt->digest = tms->digest;
-    mt->free = tms->free;
-    memcpy(mt->name,name,sizeof(mt->name));
-    ctx->module->types->listAddNodeTail(mt);
+    mt->m_id = id;
+    mt->m_module = ctx->module;
+    mt->m_rdb_load = tms->rdb_load;
+    mt->m_rdb_save = tms->rdb_save;
+    mt->m_aof_rewrite = tms->aof_rewrite;
+    mt->m_mem_usage = tms->mem_usage;
+    mt->m_digest = tms->digest;
+    mt->m_free = tms->free;
+    memcpy(mt->m_name,name,sizeof(mt->m_name));
+    ctx->module->m_types->listAddNodeTail(mt);
     return mt;
 }
 
@@ -2928,7 +2928,7 @@ moduleType *RM_ModuleTypeGetType(RedisModuleKey *key) {
         key->value == NULL ||
         RM_KeyType(key) != REDISMODULE_KEYTYPE_MODULE) return NULL;
     moduleValue *mv = (moduleValue *)key->value->ptr;
-    return mv->type;
+    return mv->m_type;
 }
 
 /* Assuming RedisModule_KeyType() returned REDISMODULE_KEYTYPE_MODULE on
@@ -2942,7 +2942,7 @@ void *RM_ModuleTypeGetValue(RedisModuleKey *key) {
         key->value == NULL ||
         RM_KeyType(key) != REDISMODULE_KEYTYPE_MODULE) return NULL;
     moduleValue *mv = (moduleValue *)key->value->ptr;
-    return mv->value;
+    return mv->m_value;
 }
 
 /* --------------------------------------------------------------------------
@@ -2956,9 +2956,9 @@ void moduleRDBLoadError(RedisModuleIO *io) {
         "Error loading data from RDB (short read or EOF). "
         "Read performed by module '%s' about type '%s' "
         "after reading '%llu' bytes of a value.",
-        io->type->module->name,
-        io->type->name,
-        (unsigned long long)io->bytes);
+        io->m_type->m_module->m_name,
+        io->m_type->m_name,
+        (unsigned long long)io->m_bytes);
     exit(1);
 }
 
@@ -2966,19 +2966,19 @@ void moduleRDBLoadError(RedisModuleIO *io) {
  * be called in the context of the rdb_save method of modules implementing new
  * data types. */
 void RM_SaveUnsigned(RedisModuleIO *io, uint64_t value) {
-    if (io->error) return;
+    if (io->m_error) return;
     /* Save opcode. */
-    int retval = rdbSaveLen(io->rio, RDB_MODULE_OPCODE_UINT);
+    int retval = rdbSaveLen(io->m_rio, RDB_MODULE_OPCODE_UINT);
     if (retval == -1) goto saveerr;
-    io->bytes += retval;
+    io->m_bytes += retval;
     /* Save value. */
-    retval = rdbSaveLen(io->rio, value);
+    retval = rdbSaveLen(io->m_rio, value);
     if (retval == -1) goto saveerr;
-    io->bytes += retval;
+    io->m_bytes += retval;
     return;
 
 saveerr:
-    io->error = 1;
+    io->m_error = 1;
 }
 
 /* Load an unsigned 64 bit value from the RDB file. This function should only
@@ -2986,12 +2986,12 @@ saveerr:
  * new data types. */
 uint64_t RM_LoadUnsigned(RedisModuleIO *io) {
     int retval;
-    if (io->ver == 2) {
-        uint64_t opcode = rdbLoadLen(io->rio,NULL);
+    if (io->m_ver == 2) {
+        uint64_t opcode = rdbLoadLen(io->m_rio,NULL);
         if (opcode != RDB_MODULE_OPCODE_UINT) goto loaderr;
     }
     uint64_t value;
-    retval = rdbLoadLenByRef(io->rio, NULL, &value);
+    retval = rdbLoadLenByRef(io->m_rio, NULL, &value);
     if (retval == -1) goto loaderr;
     return value;
 
@@ -3021,47 +3021,47 @@ int64_t RM_LoadSigned(RedisModuleIO *io) {
  * other Load family functions expecting a serialized string inside
  * the RDB file. */
 void RM_SaveString(RedisModuleIO *io, RedisModuleString *s) {
-    if (io->error) return;
+    if (io->m_error) return;
     /* Save opcode. */
-    int retval = rdbSaveLen(io->rio, RDB_MODULE_OPCODE_STRING);
+    int retval = rdbSaveLen(io->m_rio, RDB_MODULE_OPCODE_STRING);
     if (retval == -1) goto saveerr;
-    io->bytes += retval;
+    io->m_bytes += retval;
     /* Save value. */
-    retval = rdbSaveStringObject(io->rio, s);
+    retval = rdbSaveStringObject(io->m_rio, s);
     if (retval == -1) goto saveerr;
-    io->bytes += retval;
+    io->m_bytes += retval;
     return;
 
 saveerr:
-    io->error = 1;
+    io->m_error = 1;
 }
 
 /* Like RedisModule_SaveString() but takes a raw C pointer and length
  * as input. */
 void RM_SaveStringBuffer(RedisModuleIO *io, const char *str, size_t len) {
-    if (io->error) return;
+    if (io->m_error) return;
     /* Save opcode. */
-    int retval = rdbSaveLen(io->rio, RDB_MODULE_OPCODE_STRING);
+    int retval = rdbSaveLen(io->m_rio, RDB_MODULE_OPCODE_STRING);
     if (retval == -1) goto saveerr;
-    io->bytes += retval;
+    io->m_bytes += retval;
     /* Save value. */
-    retval = rdbSaveRawString(io->rio, (unsigned char*)str,len);
+    retval = rdbSaveRawString(io->m_rio, (unsigned char*)str,len);
     if (retval == -1) goto saveerr;
-    io->bytes += retval;
+    io->m_bytes += retval;
     return;
 
 saveerr:
-    io->error = 1;
+    io->m_error = 1;
 }
 
 /* Implements RM_LoadString() and RM_LoadStringBuffer() */
 void *moduleLoadString(RedisModuleIO *io, int plain, size_t *lenptr) {
     void *s;
-    if (io->ver == 2) {
-        uint64_t opcode = rdbLoadLen(io->rio,NULL);
+    if (io->m_ver == 2) {
+        uint64_t opcode = rdbLoadLen(io->m_rio,NULL);
         if (opcode != RDB_MODULE_OPCODE_STRING) goto loaderr;
     }
-    s = rdbGenericLoadStringObject(io->rio,
+    s = rdbGenericLoadStringObject(io->m_rio,
               plain ? RDB_LOAD_PLAIN : RDB_LOAD_NONE, lenptr);
     if (s == NULL) goto loaderr;
     return s;
@@ -3100,31 +3100,31 @@ char *RM_LoadStringBuffer(RedisModuleIO *io, size_t *lenptr) {
  * It is possible to load back the value with RedisModule_LoadDouble(). */
 void RM_SaveDouble(RedisModuleIO *io, double value) {
     int retval;
-    if (io->error) return;
+    if (io->m_error) return;
     /* Save opcode. */
-     retval = rdbSaveLen(io->rio, RDB_MODULE_OPCODE_DOUBLE);
+     retval = rdbSaveLen(io->m_rio, RDB_MODULE_OPCODE_DOUBLE);
     if (retval == -1) goto saveerr;
-    io->bytes += retval;
+    io->m_bytes += retval;
     /* Save value. */
-    retval = rdbSaveBinaryDoubleValue(io->rio, value);
+    retval = rdbSaveBinaryDoubleValue(io->m_rio, value);
     if (retval == -1) goto saveerr;
-    io->bytes += retval;
+    io->m_bytes += retval;
     return;
 
 saveerr:
-    io->error = 1;
+    io->m_error = 1;
 }
 
 /* In the context of the rdb_save method of a module data type, loads back the
  * double value saved by RedisModule_SaveDouble(). */
 double RM_LoadDouble(RedisModuleIO *io) {
     int retval;
-    if (io->ver == 2) {
-        uint64_t opcode = rdbLoadLen(io->rio,NULL);
+    if (io->m_ver == 2) {
+        uint64_t opcode = rdbLoadLen(io->m_rio,NULL);
         if (opcode != RDB_MODULE_OPCODE_DOUBLE) goto loaderr;
     }
     double value;
-    retval = rdbLoadBinaryDoubleValue(io->rio, &value);
+    retval = rdbLoadBinaryDoubleValue(io->m_rio, &value);
     if (retval == -1) goto loaderr;
     return value;
 
@@ -3137,31 +3137,31 @@ loaderr:
  * value to the RDB file. The float can be a valid number, a NaN or infinity.
  * It is possible to load back the value with RedisModule_LoadFloat(). */
 void RM_SaveFloat(RedisModuleIO *io, float value) {
-    if (io->error) return;
+    if (io->m_error) return;
     /* Save opcode. */
-    int retval = rdbSaveLen(io->rio, RDB_MODULE_OPCODE_FLOAT);
+    int retval = rdbSaveLen(io->m_rio, RDB_MODULE_OPCODE_FLOAT);
     if (retval == -1) goto saveerr;
-    io->bytes += retval;
+    io->m_bytes += retval;
     /* Save value. */
-    retval = rdbSaveBinaryFloatValue(io->rio, value);
+    retval = rdbSaveBinaryFloatValue(io->m_rio, value);
     if (retval == -1) goto saveerr;
-    io->bytes += retval;
+    io->m_bytes += retval;
     return;
 
 saveerr:
-    io->error = 1;
+    io->m_error = 1;
 }
 
 /* In the context of the rdb_save method of a module data type, loads back the
  * float value saved by RedisModule_SaveFloat(). */
 float RM_LoadFloat(RedisModuleIO *io) {
     int retval;
-    if (io->ver == 2) {
-        uint64_t opcode = rdbLoadLen(io->rio,NULL);
+    if (io->m_ver == 2) {
+        uint64_t opcode = rdbLoadLen(io->m_rio,NULL);
         if (opcode != RDB_MODULE_OPCODE_FLOAT) goto loaderr;
     }
     float value;
-    retval = rdbLoadBinaryFloatValue(io->rio, &value);
+    retval = rdbLoadBinaryFloatValue(io->m_rio, &value);
     if (retval == -1) goto loaderr;
     return value;
 
@@ -3240,7 +3240,7 @@ void RM_DigestEndSequence(RedisModuleDigest *md) {
  * the parameters are passed, but it does not return anything as the error
  * handling is performed by Redis itself. */
 void RM_EmitAOF(RedisModuleIO *io, const char *cmdname, const char *fmt, ...) {
-    if (io->error) return;
+    if (io->m_error) return;
     struct redisCommand *cmd;
     robj **argv = NULL;
     int argc = 0, flags = 0, j;
@@ -3251,8 +3251,8 @@ void RM_EmitAOF(RedisModuleIO *io, const char *cmdname, const char *fmt, ...) {
         serverLog(LL_WARNING,
             "Fatal: AOF method for module data type '%s' tried to "
             "emit unknown command '%s'",
-            io->type->name, cmdname);
-        io->error = 1;
+            io->m_type->m_name, cmdname);
+        io->m_error = 1;
         errno = EINVAL;
         return;
     }
@@ -3265,20 +3265,20 @@ void RM_EmitAOF(RedisModuleIO *io, const char *cmdname, const char *fmt, ...) {
         serverLog(LL_WARNING,
             "Fatal: AOF method for module data type '%s' tried to "
             "call RedisModule_EmitAOF() with wrong format specifiers '%s'",
-            io->type->name, fmt);
-        io->error = 1;
+            io->m_type->m_name, fmt);
+        io->m_error = 1;
         errno = EINVAL;
         return;
     }
 
     /* Bulk count. */
-    if (!io->error && rioWriteBulkCount(io->rio,'*',argc) == 0)
-        io->error = 1;
+    if (!io->m_error && io->m_rio->rioWriteBulkCount('*',argc) == 0)
+        io->m_error = 1;
 
     /* Arguments. */
     for (j = 0; j < argc; j++) {
-        if (!io->error && rioWriteBulkObject(io->rio,argv[j]) == 0)
-            io->error = 1;
+        if (!io->m_error && io->m_rio->rioWriteBulkObject(argv[j]) == 0)
+            io->m_error = 1;
         decrRefCount(argv[j]);
     }
     zfree(argv);
@@ -3290,13 +3290,13 @@ void RM_EmitAOF(RedisModuleIO *io, const char *cmdname, const char *fmt, ...) {
  * -------------------------------------------------------------------------- */
 
 RedisModuleCtx *RM_GetContextFromIO(RedisModuleIO *io) {
-    if (io->ctx) return io->ctx; /* Can't have more than one... */
+    if (io->m_ctx) return io->m_ctx; /* Can't have more than one... */
     RedisModuleCtx ctxtemplate = REDISMODULE_CTX_INIT;
-    io->ctx = (RedisModuleCtx *)zmalloc(sizeof(RedisModuleCtx));
-    *(io->ctx) = ctxtemplate;
-    io->ctx->module = io->type->module;
-    io->ctx->_client = NULL;
-    return io->ctx;
+    io->m_ctx = (RedisModuleCtx *)zmalloc(sizeof(RedisModuleCtx));
+    *(io->m_ctx) = ctxtemplate;
+    io->m_ctx->module = io->m_type->m_module;
+    io->m_ctx->_client = NULL;
+    return io->m_ctx;
 }
 
 /* --------------------------------------------------------------------------
@@ -3320,7 +3320,7 @@ void RM_LogRaw(RedisModule *module, const char *levelstr, const char *fmt, va_li
     else if (!strcasecmp(levelstr,"warning")) level = LL_WARNING;
     else level = LL_VERBOSE; /* Default. */
 
-    name_len = snprintf(msg, sizeof(msg),"<%s> ", module->name);
+    name_len = snprintf(msg, sizeof(msg),"<%s> ", module->m_name);
     vsnprintf(msg + name_len, sizeof(msg) - name_len, fmt, ap);
     serverLogRaw(level,msg);
 }
@@ -3356,7 +3356,7 @@ void RM_Log(RedisModuleCtx *ctx, const char *levelstr, const char *fmt, ...) {
 void RM_LogIOError(RedisModuleIO *io, const char *levelstr, const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    RM_LogRaw(io->type->module,levelstr,fmt,ap);
+    RM_LogRaw(io->m_type->m_module,levelstr,fmt,ap);
     va_end(ap);
 }
 
@@ -3742,8 +3742,8 @@ void moduleLoadFromQueue(void) {
 }
 
 void moduleFreeModuleStructure(RedisModule *module) {
-    listRelease(module->types);
-    sdsfree(module->name);
+    listRelease(module->m_types);
+    sdsfree(module->m_name);
     zfree(module);
 }
 
@@ -3799,9 +3799,9 @@ int moduleLoad(const char *path, void **module_argv, int module_argc) {
     }
 
     /* Redis module loaded! Register it. */
-    modules->dictAdd(ctx.module->name,ctx.module);
-    ctx.module->handle = handle;
-    serverLog(LL_NOTICE,"Module '%s' loaded from %s",ctx.module->name,path);
+    modules->dictAdd(ctx.module->m_name,ctx.module);
+    ctx.module->m_handle = handle;
+    serverLog(LL_NOTICE,"Module '%s' loaded from %s",ctx.module->m_name,path);
     moduleFreeContext(&ctx);
     return C_OK;
 }
@@ -3820,7 +3820,7 @@ int moduleUnload(sds name) {
         return REDISMODULE_ERR;
     }
 
-    if (module->types->listLength()) {
+    if (module->m_types->listLength()) {
         errno = EBUSY;
         return REDISMODULE_ERR;
     }
@@ -3830,17 +3830,17 @@ int moduleUnload(sds name) {
     /* Unregister all the hooks. TODO: Yet no hooks support here. */
 
     /* Unload the dynamic library. */
-    if (dlclose(module->handle) == -1) {
+    if (dlclose(module->m_handle) == -1) {
         char *error = dlerror();
         if (error == NULL) error = "Unknown error";
         serverLog(LL_WARNING,"Error when trying to close the %s module: %s",
-            module->name, error);
+            module->m_name, error);
     }
 
     /* Remove from list of modules. */
-    serverLog(LL_NOTICE,"Module %s unloaded",module->name);
-    modules->dictDelete(module->name);
-    module->name = NULL; /* The name was already freed by dictDelete(). */
+    serverLog(LL_NOTICE,"Module %s unloaded",module->m_name);
+    modules->dictDelete(module->m_name);
+    module->m_name = NULL; /* The name was already freed by dictDelete(). */
     moduleFreeModuleStructure(module);
 
     return REDISMODULE_OK;
@@ -3896,7 +3896,7 @@ void moduleCommand(client *c) {
             addReplyBulkCString(c,"name");
             addReplyBulkCBuffer(c,name,sdslen(name));
             addReplyBulkCString(c,"ver");
-            addReplyLongLong(c,module->ver);
+            addReplyLongLong(c,module->m_ver);
         }
     } else {
         addReply(c,shared.syntaxerr);

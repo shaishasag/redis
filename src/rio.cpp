@@ -287,8 +287,9 @@ void rioFreeFdset(rio *r) {
 
 /* This function can be installed both in memory and file streams when checksum
  * computation is needed. */
-void rioGenericUpdateChecksum(rio *r, const void *buf, size_t len) {
-    r->cksum = crc64(r->cksum, (const unsigned char *)buf,len);
+void rio::rioGenericUpdateChecksum(rio* prio, const void *buf, size_t len)
+{
+    prio->m_checksum = crc64(prio->m_checksum, (const unsigned char *)buf,len);
 }
 
 /* Set the file-based rio object to auto-fsync every 'bytes' file written.
@@ -299,9 +300,10 @@ void rioGenericUpdateChecksum(rio *r, const void *buf, size_t len) {
  * buffers sometimes the OS buffers way too much, resulting in too many
  * disk I/O concentrated in very little time. When we fsync in an explicit
  * way instead the I/O pressure is more distributed across time. */
-void rioSetAutoSync(rio *r, off_t bytes) {
-    serverAssert(r->read == rioFileIO.read);
-    r->io.file.autosync = bytes;
+void rio::rioSetAutoSync(off_t bytes)
+{
+    serverAssert(m_read_func == rioFileIO.m_read_func);
+    io.file.autosync = bytes;
 }
 
 /* --------------------------- Higher level interface --------------------------
@@ -310,7 +312,8 @@ void rioSetAutoSync(rio *r, off_t bytes) {
  * generating the Redis protocol for the Append Only File. */
 
 /* Write multi bulk count in the format: "*<count>\r\n". */
-size_t rioWriteBulkCount(rio *r, char prefix, int count) {
+size_t rio::rioWriteBulkCount(char prefix, int count)
+{
     char cbuf[128];
     int clen;
 
@@ -318,34 +321,41 @@ size_t rioWriteBulkCount(rio *r, char prefix, int count) {
     clen = 1+ll2string(cbuf+1,sizeof(cbuf)-1,count);
     cbuf[clen++] = '\r';
     cbuf[clen++] = '\n';
-    if (rioWrite(r,cbuf,clen) == 0) return 0;
+    if (rioWrite(cbuf, clen) == 0)
+        return 0;
     return clen;
 }
 
 /* Write binary-safe string in the format: "$<count>\r\n<payload>\r\n". */
-size_t rioWriteBulkString(rio *r, const char *buf, size_t len) {
+size_t rio::rioWriteBulkString(const char *buf, size_t len)
+{
     size_t nwritten;
 
-    if ((nwritten = rioWriteBulkCount(r,'$',len)) == 0) return 0;
-    if (len > 0 && rioWrite(r,buf,len) == 0) return 0;
-    if (rioWrite(r,"\r\n",2) == 0) return 0;
+    if ((nwritten = rioWriteBulkCount('$',len)) == 0)
+        return 0;
+    if (len > 0 && rioWrite(buf,len) == 0)
+        return 0;
+    if (rioWrite("\r\n",2) == 0)
+        return 0;
     return nwritten+len+2;
 }
 
 /* Write a long long value in format: "$<count>\r\n<payload>\r\n". */
-size_t rioWriteBulkLongLong(rio *r, long long l) {
+size_t rio::rioWriteBulkLongLong(long long l)
+{
     char lbuf[32];
     unsigned int llen;
 
     llen = ll2string(lbuf,sizeof(lbuf),l);
-    return rioWriteBulkString(r,lbuf,llen);
+    return rioWriteBulkString(lbuf, llen);
 }
 
 /* Write a double value in the format: "$<count>\r\n<payload>\r\n" */
-size_t rioWriteBulkDouble(rio *r, double d) {
+size_t rio::rioWriteBulkDouble(double d)
+{
     char dbuf[128];
     unsigned int dlen;
 
     dlen = snprintf(dbuf,sizeof(dbuf),"%.17g",d);
-    return rioWriteBulkString(r,dbuf,dlen);
+    return rioWriteBulkString(dbuf, dlen);
 }
