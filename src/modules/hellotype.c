@@ -60,7 +60,7 @@ struct HelloTypeObject {
     size_t len; /* Number of elements added. */
 };
 
-struct HelloTypeObject *createHelloTypeObject(void) {
+struct HelloTypeObject *createHelloTypeObject() {
     struct HelloTypeObject *o;
     o = RedisModule_Alloc(sizeof(*o));
     o->head = NULL;

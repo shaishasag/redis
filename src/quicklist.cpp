@@ -100,7 +100,7 @@ quicklistEntry::quicklistEntry()
 
 /* Create a new quicklist.
  * Free with quicklistRelease(). */
-quicklist *quicklistCreate(void) {
+quicklist *quicklistCreate() {
     struct quicklist *quicklist = (struct quicklist *)zmalloc(sizeof(*quicklist));
     quicklist->m_head_ql_node = NULL;
     quicklist->m_tail_ql_node = NULL;
@@ -1503,7 +1503,7 @@ static void ql_info(quicklist *ql) {
 }
 
 /* Return the UNIX time in microseconds */
-static long long ustime(void) {
+static long long ustime() {
     struct timeval tv;
     long long ust;
 
@@ -1514,7 +1514,7 @@ static long long ustime(void) {
 }
 
 /* Return the UNIX time in milliseconds */
-static long long mstime(void) { return ustime() / 1000; }
+static long long mstime() { return ustime() / 1000; }
 
 /* Iterate over an entire quicklist.
  * Print the list if 'print' == 1.

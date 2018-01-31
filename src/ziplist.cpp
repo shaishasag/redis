@@ -575,7 +575,7 @@ void zipEntry(unsigned char *p, zlentry *e) {
 }
 
 /* Create a new empty ziplist. */
-unsigned char *ziplistNew(void) {
+unsigned char *ziplistNew() {
     unsigned int bytes = ZIPLIST_HEADER_SIZE+1;
     unsigned char *zl = (unsigned char *)zmalloc(bytes);
     ZIPLIST_BYTES(zl) = intrev32ifbe(bytes);
@@ -1280,7 +1280,7 @@ static unsigned char *createIntList() {
     return zl;
 }
 
-static long long usec(void) {
+static long long usec() {
     struct timeval tv;
     gettimeofday(&tv,NULL);
     return (((long long)tv.tv_sec)*1000000)+tv.tv_usec;

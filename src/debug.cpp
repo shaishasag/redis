@@ -655,7 +655,7 @@ void _serverPanic(const char *file, int line, const char *msg, ...) {
     *((char*)-1) = 'x';
 }
 
-void bugReportStart(void) {
+void bugReportStart() {
     if (server.bug_report_start == 0) {
         serverLogRaw(LL_WARNING|LL_RAW,
         "\n\n=== REDIS BUG REPORT START: Cut & paste starting from here ===\n");
@@ -845,7 +845,7 @@ void logRegisters(ucontext_t *uc) {
  * test) or when an API call requires a raw fd.
  *
  * Close it with closeDirectLogFiledes(). */
-int openDirectLogFiledes(void) {
+int openDirectLogFiledes() {
     int log_to_stdout = server.logfile[0] == '\0';
     int fd = log_to_stdout ?
         STDOUT_FILENO :
@@ -889,7 +889,7 @@ void logStackTrace(ucontext_t *uc) {
 /* Log information about the "current" client, that is, the client that is
  * currently being served by Redis. May be NULL if Redis is not serving a
  * client right now. */
-void logCurrentClient(void) {
+void logCurrentClient() {
     if (server.current_client == NULL) return;
 
     client *cc = server.current_client;
@@ -930,7 +930,7 @@ void logCurrentClient(void) {
 #define MEMTEST_MAX_REGIONS 128
 
 /* A non destructive memory test executed during segfauls. */
-int memtest_test_linux_anonymous_maps(void) {
+int memtest_test_linux_anonymous_maps() {
     FILE *fp;
     char line[1024];
     char logbuf[1024];
@@ -1204,7 +1204,7 @@ void enableWatchdog(int period) {
 }
 
 /* Disable the software watchdog. */
-void disableWatchdog(void) {
+void disableWatchdog() {
     struct sigaction act;
     if (server.watchdog_period == 0) return; /* Already disabled. */
     watchdogScheduleSignal(0); /* Stop the current timer. */

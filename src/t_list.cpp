@@ -797,7 +797,7 @@ int serveClientBlockedOnList(client *receiver, robj *key, robj *dstkey, redisDb 
  * serve clients accordingly. Note that the function will iterate again and
  * again as a result of serving BRPOPLPUSH we can have new blocking clients
  * to serve because of the PUSH side of BRPOPLPUSH. */
-void handleClientsBlockedOnLists(void) {
+void handleClientsBlockedOnLists() {
     while(server.ready_keys->listLength() != 0) {
 
         /* Point server.ready_keys to a fresh list and save the current one

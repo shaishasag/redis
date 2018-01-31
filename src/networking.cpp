@@ -722,7 +722,7 @@ static void freeClientArgv(client *c) {
 /* Close all the slaves connections. This is useful in chained replication
  * when we resync with our own master and want to force all our slaves to
  * resync with us as well. */
-void disconnectSlaves(void) {
+void disconnectSlaves() {
     while (server.slaves->listLength()) {
         listNode *ln = server.slaves->listFirst();
         freeClient((client*)ln->listNodeValue());
@@ -876,7 +876,7 @@ void freeClientAsync(client *c) {
     server.clients_to_close->listAddNodeTail(c);
 }
 
-void freeClientsInAsyncFreeQueue(void) {
+void freeClientsInAsyncFreeQueue() {
     while (server.clients_to_close->listLength()) {
         listNode *ln = server.clients_to_close->listFirst();
         client *c = (client *)ln->listNodeValue();
@@ -986,7 +986,7 @@ void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask) {
  * we can just write the replies to the client output buffer without any
  * need to use a syscall in order to install the writable event handler,
  * get it called, and so forth. */
-int handleClientsWithPendingWrites(void) {
+int handleClientsWithPendingWrites() {
     listNode *ln;
     int processed = server.clients_pending_write->listLength();
 
@@ -1534,7 +1534,7 @@ sds catClientInfoString(sds s, client *client) {
         client->lastcmd ? client->lastcmd->name : "NULL");
 }
 
-sds getAllClientsInfoString(void) {
+sds getAllClientsInfoString() {
     listNode *ln;
     sds o = sdsnewlen(NULL,200*server.clients->listLength());
     sdsclear(o);
@@ -1917,7 +1917,7 @@ void asyncCloseClientOnOutputBufferLimitReached(client *c) {
  * output buffers without returning control to the event loop.
  * This is also called by SHUTDOWN for a best-effort attempt to send
  * slaves the latest writes. */
-void flushSlavesOutputBuffers(void) {
+void flushSlavesOutputBuffers() {
     listNode *ln;
 
     listIter li(server.slaves);
@@ -1966,7 +1966,7 @@ void pauseClients(mstime_t end) {
 
 /* Return non-zero if clients are currently paused. As a side effect the
  * function checks if the pause time was reached and clear it. */
-int clientsArePaused(void) {
+int clientsArePaused() {
     if (server.clients_paused &&
         server.clients_pause_end_time < server.mstime)
     {
@@ -2003,7 +2003,7 @@ int clientsArePaused(void) {
  * write, close sequence needed to serve a client.
  *
  * The function returns the total number of events processed. */
-int processEventsWhileBlocked(void) {
+int processEventsWhileBlocked() {
     int iterations = 4; /* See the function top-comment. */
     int count = 0;
     while (iterations--) {

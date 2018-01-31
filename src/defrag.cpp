@@ -473,7 +473,7 @@ float getAllocatorFragmentation(size_t *out_frag_bytes) {
 /* Perform incremental defragmentation work from the serverCron.
  * This works in a similar way to activeExpireCycle, in the sense that
  * we do incremental work across calls. */
-void activeDefragCycle(void) {
+void activeDefragCycle() {
     static int current_db = -1;
     static unsigned long cursor = 0;
     static redisDb *db = NULL;
@@ -570,7 +570,7 @@ void activeDefragCycle(void) {
 
 #else /* HAVE_DEFRAG */
 
-void activeDefragCycle(void) {
+void activeDefragCycle() {
     /* Not implemented yet. */
 }
 

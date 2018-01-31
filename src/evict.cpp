@@ -67,7 +67,7 @@ static evictionPoolEntry *EvictionPoolLRU;
 /* Return the LRU clock, based on the clock resolution. This is a time
  * in a reduced-bits format that can be used to set and check the
  * object->lru field of redisObject structures. */
-unsigned int getLRUClock(void) {
+unsigned int getLRUClock() {
     return (mstime()/LRU_CLOCK_RESOLUTION) & LRU_CLOCK_MAX;
 }
 
@@ -75,7 +75,7 @@ unsigned int getLRUClock(void) {
  * If the current resolution is lower than the frequency we refresh the
  * LRU clock (as it should be in production servers) we return the
  * precomputed value, otherwise we need to resort to a system call. */
-unsigned int LRU_CLOCK(void) {
+unsigned int LRU_CLOCK() {
     unsigned int lruclock;
     if (1000/server.hz <= LRU_CLOCK_RESOLUTION) {
         atomicGet(server.lruclock,lruclock);
@@ -136,7 +136,7 @@ unsigned long long estimateObjectIdleTime(robj *o) {
  * evicted in the whole database. */
 
 /* Create a new eviction pool. */
-void evictionPoolAlloc(void) {
+void evictionPoolAlloc() {
     evictionPoolEntry *ep;
     int j;
 
@@ -295,7 +295,7 @@ void evictionPoolPopulate(int dbid, dict *sampledict, dict *keydict, evictionPoo
 /* Return the current time in minutes, just taking the least significant
  * 16 bits. The returned time is suitable to be stored as LDT (last decrement
  * time) for the LFU implementation. */
-unsigned long LFUGetTimeInMinutes(void) {
+unsigned long LFUGetTimeInMinutes() {
     return (server.unixtime/60) & 65535;
 }
 
@@ -348,7 +348,7 @@ unsigned long LFUDecrAndReturn(robj *o) {
 /* We don't want to count AOF buffers and slaves output buffers as
  * used memory: the eviction should use mostly data size. This function
  * returns the sum of AOF and slaves buffer. */
-size_t freeMemoryGetNotCountedMemory(void) {
+size_t freeMemoryGetNotCountedMemory() {
     size_t overhead = 0;
     int slaves = server.slaves->listLength();
 
@@ -367,7 +367,7 @@ size_t freeMemoryGetNotCountedMemory(void) {
     return overhead;
 }
 
-int freeMemoryIfNeeded(void) {
+int freeMemoryIfNeeded() {
     size_t mem_reported, mem_used, mem_tofree, mem_freed;
     mstime_t latency, eviction_latency;
     long long delta;

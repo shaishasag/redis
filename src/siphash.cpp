@@ -310,7 +310,7 @@ const uint8_t vectors_sip64[64][8] = {
  * IMPORTANT: The test vector is for SipHash 2-4. Before running
  * the test revert back the siphash() function to 2-4 rounds since
  * now it uses 1-2 rounds. */
-int siphash_test(void) {
+int siphash_test() {
     uint8_t in[64], k[16];
     int i;
     int fails = 0;
@@ -347,7 +347,7 @@ int siphash_test(void) {
     return 1;
 }
 
-int main(void) {
+int main() {
     if (siphash_test() == 0) {
         printf("SipHash test: OK\n");
         return 0;

@@ -70,7 +70,7 @@ sequence::~sequence()
 }
 
 /* Create a new sequence. */
-sequence *createSparklineSequence(void) {
+sequence *createSparklineSequence() {
     void* seq_mem = zmalloc(sizeof(sequence));
     sequence* seq = new (seq_mem) sequence;
     return seq;

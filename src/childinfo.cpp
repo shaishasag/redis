@@ -46,7 +46,7 @@ void openChildInfoPipe() {
 }
 
 /* Close the pipes opened with openChildInfoPipe(). */
-void closeChildInfoPipe(void) {
+void closeChildInfoPipe() {
     if (server.child_info_pipe[0] != -1 ||
         server.child_info_pipe[1] != -1)
     {
@@ -70,7 +70,7 @@ void sendChildInfo(int ptype) {
 }
 
 /* Receive COW data from parent. */
-void receiveChildInfo(void) {
+void receiveChildInfo() {
     if (server.child_info_pipe[0] == -1) return;
     ssize_t wlen = sizeof(server.child_info_data);
     if (read(server.child_info_pipe[0],&server.child_info_data,wlen) == wlen &&

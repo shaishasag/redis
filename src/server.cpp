@@ -401,7 +401,7 @@ err:
 }
 
 /* Return the UNIX time in microseconds */
-long long ustime(void) {
+long long ustime() {
     struct timeval tv;
     long long ust;
 
@@ -412,7 +412,7 @@ long long ustime(void) {
 }
 
 /* Return the UNIX time in milliseconds */
-mstime_t mstime(void) {
+mstime_t mstime() {
     return ustime()/1000;
 }
 
@@ -740,7 +740,7 @@ int incrementallyRehash(int dbid) {
  * memory pages are copied). The goal of this function is to update the ability
  * for dict.c to resize the hash tables accordingly to the fact we have o not
  * running childs. */
-void updateDictResizePolicy(void) {
+void updateDictResizePolicy() {
     if (server.rdb_child_pid == -1 && server.aof_child_pid == -1)
         dictEnableResize();
     else
@@ -839,7 +839,7 @@ int clientsCronResizeQueryBuffer(client *c) {
 }
 
 #define CLIENTS_CRON_MIN_ITERATIONS 5
-void clientsCron(void) {
+void clientsCron() {
     /* Make sure to process at least numclients/server.hz of clients
      * per call. Since this function is called server.hz times per second
      * we are sure that in the worst case we process all the clients in 1
@@ -873,7 +873,7 @@ void clientsCron(void) {
 /* This function handles 'background' operations we are required to do
  * incrementally in Redis databases, such as active key expiring, resizing,
  * rehashing. */
-void databasesCron(void) {
+void databasesCron() {
     /* Expire keys by random sampling. Not required for slaves
      * as master will synthesize DELs for us. */
     if (server.active_expire_enabled && server.masterhost == NULL) {
@@ -929,7 +929,7 @@ void databasesCron(void) {
  * virtual memory and aging there is to store the current time in objects at
  * every object access, and accuracy is not needed. To access a global var is
  * a lot faster than calling time(NULL) */
-void updateCachedTime(void) {
+void updateCachedTime() {
     time_t unixtime = time(NULL);
     atomicSet(server.unixtime,unixtime);
     server.mstime = mstime();
@@ -1248,7 +1248,7 @@ void afterSleep(struct aeEventLoop *eventLoop) {
 
 /* =========================== Server initialization ======================== */
 
-void createSharedObjects(void) {
+void createSharedObjects() {
     int j;
 
     shared.crlf = createObject(OBJ_STRING,sdsnew("\r\n"));
@@ -1340,7 +1340,7 @@ void createSharedObjects(void) {
     shared.maxstring = sdsnew("maxstring");
 }
 
-void initServerConfig(void) {
+void initServerConfig() {
     int j;
 
     pthread_mutex_init(&server.next_client_id_mutex,NULL);
@@ -1603,7 +1603,7 @@ int restartServer(int flags, mstime_t delay) {
  * If it will not be possible to set the limit accordingly to the configured
  * max number of clients, the function will do the reverse setting
  * server.maxclients to the value that we can actually handle. */
-void adjustOpenFilesLimit(void) {
+void adjustOpenFilesLimit() {
     rlim_t maxfiles = server.maxclients+CONFIG_MIN_RESERVED_FDS;
     struct rlimit limit;
 
@@ -1680,7 +1680,7 @@ void adjustOpenFilesLimit(void) {
 
 /* Check that server.tcp_backlog can be actually enforced in Linux according
  * to the value of /proc/sys/net/core/somaxconn, or warn about it. */
-void checkTcpBacklogSettings(void) {
+void checkTcpBacklogSettings() {
 #ifdef HAVE_PROC_SOMAXCONN
     FILE *fp = fopen("/proc/sys/net/core/somaxconn","r");
     char buf[1024];
@@ -1775,7 +1775,7 @@ int listenToPort(int port, int *fds, int *count) {
 /* Resets the stats that we expose via INFO or other means that we want
  * to reset via CONFIG RESETSTAT. The function is also used in order to
  * initialize these fields in initServer() at server startup. */
-void resetServerStats(void) {
+void resetServerStats() {
     int j;
 
     server.stat_numcommands = 0;
@@ -1806,7 +1806,7 @@ void resetServerStats(void) {
     server.aof_delayed_fsync = 0;
 }
 
-void initServer(void) {
+void initServer() {
     int j;
 
     signal(SIGHUP, SIG_IGN);
@@ -1967,7 +1967,7 @@ void initServer(void) {
 
 /* Populates the Redis Command Table starting from the hard coded list
  * we have on top of redis.c file. */
-void populateCommandTable(void) {
+void populateCommandTable() {
     int j;
     int numcommands = sizeof(redisCommandTable)/sizeof(struct redisCommand);
 
@@ -2003,7 +2003,7 @@ void populateCommandTable(void) {
     }
 }
 
-void resetCommandTableStats(void) {
+void resetCommandTableStats() {
     struct redisCommand *c;
     dictEntry *de;
 
@@ -3342,7 +3342,7 @@ void monitorCommand(client *c) {
 /* =================================== Main! ================================ */
 
 #ifdef __linux__
-int linuxOvercommitMemoryValue(void) {
+int linuxOvercommitMemoryValue() {
     FILE *fp = fopen("/proc/sys/vm/overcommit_memory","r");
     char buf[64];
 
@@ -3356,7 +3356,7 @@ int linuxOvercommitMemoryValue(void) {
     return atoi(buf);
 }
 
-void linuxMemoryWarnings(void) {
+void linuxMemoryWarnings() {
     if (linuxOvercommitMemoryValue() == 0) {
         serverLog(LL_WARNING,"WARNING overcommit_memory is set to 0! Background save may fail under low memory condition. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.");
     }
@@ -3366,7 +3366,7 @@ void linuxMemoryWarnings(void) {
 }
 #endif /* __linux__ */
 
-void createPidFile(void) {
+void createPidFile() {
     /* If pidfile requested, but no pidfile defined, use
      * default pidfile path */
     if (!server.pidfile) server.pidfile = zstrdup(CONFIG_DEFAULT_PID_FILE);
@@ -3379,7 +3379,7 @@ void createPidFile(void) {
     }
 }
 
-void daemonize(void) {
+void daemonize() {
     int fd;
 
     if (fork() != 0) exit(0); /* parent exits */
@@ -3396,7 +3396,7 @@ void daemonize(void) {
     }
 }
 
-void version(void) {
+void version() {
     printf("Redis server v=%s sha=%s:%d malloc=%s bits=%d build=%llx\n",
         REDIS_VERSION,
         redisGitSHA1(),
@@ -3407,7 +3407,7 @@ void version(void) {
     exit(0);
 }
 
-void usage(void) {
+void usage() {
     fprintf(stderr,"Usage: ./redis-server [/path/to/redis.conf] [options]\n");
     fprintf(stderr,"       ./redis-server - (read config from stdin)\n");
     fprintf(stderr,"       ./redis-server -v or --version\n");
@@ -3424,7 +3424,7 @@ void usage(void) {
     exit(1);
 }
 
-void redisAsciiArt(void) {
+void redisAsciiArt() {
 #include "asciilogo.h"
     char *buf = (char *)zmalloc(1024*16);
     char *mode;
@@ -3490,7 +3490,7 @@ static void sigShutdownHandler(int sig) {
     server.shutdown_asap = 1;
 }
 
-void setupSignalHandlers(void) {
+void setupSignalHandlers() {
     struct sigaction act;
 
     /* When the SA_SIGINFO flag is set in sa_flags then sa_sigaction is used.
@@ -3527,7 +3527,7 @@ int checkForSentinelMode(int argc, char **argv) {
 }
 
 /* Function called at startup to load RDB or AOF file in memory. */
-void loadDataFromDisk(void) {
+void loadDataFromDisk() {
     long long start = ustime();
     if (server.aof_state == AOF_ON) {
         if (loadAppendOnlyFile(server.aof_filename) == C_OK)
@@ -3588,7 +3588,7 @@ void redisSetProcTitle(char *title) {
  * Check whether systemd or upstart have been used to start redis.
  */
 
-int redisSupervisedUpstart(void) {
+int redisSupervisedUpstart() {
     const char *upstart_job = getenv("UPSTART_JOB");
 
     if (!upstart_job) {
@@ -3603,7 +3603,7 @@ int redisSupervisedUpstart(void) {
     return 1;
 }
 
-int redisSupervisedSystemd(void) {
+int redisSupervisedSystemd() {
     const char *notify_socket = getenv("NOTIFY_SOCKET");
     int fd = 1;
     struct sockaddr_un su;

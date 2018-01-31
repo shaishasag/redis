@@ -61,7 +61,7 @@ private:
 #define SPARKLINE_FILL 1      /* Fill the area under the curve. */
 #define SPARKLINE_LOG_SCALE 2 /* Use logarithmic scale. */
 
-sequence *createSparklineSequence(void);
+sequence *createSparklineSequence();
 void freeSparklineSequence(sequence *seq);
 
 #endif /* __SPARKLINE_H */

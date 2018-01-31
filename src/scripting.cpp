@@ -45,7 +45,7 @@ char *redisProtocolToLuaType_Error(lua_State *lua, char *reply);
 char *redisProtocolToLuaType_MultiBulk(lua_State *lua, char *reply);
 int redis_math_random (lua_State *L);
 int redis_math_randomseed (lua_State *L);
-void ldbInit(void);
+void ldbInit();
 void ldbDisable(client *c);
 void ldbEnable(client *c);
 void evalGenericCommandWithDebugging(client *c, int evalsha);
@@ -1085,12 +1085,12 @@ void scriptingInit(int setup) {
 
 /* Release resources related to Lua scripting.
  * This function is used in order to reset the scripting environment. */
-void scriptingRelease(void) {
+void scriptingRelease() {
     dictRelease(server.lua_scripts);
     lua_close(server.lua);
 }
 
-void scriptingReset(void) {
+void scriptingReset() {
     scriptingRelease();
     scriptingInit(0);
 }
@@ -1592,7 +1592,7 @@ void ldbLogWithMaxLen(sds entry) {
 /* Send ldb.logs to the debugging client as a multi-bulk reply
  * consisting of simple strings. Log entries which include newlines have them
  * replaced with spaces. The entries sent are also consumed. */
-void ldbSendLogs(void) {
+void ldbSendLogs() {
     sds proto = sdsempty();
     proto = sdscatfmt(proto,"*%i\r\n", (int)ldb.logs->listLength());
     while(ldb.logs->listLength()) {
@@ -1720,12 +1720,12 @@ int ldbRemoveChild(pid_t pid) {
 
 /* Return the number of children we still did not received termination
  * acknowledge via wait() in the parent process. */
-int ldbPendingChildren(void) {
+int ldbPendingChildren() {
     return ldb.children->listLength();
 }
 
 /* Kill all the forked sessions. */
-void ldbKillForkedSessions(void) {
+void ldbKillForkedSessions() {
     listNode *ln;
 
     listIter li(ldb.children);

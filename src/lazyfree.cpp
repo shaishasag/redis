@@ -7,7 +7,7 @@ static size_t lazyfree_objects = 0;
 pthread_mutex_t lazyfree_objects_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* Return the number of currently pending objects to free. */
-size_t lazyfreeGetPendingObjectsCount(void) {
+size_t lazyfreeGetPendingObjectsCount() {
     size_t aux;
     atomicGet(lazyfree_objects,aux);
     return aux;
@@ -97,7 +97,7 @@ void emptyDbAsync(redisDb *db) {
 
 /* Empty the slots-keys map of Redis CLuster by creating a new empty one
  * and scheduiling the old for lazy freeing. */
-void slotToKeyFlushAsync(void) {
+void slotToKeyFlushAsync() {
     rax *old = server.cluster->m_slots_to_keys;
 
     server.cluster->m_slots_to_keys = raxNew();

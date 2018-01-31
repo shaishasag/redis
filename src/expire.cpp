@@ -263,7 +263,7 @@ dict *slaveKeysWithExpire = NULL;
 
 /* Check the set of keys created by the master with an expire set in order to
  * check if they should be evicted. */
-void expireSlaveKeys(void) {
+void expireSlaveKeys() {
     if (slaveKeysWithExpire == NULL ||
         slaveKeysWithExpire->dictSize() == 0) return;
 
@@ -352,7 +352,7 @@ void rememberSlaveKeyWithExpire(redisDb *db, robj *key) {
 }
 
 /* Return the number of keys we are tracking. */
-size_t getSlaveKeyWithExpireCount(void) {
+size_t getSlaveKeyWithExpireCount() {
     if (slaveKeysWithExpire == NULL) return 0;
     return slaveKeysWithExpire->dictSize();
 }
@@ -365,7 +365,7 @@ size_t getSlaveKeyWithExpireCount(void) {
  * but it is not worth it since anyway race conditions using the same set
  * of key names in a wriatable slave and in its master will lead to
  * inconsistencies. This is just a best-effort thing we do. */
-void flushSlaveKeysWithExpireList(void) {
+void flushSlaveKeysWithExpireList() {
     if (slaveKeysWithExpire) {
         dictRelease(slaveKeysWithExpire);
         slaveKeysWithExpire = NULL;

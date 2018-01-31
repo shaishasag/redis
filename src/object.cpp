@@ -179,42 +179,42 @@ robj *dupStringObject(const robj *o) {
     }
 }
 
-robj *createQuicklistObject(void) {
+robj *createQuicklistObject() {
     quicklist *l = quicklistCreate();
     robj *o = createObject(OBJ_LIST,l);
     o->encoding = OBJ_ENCODING_QUICKLIST;
     return o;
 }
 
-robj *createZiplistObject(void) {
+robj *createZiplistObject() {
     unsigned char *zl = ziplistNew();
     robj *o = createObject(OBJ_LIST,zl);
     o->encoding = OBJ_ENCODING_ZIPLIST;
     return o;
 }
 
-robj *createSetObject(void) {
+robj *createSetObject() {
     dict *d = dictCreate(&setDictType,NULL);
     robj *o = createObject(OBJ_SET,d);
     o->encoding = OBJ_ENCODING_HT;
     return o;
 }
 
-robj *createIntsetObject(void) {
+robj *createIntsetObject() {
     intset *is = intset::intsetNew();
     robj *o = createObject(OBJ_SET,is);
     o->encoding = OBJ_ENCODING_INTSET;
     return o;
 }
 
-robj *createHashObject(void) {
+robj *createHashObject() {
     unsigned char *zl = ziplistNew();
     robj *o = createObject(OBJ_HASH, zl);
     o->encoding = OBJ_ENCODING_ZIPLIST;
     return o;
 }
 
-robj *createZsetObject(void) {
+robj *createZsetObject() {
     zset* zs = (zset*)zmalloc(sizeof(*zs));
     robj *o;
 
@@ -225,7 +225,7 @@ robj *createZsetObject(void) {
     return o;
 }
 
-robj *createZsetZiplistObject(void) {
+robj *createZsetZiplistObject() {
     unsigned char *zl = ziplistNew();
     robj *o = createObject(OBJ_ZSET,zl);
     o->encoding = OBJ_ENCODING_ZIPLIST;
@@ -809,7 +809,7 @@ void freeMemoryOverheadData(struct redisMemOverhead *mh) {
 /* Return a struct redisMemOverhead filled with memory overhead
  * information used for the MEMORY OVERHEAD and INFO command. The returned
  * structure pointer should be freed calling freeMemoryOverheadData(). */
-struct redisMemOverhead *getMemoryOverheadData(void) {
+struct redisMemOverhead *getMemoryOverheadData() {
     int j;
     size_t mem_total = 0;
     size_t mem = 0;
@@ -917,7 +917,7 @@ void inputCatSds(void *result, const char *str) {
 
 /* This implements MEMORY DOCTOR. An human readable analysis of the Redis
  * memory condition. */
-sds getMemoryDoctorReport(void) {
+sds getMemoryDoctorReport() {
     int empty = 0;          /* Instance is empty or almost empty. */
     int big_peak = 0;       /* Memory peak is much larger than used mem. */
     int high_frag = 0;      /* High fragmentation. */

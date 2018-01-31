@@ -68,10 +68,11 @@ void rdbCheckThenExit(int linenum, char *reason, ...) {
     exit(1);
 }
 
-static int rdbWriteRaw(rio *rdb, void *p, size_t len) {
+static int rdbWriteRaw(rio *rdb, void *p, size_t len)
+{
     if (rdb && rdb->rioWrite(p,len) == 0)
         return -1;
-    return len;
+    return (int)len;
 }
 
 int rdbSaveType(rio *rdb, unsigned char type) {
@@ -95,7 +96,7 @@ time_t rdbLoadTime(rio *rdb) {
 
 int rdbSaveMillisecondTime(rio *rdb, long long t) {
     int64_t t64 = (int64_t) t;
-    return rdbWriteRaw(rdb,&t64,8);
+    return rdbWriteRaw(rdb,&t64, 8);
 }
 
 long long rdbLoadMillisecondTime(rio *rdb) {
@@ -1485,7 +1486,7 @@ void loadingProgress(off_t pos) {
 }
 
 /* Loading finished */
-void stopLoading(void) {
+void stopLoading() {
     server.loading = 0;
 }
 

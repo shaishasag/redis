@@ -35,7 +35,7 @@
 #ifndef _ZIPMAP_H
 #define _ZIPMAP_H
 
-unsigned char *zipmapNew(void);
+unsigned char *zipmapNew();
 unsigned char *zipmapSet(unsigned char *zm, unsigned char *key, unsigned int klen, unsigned char *val, unsigned int vlen, int *update);
 unsigned char *zipmapDel(unsigned char *zm, unsigned char *key, unsigned int klen, int *deleted);
 unsigned char *zipmapRewind(unsigned char *zm);

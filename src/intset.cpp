@@ -305,11 +305,11 @@ static void error(char *err) {
 }
 #endif
 
-static void ok(void) {
+static void ok() {
     printf("OK\n");
 }
 
-static long long usec(void) {
+static long long usec() {
     struct timeval tv;
     gettimeofday(&tv,NULL);
     return (((long long)tv.tv_sec)*1000000)+tv.tv_usec;

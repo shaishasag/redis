@@ -370,12 +370,12 @@ void sentinelStartFailover(sentinelRedisInstance *master);
 void sentinelDiscardReplyCallback(redisAsyncContext *c, void *reply, void *privdata);
 int sentinelSendSlaveOf(sentinelRedisInstance *ri, char *host, int port);
 char *sentinelVoteLeader(sentinelRedisInstance *master, uint64_t req_epoch, char *req_runid, uint64_t *leader_epoch);
-void sentinelFlushConfig(void);
-void sentinelGenerateInitialMonitorEvents(void);
+void sentinelFlushConfig();
+void sentinelGenerateInitialMonitorEvents();
 int sentinelSendPing(sentinelRedisInstance *ri);
 int sentinelForceHelloUpdateForMaster(sentinelRedisInstance *master);
 sentinelRedisInstance *getSentinelRedisInstanceByAddrAndRunID(dict *instances, char *ip, int port, char *runid);
-void sentinelSimFailureCrash(void);
+void sentinelSimFailureCrash();
 
 /* ========================= Dictionary types =============================== */
 
@@ -438,12 +438,12 @@ struct redisCommand sentinelcmds[] = {
 
 /* This function overwrites a few normal Redis config default with Sentinel
  * specific defaults. */
-void initSentinelConfig(void) {
+void initSentinelConfig() {
     server.port = REDIS_SENTINEL_PORT;
 }
 
 /* Perform the Sentinel mode initialization. */
-void initSentinel(void) {
+void initSentinel() {
     unsigned int j;
 
     /* Remove usual Redis commands from the command table, then just add
@@ -473,7 +473,7 @@ void initSentinel(void) {
 
 /* This function gets called when the server is in Sentinel mode, started,
  * loaded the configuration, and is ready for normal operations. */
-void sentinelIsRunning(void) {
+void sentinelIsRunning() {
     int j;
 
     if (server.configfile == NULL) {
@@ -640,7 +640,7 @@ void sentinelEvent(int level, char *type, sentinelRedisInstance *ri,
  * +monitor event for every configured master. The same events are also
  * generated when a master to monitor is added at runtime via the
  * SENTINEL MONITOR command. */
-void sentinelGenerateInitialMonitorEvents(void) {
+void sentinelGenerateInitialMonitorEvents() {
     dictEntry *de;
 
     dictIterator di(sentinel.masters);
@@ -724,7 +724,7 @@ listNode *sentinelGetScriptListNodeByPid(pid_t pid) {
 
 /* Run pending scripts if we are not already at max number of running
  * scripts. */
-void sentinelRunPendingScripts(void) {
+void sentinelRunPendingScripts() {
     listNode *ln;
     mstime_t now = mstime();
 
@@ -787,7 +787,7 @@ mstime_t sentinelScriptRetryDelay(int retry_num) {
  * script terminated successfully. If instead the script was terminated by
  * a signal, or returned exit code "1", it is scheduled to run again if
  * the max number of retries did not already elapsed. */
-void sentinelCollectTerminatedScripts(void) {
+void sentinelCollectTerminatedScripts() {
     int statloc;
     pid_t pid;
 
@@ -834,7 +834,7 @@ void sentinelCollectTerminatedScripts(void) {
 
 /* Kill scripts in timeout, they'll be collected by the
  * sentinelCollectTerminatedScripts() function. */
-void sentinelKillTimedoutScripts(void) {
+void sentinelKillTimedoutScripts() {
     listNode *ln;
     mstime_t now = mstime();
 
@@ -919,7 +919,7 @@ void sentinelCallClientReconfScript(sentinelRedisInstance *master, int role, cha
 /* =============================== instanceLink ============================= */
 
 /* Create a not yet connected link object. */
-instanceLink *createInstanceLink(void) {
+instanceLink *createInstanceLink() {
     instanceLink* link = (instanceLink*)zmalloc(sizeof(*link));
 
     link->refcount = 1;
@@ -1825,7 +1825,7 @@ void rewriteConfigSentinelOption(struct rewriteConfigState *state) {
  * configuration file to make sure changes are committed to disk.
  *
  * On failure the function logs a warning on the Redis log. */
-void sentinelFlushConfig(void) {
+void sentinelFlushConfig() {
     int fd = -1;
     int saved_hz = server.hz;
     int rewrite_status;
@@ -3560,7 +3560,7 @@ void sentinelAskMasterStateToOtherSentinels(sentinelRedisInstance *master, int f
 /* =============================== FAILOVER ================================= */
 
 /* Crash because of user request via SENTINEL simulate-failure command. */
-void sentinelSimFailureCrash(void) {
+void sentinelSimFailureCrash() {
     serverLog(LL_WARNING,
         "Sentinel CRASH because of SENTINEL simulate-failure");
     exit(99);
@@ -4268,7 +4268,7 @@ void sentinelHandleDictOfRedisInstances(dict *instances) {
  * for SENTINEL_TILT_PERIOD to elapse before starting to act again.
  *
  * During TILT time we still collect information, we just do not act. */
-void sentinelCheckTiltCondition(void) {
+void sentinelCheckTiltCondition() {
     mstime_t now = mstime();
     mstime_t delta = now - sentinel.previous_time;
 
@@ -4280,7 +4280,7 @@ void sentinelCheckTiltCondition(void) {
     sentinel.previous_time = mstime();
 }
 
-void sentinelTimer(void) {
+void sentinelTimer() {
     sentinelCheckTiltCondition();
     sentinelHandleDictOfRedisInstances(sentinel.masters);
     sentinelRunPendingScripts();

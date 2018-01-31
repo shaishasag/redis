@@ -104,7 +104,7 @@ static void writeHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 static void createMissingClients(pclient c);
 
 /* Implementation */
-static long long ustime(void) {
+static long long ustime() {
     struct timeval tv;
     long long ust;
 
@@ -114,7 +114,7 @@ static long long ustime(void) {
     return ust;
 }
 
-static long long mstime(void) {
+static long long mstime() {
     struct timeval tv;
     long long mst;
 
@@ -138,7 +138,7 @@ static void freeClient(pclient c) {
     config.clients->listDelNode(ln);
 }
 
-static void freeAllClients(void) {
+static void freeAllClients() {
     listNode *ln = config.clients->listFirst();
 
     while(ln) {
@@ -430,7 +430,7 @@ static int compareLatency(const void *a, const void *b) {
     return (*(long long*)a)-(*(long long*)b);
 }
 
-static void showLatencyReport(void) {
+static void showLatencyReport() {
     int i, curlat = 0;
     float perc, reqpersec;
 

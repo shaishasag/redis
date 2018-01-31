@@ -77,13 +77,13 @@ void *zcalloc(size_t size);
 void *zrealloc(void *ptr, size_t size);
 void zfree(void *ptr);
 char *zstrdup(const char *s);
-size_t zmalloc_used_memory(void);
+size_t zmalloc_used_memory();
 void zmalloc_set_oom_handler(void (*oom_handler)(size_t));
 float zmalloc_get_fragmentation_ratio(size_t rss);
-size_t zmalloc_get_rss(void);
+size_t zmalloc_get_rss();
 size_t zmalloc_get_private_dirty(long pid);
 size_t zmalloc_get_smap_bytes_by_field(char *field, long pid);
-size_t zmalloc_get_memory_size(void);
+size_t zmalloc_get_memory_size();
 void zlibc_free(void *ptr);
 
 #ifdef HAVE_DEFRAG

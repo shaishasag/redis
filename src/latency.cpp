@@ -61,7 +61,7 @@ dictType latencyTimeSeriesDictType = {
 #ifdef __linux__
 /* Returns 1 if Transparent Huge Pages support is enabled in the kernel.
  * Otherwise (or if we are unable to check) 0 is returned. */
-int THPIsEnabled(void) {
+int THPIsEnabled() {
     char buf[1024];
 
     FILE *fp = fopen("/sys/kernel/mm/transparent_hugepage/enabled","r");
@@ -78,7 +78,7 @@ int THPIsEnabled(void) {
 /* Report the amount of AnonHugePages in smap, in bytes. If the return
  * value of the function is non-zero, the process is being targeted by
  * THP support, and is likely to have memory usage / latency issues. */
-int THPGetAnonHugePagesSize(void) {
+int THPGetAnonHugePagesSize() {
     return zmalloc_get_smap_bytes_by_field("AnonHugePages:",-1);
 }
 
@@ -87,7 +87,7 @@ int THPGetAnonHugePagesSize(void) {
 /* Latency monitor initialization. We just need to create the dictionary
  * of time series, each time serie is craeted on demand in order to avoid
  * having a fixed list to maintain. */
-void latencyMonitorInit(void) {
+void latencyMonitorInit() {
     server.latency_events = dictCreate(&latencyTimeSeriesDictType,NULL);
 }
 
@@ -211,7 +211,7 @@ void analyzeLatencyForEvent(char *event, struct latencyStats *ls) {
 }
 
 /* Create a human readable report of latency events for this Redis instance. */
-sds createLatencyReport(void) {
+sds createLatencyReport() {
     sds report = sdsempty();
     int advise_better_vm = 0;       /* Better virtual machines. */
     int advise_slowlog_enabled = 0; /* Enable slowlog. */

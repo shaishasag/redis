@@ -1391,7 +1391,7 @@ void slotToKeyDel(robj *key) {
     slotToKeyUpdateKey(key,0);
 }
 
-void slotToKeyFlush(void) {
+void slotToKeyFlush() {
     raxFree(server.cluster->m_slots_to_keys);
     server.cluster->m_slots_to_keys = raxNew();
     memset(server.cluster->m_slots_keys_count,0,

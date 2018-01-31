@@ -54,12 +54,12 @@ void clusterReadHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 void clusterSendPing(clusterLink *link, int type); //!
 void clusterSendFail(char *nodename);
 void clusterSendFailoverAuthIfNeeded(clusterNode *node, clusterMsg *request); //!
-void clusterUpdateState(void);
+void clusterUpdateState();
 sds clusterGenNodesDescription(int filter);
 clusterNode *clusterLookupNode(const char *name);
 int clusterDelSlot(int slot);
 void clusterSetMaster(clusterNode *n); //!
-void clusterHandleSlaveFailover(void);
+void clusterHandleSlaveFailover();
 void clusterHandleSlaveMigration(int max_slaves);
 int bitmapTestBit(unsigned char *bitmap, int pos);
 void clusterDoBeforeSleep(int flags);
@@ -1117,7 +1117,7 @@ void clusterHandleConfigEpochCollision(clusterNode *sender) {
  * the hash table is supposed to contain very little elements at max.
  * However without the cleanup during long uptimes and with some automated
  * node add/removal procedures, entries could accumulate. */
-void clusterBlacklistCleanup(void) {
+void clusterBlacklistCleanup() {
     dictEntry *de;
     dictIterator di(server.cluster->m_nodes_black_list, 1);
     while((de = di.dictNext()) != NULL) {
@@ -2559,7 +2559,7 @@ void clusterPropagatePublish(robj *channel, robj *message) {
  *
  * Note that we send the failover request to everybody, master and slave nodes,
  * but only the masters are supposed to reply to our query. */
-void clusterRequestFailoverAuth(void) {
+void clusterRequestFailoverAuth() {
     unsigned char buf[sizeof(clusterMsg)];
     clusterMsg *hdr = (clusterMsg*) buf;
     uint32_t totlen;
@@ -2715,7 +2715,7 @@ void clusterSendFailoverAuthIfNeeded(clusterNode *node, clusterMsg *request) {
  * The slave rank is used to add a delay to start an election in order to
  * get voted and replace a failing master. Slaves with better replication
  * offsets are more likely to win. */
-int clusterGetSlaveRank(void) {
+int clusterGetSlaveRank() {
     long long myoffset;
     int j, rank = 0;
     clusterNode *master;
@@ -2801,7 +2801,7 @@ void clusterLogCantFailover(int reason) {
  *
  * Note that it's up to the caller to be sure that the node got a new
  * configuration epoch already. */
-void clusterFailoverReplaceYourMaster(void) {
+void clusterFailoverReplaceYourMaster() {
     int j;
     clusterNode *oldmaster = myself->m_slaveof;
 
@@ -2839,7 +2839,7 @@ void clusterFailoverReplaceYourMaster(void) {
  * 2) Try to get elected by masters.
  * 3) Perform the failover informing all the other nodes.
  */
-void clusterHandleSlaveFailover(void) {
+void clusterHandleSlaveFailover() {
     mstime_t data_age;
     mstime_t auth_age = mstime() - server.cluster->m_failover_auth_time;
     int needed_quorum = (server.cluster->m_size / 2) + 1;
@@ -3163,7 +3163,7 @@ void resetManualFailover() {
 }
 
 /* If a manual failover timed out, abort it. */
-void manualFailoverCheckTimeout(void) {
+void manualFailoverCheckTimeout() {
     if (server.cluster->m_mf_end && server.cluster->m_mf_end < mstime()) {
         serverLog(LL_WARNING,"Manual failover timed out.");
         resetManualFailover();
@@ -3172,7 +3172,7 @@ void manualFailoverCheckTimeout(void) {
 
 /* This function is called from the cluster cron function in order to go
  * forward with a manual failover state machine. */
-void clusterHandleManualFailover(void) {
+void clusterHandleManualFailover() {
     /* Return ASAP if no manual failover is in progress. */
     if (server.cluster->m_mf_end == 0) return;
 
@@ -3197,7 +3197,7 @@ void clusterHandleManualFailover(void) {
  * -------------------------------------------------------------------------- */
 
 /* This is executed 10 times every second */
-void clusterCron(void) {
+void clusterCron() {
     dictEntry *de;
     int update_state = 0;
     int orphaned_masters; /* How many masters there are without ok slaves. */
@@ -3474,7 +3474,7 @@ void clusterCron(void) {
  * reaction to events fired but that are not safe to perform inside event
  * handlers, or to perform potentially expansive tasks that we need to do
  * a single time before replying to clients. */
-void clusterBeforeSleep(void) {
+void clusterBeforeSleep() {
     /* Handle failover, this is needed when it is likely that there is already
      * the quorum from masters in order to react fast. */
     if (server.cluster->m_todo_before_sleep & CLUSTER_TODO_HANDLE_FAILOVER)
@@ -3529,7 +3529,7 @@ void bitmapClearBit(unsigned char *bitmap, int pos) {
 /* Return non-zero if there is at least one master with slaves in the cluster.
  * Otherwise zero is returned. Used by clusterNodeSetSlotBit() to set the
  * MIGRATE_TO flag the when a master gets the first slot. */
-int clusterMastersHaveSlaves(void) {
+int clusterMastersHaveSlaves() {
     dictIterator di(server.cluster->m_nodes, 1);
     dictEntry *de;
     int slaves = 0;
@@ -3640,7 +3640,7 @@ void clusterCloseAllSlots() {
 #define CLUSTER_MIN_REJOIN_DELAY 500
 #define CLUSTER_WRITABLE_DELAY 2000
 
-void clusterUpdateState(void) {
+void clusterUpdateState() {
     int j, new_state;
     int reachable_masters = 0;
     static mstime_t among_minority_time;
@@ -3756,7 +3756,7 @@ void clusterUpdateState(void) {
  * The function also uses the logging facility in order to warn the user
  * about desynchronizations between the data we have in memory and the
  * cluster configuration. */
-int verifyClusterConfigWithData(void) {
+int verifyClusterConfigWithData() {
     int j;
     int update_config = 0;
 
@@ -4852,7 +4852,7 @@ void migrateCloseSocket(robj *host, robj *port) {
     sdsfree(name);
 }
 
-void migrateCloseTimedoutSockets(void) {
+void migrateCloseTimedoutSockets() {
     dictIterator di(server.migrate_cached_sockets, 1);
     dictEntry *de;
 

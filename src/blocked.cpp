@@ -176,7 +176,7 @@ void replyToBlockedClientTimedOut(client *c) {
  *
  * The semantics is to send an -UNBLOCKED error to the client, disconnecting
  * it at the same time. */
-void disconnectAllBlockedClients(void) {
+void disconnectAllBlockedClients() {
     listNode *ln;
 
     listIter li(server.clients);

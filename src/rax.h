@@ -143,7 +143,7 @@ struct raxIterator {
 extern void *raxNotFound;
 
 /* Exported API. */
-rax *raxNew(void);
+rax *raxNew();
 int raxInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old);
 int raxRemove(rax *rax, unsigned char *s, size_t len, void **old);
 void *raxFind(rax *rax, unsigned char *s, size_t len);

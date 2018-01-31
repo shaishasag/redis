@@ -1086,7 +1086,7 @@ int hllMerge(uint8_t *max, robj *hll) {
 
 /* Create an HLL object. We always create the HLL using sparse encoding.
  * This will be upgraded to the dense representation as needed. */
-robj *createHLLObject(void) {
+robj *createHLLObject() {
     robj *o;
     hllhdr*hdr;
     sds s;

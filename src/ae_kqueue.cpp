@@ -134,6 +134,6 @@ int aeEventLoop::aeApiPoll(struct timeval *tvp) {
     return numevents;
 }
 
-char *aeEventLoop::aeApiName(void) {
+char *aeEventLoop::aeApiName() {
     return (char *)"kqueue";
 }

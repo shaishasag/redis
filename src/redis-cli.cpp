@@ -127,17 +127,17 @@ static struct pref {
 } pref;
 
 static volatile sig_atomic_t force_cancel_loop = 0;
-static void usage(void);
-static void slaveMode(void);
-char *redisGitSHA1(void);
-char *redisGitDirty(void);
+static void usage();
+static void slaveMode();
+char *redisGitSHA1();
+char *redisGitDirty();
 static int cliConnect(int force);
 
 /*------------------------------------------------------------------------------
  * Utility functions
  *--------------------------------------------------------------------------- */
 
-static long long ustime(void) {
+static long long ustime() {
     struct timeval tv;
     long long ust;
 
@@ -147,11 +147,11 @@ static long long ustime(void) {
     return ust;
 }
 
-static long long mstime(void) {
+static long long mstime() {
     return ustime()/1000;
 }
 
-static void cliRefreshPrompt(void) {
+static void cliRefreshPrompt() {
     int len;
 
     if (config.eval_ldb) return;
@@ -305,7 +305,7 @@ struct helpEntry{
 static helpEntry *helpEntries;
 static int helpEntriesLen;
 
-static sds cliVersion(void) {
+static sds cliVersion() {
     sds version;
     version = sdscatprintf(sdsempty(), "%s", REDIS_VERSION);
 
@@ -319,7 +319,7 @@ static sds cliVersion(void) {
     return version;
 }
 
-static void cliInitHelp(void) {
+static void cliInitHelp() {
     int commandslen = sizeof(commandHelp)/sizeof(struct commandHelp);
     int groupslen = sizeof(commandGroups)/sizeof(char*);
     int i, len, pos = 0;
@@ -352,7 +352,7 @@ static void cliInitHelp(void) {
  * to may support more commands, so this function integrates the previous
  * entries with additional entries obtained using the COMMAND command
  * available in recent versions of Redis. */
-static void cliIntegrateHelp(void) {
+static void cliIntegrateHelp() {
     if (cliConnect(0) == REDIS_ERR) return;
 
     redisReply *reply = (redisReply *)redisCommand(context, "COMMAND");
@@ -417,7 +417,7 @@ static void cliOutputCommandHelp(struct commandHelp *help, int group) {
 }
 
 /* Print generic help. */
-static void cliOutputGenericHelp(void) {
+static void cliOutputGenericHelp() {
     sds version = cliVersion();
     printf(
         "redis-cli %s\n"
@@ -567,7 +567,7 @@ static void freeHintsCallback(void *ptr) {
  *--------------------------------------------------------------------------- */
 
 /* Send AUTH command to the server */
-static int cliAuth(void) {
+static int cliAuth() {
     redisReply *reply;
     if (config.auth == NULL) return REDIS_OK;
 
@@ -580,7 +580,7 @@ static int cliAuth(void) {
 }
 
 /* Send SELECT dbnum to the server */
-static int cliSelect(void) {
+static int cliSelect() {
     redisReply *reply;
     if (config.dbnum == 0) return REDIS_OK;
 
@@ -634,7 +634,7 @@ static int cliConnect(int force) {
     return REDIS_OK;
 }
 
-static void cliPrintContextError(void) {
+static void cliPrintContextError() {
     if (context == NULL) return;
     fprintf(stderr,"Error: %s\n",context->errstr);
 }
@@ -706,7 +706,7 @@ static sds cliFormatReplyTTY(redisReply *r, char *prefix) {
     return out;
 }
 
-int isColorTerm(void) {
+int isColorTerm() {
     char *t = getenv("TERM");
     return t != NULL && strstr(t,"xterm") != NULL;
 }
@@ -1173,7 +1173,7 @@ static int parseOptions(int argc, char **argv) {
     return i;
 }
 
-static sds readArgFromStdin(void) {
+static sds readArgFromStdin() {
     char buf[1024];
     sds arg = sdsempty();
 
@@ -1190,7 +1190,7 @@ static sds readArgFromStdin(void) {
     return arg;
 }
 
-static void usage(void) {
+static void usage() {
     sds version = cliVersion();
     fprintf(stderr,
 "redis-cli %s\n"
@@ -1345,7 +1345,7 @@ void cliSetPreferences(char **argv, int argc, int interactive) {
 }
 
 /* Load the ~/.redisclirc file if any. */
-void cliLoadPreferences(void) {
+void cliLoadPreferences() {
     sds rcfile = getDotfilePath(REDIS_CLI_RCFILE_ENV,REDIS_CLI_RCFILE_DEFAULT);
     if (rcfile == NULL) return;
     FILE *fp = fopen(rcfile,"r");
@@ -1365,7 +1365,7 @@ void cliLoadPreferences(void) {
     sdsfree(rcfile);
 }
 
-static void repl(void) {
+static void repl() {
     sds historyfile = NULL;
     int history = 0;
     char *line;
@@ -1586,7 +1586,7 @@ static void latencyModePrint(long long min, long long max, double avg, long long
 
 #define LATENCY_SAMPLE_RATE 10 /* milliseconds. */
 #define LATENCY_HISTORY_DEFAULT_INTERVAL 15000 /* milliseconds. */
-static void latencyMode(void) {
+static void latencyMode() {
     redisReply *reply;
     long long start, latency, min = 0, max = 0, tot = 0, count = 0;
     long long history_interval =
@@ -1693,7 +1693,7 @@ void showLatencyDistSamples(struct distsamples *samples, long long tot) {
 
 /* Show the legend: different buckets values and colors meaning, so
  * that the spectrum is more easily readable. */
-void showLatencyDistLegend(void) {
+void showLatencyDistLegend() {
     int j;
 
     printf("---------------------------------------------\n");
@@ -1710,7 +1710,7 @@ void showLatencyDistLegend(void) {
     printf("---------------------------------------------\n");
 }
 
-static void latencyDistMode(void) {
+static void latencyDistMode() {
     redisReply *reply;
     long long start, latency, count = 0;
     long long history_interval =
@@ -1827,7 +1827,7 @@ unsigned long long sendSync(int fd) {
     return strtoull(buf+1,NULL,10);
 }
 
-static void slaveMode(void) {
+static void slaveMode() {
     int fd = context->fd;
     unsigned long long payload = sendSync(fd);
     char buf[1024];
@@ -1861,7 +1861,7 @@ static void slaveMode(void) {
 
 /* This function implements --rdb, so it uses the replication protocol in order
  * to fetch the RDB file from a remote server. */
-static void getRDB(void) {
+static void getRDB() {
     int s = context->fd;
     int fd;
     unsigned long long payload = sendSync(s);
@@ -1909,7 +1909,7 @@ static void getRDB(void) {
  *--------------------------------------------------------------------------- */
 
 #define PIPEMODE_WRITE_LOOP_MAX_BYTES (128*1024)
-static void pipeMode(void) {
+static void pipeMode() {
     int fd = context->fd;
     long long errors = 0, replies = 0, obuf_len = 0, obuf_pos = 0;
     char ibuf[1024*16], obuf[1024*16]; /* Input and output buffers */
@@ -2103,7 +2103,7 @@ static redisReply *sendScan(unsigned long long *it) {
     return reply;
 }
 
-static int getDbSize(void) {
+static int getDbSize() {
     redisReply *reply;
     int size;
 
@@ -2216,7 +2216,7 @@ static void getKeySizes(redisReply *keys, int *types,
     }
 }
 
-static void findBigKeys(void) {
+static void findBigKeys() {
     unsigned long long biggest[5] = {0}, counts[5] = {0}, totalsize[5] = {0};
     unsigned long long sampled = 0, total_keys, totlen=0, *sizes=NULL, it=0;
     sds maxkeys[5] = {0};
@@ -2378,7 +2378,7 @@ static void getKeyFreqs(redisReply *keys, unsigned long long *freqs) {
 }
 
 #define HOTKEYS_SAMPLE 16
-static void findHotKeys(void) {
+static void findHotKeys() {
     redisReply *keys, *reply;
     unsigned long long counters[HOTKEYS_SAMPLE] = {0};
     sds hotkeys[HOTKEYS_SAMPLE] = {NULL};
@@ -2531,7 +2531,7 @@ void bytesToHuman(char *s, long long n) {
     }
 }
 
-static void statMode(void) {
+static void statMode() {
     redisReply *reply;
     long aux, requests = 0;
     int i = 0;
@@ -2621,7 +2621,7 @@ static void statMode(void) {
  * Scan mode
  *--------------------------------------------------------------------------- */
 
-static void scanMode(void) {
+static void scanMode() {
     redisReply *reply;
     unsigned long long cur = 0;
 
@@ -2680,7 +2680,7 @@ void LRUTestGenKey(char *buf, size_t buflen) {
 
 #define LRU_CYCLE_PERIOD 1000 /* 1000 milliseconds. */
 #define LRU_CYCLE_PIPELINE_SIZE 250
-static void LRUTestMode(void) {
+static void LRUTestMode() {
     redisReply *reply;
     char key[128];
     long long start_cycle;
@@ -2752,7 +2752,7 @@ static void LRUTestMode(void) {
 /* This is just some computation the compiler can't optimize out.
  * Should run in less than 100-200 microseconds even using very
  * slow hardware. Runs in less than 10 microseconds in modern HW. */
-unsigned long compute_something_fast(void) {
+unsigned long compute_something_fast() {
     unsigned char s[256], i, j, t;
     int count = 1000, k;
     unsigned long output = 0;
@@ -2777,7 +2777,7 @@ static void intrinsicLatencyModeStop(int s) {
     force_cancel_loop = 1;
 }
 
-static void intrinsicLatencyMode(void) {
+static void intrinsicLatencyMode() {
     long long test_end, run_time, max_latency = 0, runs = 0;
 
     run_time = config.intrinsic_latency_duration*1000000;

@@ -37,11 +37,11 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 
-void replicationDiscardCachedMaster(void);
+void replicationDiscardCachedMaster();
 void replicationResurrectCachedMaster(int newfd);
-void replicationSendAck(void);
+void replicationSendAck();
 void putSlaveOnline(client *slave);
-int cancelReplicationHandshake(void);
+int cancelReplicationHandshake();
 
 /* --------------------------- Utility functions ---------------------------- */
 
@@ -74,7 +74,7 @@ char *replicationGetSlaveName(client *c) {
 
 /* ---------------------------------- MASTER -------------------------------- */
 
-void createReplicationBacklog(void) {
+void createReplicationBacklog() {
     serverAssert(server.repl_backlog == NULL);
     server.repl_backlog = (char *)zmalloc(server.repl_backlog_size);
     server.repl_backlog_histlen = 0;
@@ -113,7 +113,7 @@ void resizeReplicationBacklog(long long newsize) {
     }
 }
 
-void freeReplicationBacklog(void) {
+void freeReplicationBacklog() {
     serverAssert(server.slaves->listLength() == 0);
     zfree(server.repl_backlog);
     server.repl_backlog = NULL;
@@ -392,7 +392,7 @@ long long addReplyReplicationBacklog(client *c, long long offset) {
  * from the slave. The returned value is only valid immediately after
  * the BGSAVE process started and before executing any other command
  * from clients. */
-long long getPsyncInitialOffset(void) {
+long long getPsyncInitialOffset() {
     return server.master_repl_offset;
 }
 
@@ -998,7 +998,7 @@ void updateSlavesWaitingBgsave(int bgsaveerr, int type) {
  * This will prevent successful PSYNCs between this master and other
  * slaves, so the command should be called when something happens that
  * alters the current story of the dataset. */
-void changeReplicationId(void) {
+void changeReplicationId() {
     getRandomHexChars(server.replid,CONFIG_RUN_ID_SIZE);
     server.replid[CONFIG_RUN_ID_SIZE] = '\0';
 }
@@ -1006,7 +1006,7 @@ void changeReplicationId(void) {
 /* Clear (invalidate) the secondary replication ID. This happens, for
  * example, after a full resynchronization, when we start a new replication
  * history. */
-void clearReplicationId2(void) {
+void clearReplicationId2() {
     memset(server.replid2,'0',sizeof(server.replid));
     server.replid2[CONFIG_RUN_ID_SIZE] = '\0';
     server.second_replid_offset = -1;
@@ -1017,7 +1017,7 @@ void clearReplicationId2(void) {
  * This should be used when an instance is switched from slave to master
  * so that it can serve PSYNC requests performed using the master
  * replication ID. */
-void shiftReplicationId(void) {
+void shiftReplicationId() {
     memcpy(server.replid2,server.replid,sizeof(server.replid));
     /* We set the second replid offset to the master offset + 1, since
      * the slave will ask for the first byte it has not yet received, so
@@ -1035,7 +1035,7 @@ void shiftReplicationId(void) {
 
 /* Returns 1 if the given replication state is a handshake state,
  * 0 otherwise. */
-int slaveIsInHandshakeState(void) {
+int slaveIsInHandshakeState() {
     return server.repl_state >= REPL_STATE_RECEIVE_PONG &&
            server.repl_state <= REPL_STATE_RECEIVE_PSYNC;
 }
@@ -1048,7 +1048,7 @@ int slaveIsInHandshakeState(void) {
  * The function is called in two contexts: while we flush the current
  * data with emptyDb(), and while we load the new data received as an
  * RDB file from the master. */
-void replicationSendNewlineToMaster(void) {
+void replicationSendNewlineToMaster() {
     static time_t newline_sent;
     if (time(NULL) != newline_sent) {
         newline_sent = time(NULL);
@@ -1846,7 +1846,7 @@ write_error: /* Handle sendSynchronousCommand(SYNC_CMD_WRITE) errors. */
     goto error;
 }
 
-int connectWithMaster(void) {
+int connectWithMaster() {
     int fd;
 
     fd = anetTcpNonBlockBestEffortBindConnect(NULL,
@@ -1875,7 +1875,7 @@ int connectWithMaster(void) {
  * in progress to undo it.
  * Never call this function directly, use cancelReplicationHandshake() instead.
  */
-void undoConnectWithMaster(void) {
+void undoConnectWithMaster() {
     int fd = server.repl_transfer_s;
 
     server.el->aeDeleteFileEvent(fd,AE_READABLE|AE_WRITABLE);
@@ -1886,7 +1886,7 @@ void undoConnectWithMaster(void) {
 /* Abort the async download of the bulk dataset while SYNC-ing with master.
  * Never call this function directly, use cancelReplicationHandshake() instead.
  */
-void replicationAbortSyncTransfer(void) {
+void replicationAbortSyncTransfer() {
     serverAssert(server.repl_state == REPL_STATE_TRANSFER);
     undoConnectWithMaster();
     close(server.repl_transfer_fd);
@@ -1902,7 +1902,7 @@ void replicationAbortSyncTransfer(void) {
  * the replication state (server.repl_state) set to REPL_STATE_CONNECT.
  *
  * Otherwise zero is returned and no operation is perforemd at all. */
-int cancelReplicationHandshake(void) {
+int cancelReplicationHandshake() {
     if (server.repl_state == REPL_STATE_TRANSFER) {
         replicationAbortSyncTransfer();
         server.repl_state = REPL_STATE_CONNECT;
@@ -1941,7 +1941,7 @@ void replicationSetMaster(char *ip, int port) {
 }
 
 /* Cancel replication, setting the instance as a master itself. */
-void replicationUnsetMaster(void) {
+void replicationUnsetMaster() {
     if (server.masterhost == NULL) return; /* Nothing to do. */
     sdsfree(server.masterhost);
     server.masterhost = NULL;
@@ -1969,7 +1969,7 @@ void replicationUnsetMaster(void) {
 
 /* This function is called when the slave lose the connection with the
  * master into an unexpected way. */
-void replicationHandleMasterDisconnection(void) {
+void replicationHandleMasterDisconnection() {
     server.master = NULL;
     server.repl_state = REPL_STATE_CONNECT;
     server.repl_down_since = server.unixtime;
@@ -2079,7 +2079,7 @@ void roleCommand(client *c) {
 /* Send a REPLCONF ACK command to the master to inform it about the current
  * processed offset. If we are not connected with a master, the command has
  * no effects. */
-void replicationSendAck(void) {
+void replicationSendAck() {
     client *c = server.master;
 
     if (c != NULL) {
@@ -2156,7 +2156,7 @@ void replicationCacheMaster(client *c) {
  * the new master will accept its replication ID, and potentiall also the
  * current offset if no data was lost during the failover. So we use our
  * current replication ID and offset in order to synthesize a cached master. */
-void replicationCacheMasterUsingMyself(void) {
+void replicationCacheMasterUsingMyself() {
     /* The master client we create can be set to any DBID, because
      * the new master will start its replication stream with SELECT. */
     server.master_initial_offset = server.master_repl_offset;
@@ -2174,7 +2174,7 @@ void replicationCacheMasterUsingMyself(void) {
 
 /* Free a cached master, called when there are no longer the conditions for
  * a partial resync on reconnection. */
-void replicationDiscardCachedMaster(void) {
+void replicationDiscardCachedMaster() {
     if (server.cached_master == NULL) return;
 
     serverLog(LL_NOTICE,"Discarding previously cached master state.");
@@ -2222,7 +2222,7 @@ void replicationResurrectCachedMaster(int newfd) {
 /* This function counts the number of slaves with lag <= min-slaves-max-lag.
  * If the option is active, the server will prevent writes if there are not
  * enough connected slaves with the specified lag (or less). */
-void refreshGoodSlavesCount(void) {
+void refreshGoodSlavesCount() {
     listNode *ln;
     int good = 0;
 
@@ -2272,7 +2272,7 @@ void refreshGoodSlavesCount(void) {
  */
 
 /* Initialize the script cache, only called at startup. */
-void replicationScriptCacheInit(void) {
+void replicationScriptCacheInit() {
     server.repl_scriptcache_size = 10000;
     server.repl_scriptcache_dict = dictCreate(&replScriptCacheDictType,NULL);
     server.repl_scriptcache_fifo = listCreate();
@@ -2289,7 +2289,7 @@ void replicationScriptCacheInit(void) {
  * 3) Every time we are left without slaves at all, and AOF is off, in order
  *    to reclaim otherwise unused memory.
  */
-void replicationScriptCacheFlush(void) {
+void replicationScriptCacheFlush() {
     server.repl_scriptcache_dict->dictEmpty(NULL);
     listRelease(server.repl_scriptcache_fifo);
     server.repl_scriptcache_fifo = listCreate();
@@ -2354,7 +2354,7 @@ int replicationScriptCacheExists(sds sha1) {
  * to all the slaves in the beforeSleep() function. Note that this way
  * we "group" all the clients that want to wait for synchronouns replication
  * in a given event loop iteration, and send a single GETACK for them all. */
-void replicationRequestAckFromSlaves(void) {
+void replicationRequestAckFromSlaves() {
     server.get_ack_from_slaves = 1;
 }
 
@@ -2425,7 +2425,7 @@ void unblockClientWaitingReplicas(client *c) {
 
 /* Check if there are clients blocked in WAIT that can be unblocked since
  * we received enough ACKs from slaves. */
-void processClientsWaitingReplicas(void) {
+void processClientsWaitingReplicas() {
     long long last_offset = 0;
     int last_numreplicas = 0;
 
@@ -2459,7 +2459,7 @@ void processClientsWaitingReplicas(void) {
 
 /* Return the slave replication offset for this instance, that is
  * the offset for which we already processed the master replication stream. */
-long long replicationGetSlaveOffset(void) {
+long long replicationGetSlaveOffset() {
     long long offset = 0;
 
     if (server.masterhost != NULL) {
@@ -2480,7 +2480,7 @@ long long replicationGetSlaveOffset(void) {
 /* --------------------------- REPLICATION CRON  ---------------------------- */
 
 /* Replication cron function, called 1 time per second. */
-void replicationCron(void) {
+void replicationCron() {
     static long long replication_cron_loops = 0;
 
     /* Non blocking connection timeout? */

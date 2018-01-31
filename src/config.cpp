@@ -128,7 +128,7 @@ const char *configEnumGetNameOrUnknown(configEnum *ce, int val) {
 }
 
 /* Used for INFO generation. */
-const char *evictPolicyToString(void) {
+const char *evictPolicyToString() {
     return configEnumGetNameOrUnknown(maxmemory_policy_enum,server.maxmemory_policy);
 }
 
@@ -149,7 +149,7 @@ void appendServerSaveParams(time_t seconds, int changes) {
     server.saveparamslen++;
 }
 
-void resetServerSaveParams(void) {
+void resetServerSaveParams() {
     zfree(server.saveparams);
     server.saveparams = NULL;
     server.saveparamslen = 0;

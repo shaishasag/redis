@@ -111,7 +111,7 @@ void slowlogFreeEntry(void *septr) {
 
 /* Initialize the slow log. This function should be called a single time
  * at server startup. */
-void slowlogInit(void) {
+void slowlogInit() {
     server.slowlog = listCreate();
     server.slowlog_entry_id = 0;
     server.slowlog->listSetFreeMethod(slowlogFreeEntry);
@@ -132,7 +132,7 @@ void slowlogPushEntryIfNeeded(client *c, robj **argv, int argc, long long durati
 }
 
 /* Remove all the entries from the current slow log. */
-void slowlogReset(void) {
+void slowlogReset() {
     while (server.slowlog->listLength() > 0)
         server.slowlog->listDelNode(server.slowlog->listLast());
 }

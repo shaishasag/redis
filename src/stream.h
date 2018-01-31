@@ -48,7 +48,7 @@ typedef struct streamIterator {
 
 struct client;
 
-stream *streamNew(void);
+stream *streamNew();
 void freeStream(stream *s);
 size_t streamReplyWithRange(struct client *c, stream *s, streamID *start, streamID *end, size_t count, int rev);
 void streamIteratorStart(streamIterator *si, stream *s, streamID *start, streamID *end, int rev);

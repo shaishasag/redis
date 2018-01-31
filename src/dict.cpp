@@ -79,7 +79,7 @@ void dictSetHashFunctionSeed(uint8_t *seed) {
     memcpy(dict_hash_function_seed,seed,sizeof(dict_hash_function_seed));
 }
 
-uint8_t *dictGetHashFunctionSeed(void) {
+uint8_t *dictGetHashFunctionSeed() {
     return dict_hash_function_seed;
 }
 
@@ -291,7 +291,7 @@ int dict::dictRehash(int n)
     return 1;
 }
 
-long long timeInMilliseconds(void) {
+long long timeInMilliseconds() {
     struct timeval tv;
 
     gettimeofday(&tv,NULL);
@@ -1022,11 +1022,11 @@ void dict::dictEmpty(void(callback)(void*)) {
     m_iterators = 0;
 }
 
-void dictEnableResize(void) {
+void dictEnableResize() {
     dict_can_resize = 1;
 }
 
-void dictDisableResize(void) {
+void dictDisableResize() {
     dict_can_resize = 0;
 }
 

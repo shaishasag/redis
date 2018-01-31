@@ -677,7 +677,7 @@ int pathIsBaseName(char *path) {
 #ifdef REDIS_TEST
 #include <assert.h>
 
-static void test_string2ll(void) {
+static void test_string2ll() {
     char buf[32];
     long long v;
 
@@ -732,7 +732,7 @@ static void test_string2ll(void) {
     assert(string2ll(buf,strlen(buf),&v) == 0);
 }
 
-static void test_string2l(void) {
+static void test_string2l() {
     char buf[32];
     long v;
 
@@ -781,7 +781,7 @@ static void test_string2l(void) {
 #endif
 }
 
-static void test_ll2string(void) {
+static void test_ll2string() {
     char buf[32];
     long long v;
     int sz;

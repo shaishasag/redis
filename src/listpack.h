@@ -44,7 +44,7 @@
 #define LP_AFTER 1
 #define LP_REPLACE 2
 
-unsigned char *lpNew(void);
+unsigned char *lpNew();
 void lpFree(unsigned char *lp);
 unsigned char *lpInsert(unsigned char *lp, unsigned char *ele, uint32_t size, unsigned char *p, int where, unsigned char **newp);
 unsigned char *lpAppend(unsigned char *lp, unsigned char *ele, uint32_t size);

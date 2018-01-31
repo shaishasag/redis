@@ -139,7 +139,7 @@ sds sdsnewlen(const void *init, size_t initlen) {
 
 /* Create an empty (zero length) sds string. Even in this case the string
  * always has an implicit null term. */
-sds sdsempty(void) {
+sds sdsempty() {
     return sdsnewlen("",0);
 }
 
@@ -1114,7 +1114,7 @@ void sds_free(void *ptr) { s_free(ptr); }
 #include "limits.h"
 
 #define UNUSED(x) (void)(x)
-int sdsTest(void) {
+int sdsTest() {
     {
         sds x = sdsnew("foo"), y;
 
@@ -1279,7 +1279,7 @@ int sdsTest(void) {
 #endif
 
 #ifdef SDS_TEST_MAIN
-int main(void) {
+int main() {
     return sdsTest();
 }
 #endif

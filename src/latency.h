@@ -61,9 +61,9 @@ struct latencyStats {
     time_t period;          /* Number of seconds since first event and now. */
 };
 
-void latencyMonitorInit(void);
+void latencyMonitorInit();
 void latencyAddSample(char *event, mstime_t latency);
-int THPIsEnabled(void);
+int THPIsEnabled();
 
 /* Latency monitoring macros. */
 

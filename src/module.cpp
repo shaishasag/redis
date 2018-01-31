@@ -669,7 +669,7 @@ int RM_IsModuleNameBusy(const char *name) {
 }
 
 /* Return the current UNIX time in milliseconds. */
-long long RM_Milliseconds(void) {
+long long RM_Milliseconds() {
     return mstime();
 }
 
@@ -3484,7 +3484,7 @@ int RM_AbortBlock(RedisModuleBlockedClient *bc) {
  * blocked client, it was terminated by Redis (for timeout or other reasons).
  * When this happens the RedisModuleBlockedClient structure in the queue
  * will have the 'client' field set to NULL. */
-void moduleHandleBlockedClients(void) {
+void moduleHandleBlockedClients() {
     listNode *ln;
     RedisModuleBlockedClient *bc;
 
@@ -3650,11 +3650,11 @@ void RM_ThreadSafeContextUnlock(RedisModuleCtx *ctx) {
     moduleReleaseGIL();
 }
 
-void moduleAcquireGIL(void) {
+void moduleAcquireGIL() {
     pthread_mutex_lock(&moduleGIL);
 }
 
-void moduleReleaseGIL(void) {
+void moduleReleaseGIL() {
     pthread_mutex_unlock(&moduleGIL);
 }
 
@@ -3691,9 +3691,9 @@ int moduleRegisterApi(const char *funcname, void *funcptr) {
     moduleRegisterApi("RedisModule_" #name, (void *)(unsigned long)RM_ ## name)
 
 /* Global initialization at Redis startup. */
-void moduleRegisterCoreAPI(void);
+void moduleRegisterCoreAPI();
 
-void moduleInitModulesSystem(void) {
+void moduleInitModulesSystem() {
     moduleUnblockedClients = listCreate();
 
     server.loadmodule_queue = listCreate();
@@ -3724,7 +3724,7 @@ void moduleInitModulesSystem(void) {
  * modules is not considered sane: clients may rely on the existance of
  * given commands, loading AOF also may need some modules to exist, and
  * if this instance is a slave, it must understand commands from master. */
-void moduleLoadFromQueue(void) {
+void moduleLoadFromQueue() {
     listNode *ln;
 
     listIter li(server.loadmodule_queue);
@@ -3904,13 +3904,13 @@ void moduleCommand(client *c) {
 }
 
 /* Return the number of registered modules. */
-size_t moduleCount(void) {
+size_t moduleCount() {
     return modules->dictSize();
 }
 
 /* Register all the APIs we export. Keep this function at the end of the
  * file so that's easy to seek it to add new entries. */
-void moduleRegisterCoreAPI(void) {
+void moduleRegisterCoreAPI() {
     server.moduleapi = dictCreate(&moduleAPIDictType,NULL);
     REGISTER_API(Alloc);
     REGISTER_API(Calloc);

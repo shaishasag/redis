@@ -75,7 +75,7 @@ void memtest_progress_start(char *title, int pass) {
     fflush(stdout);
 }
 
-void memtest_progress_end(void) {
+void memtest_progress_end() {
     printf("\x1b[H\x1b[2J");    /* Cursor home, clear screen. */
 }
 

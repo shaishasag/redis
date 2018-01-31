@@ -202,7 +202,7 @@ void aof_background_fsync(int fd) {
 
 /* Called when the user switches from "appendonly yes" to "appendonly no"
  * at runtime using the CONFIG command. */
-void stopAppendOnly(void) {
+void stopAppendOnly() {
     serverAssert(server.aof_state != AOF_OFF);
     flushAppendOnlyFile(1);
     aof_fsync(server.aof_fd);
@@ -232,7 +232,7 @@ void stopAppendOnly(void) {
 
 /* Called when the user switches from "appendonly no" to "appendonly yes"
  * at runtime using the CONFIG command. */
-int startAppendOnly(void) {
+int startAppendOnly() {
     char cwd[MAXPATHLEN]; /* Current working dir path for error messages. */
 
     server.aof_last_fsync = server.unixtime;
@@ -578,7 +578,7 @@ void feedAppendOnlyFile(struct redisCommand *cmd, int dictid, robj **argv, int a
 
 /* In Redis commands are always executed in the context of a client, so in
  * order to load the append only file we need to create a fake client. */
-struct client *createFakeClient(void) {
+struct client *createFakeClient() {
     struct client* c = (client*)zmalloc(sizeof(*c));
 
     selectDb(c,0);
@@ -1045,7 +1045,7 @@ int rewriteModuleObject(rio *r, robj *key, robj *o) {
 /* This function is called by the child rewriting the AOF file to read
  * the difference accumulated from the parent into a buffer, that is
  * concatenated at the end of the rewrite. */
-ssize_t aofReadDiffFromParent(void) {
+ssize_t aofReadDiffFromParent() {
     char buf[65536]; /* Default pipe buffer size on most Linux systems. */
     ssize_t nread, total = 0;
 
@@ -1269,7 +1269,7 @@ void aofChildPipeReadable(aeEventLoop *el, int fd, void *privdata, int mask) {
  * and two other pipes used by the children to signal it finished with
  * the rewrite so no more data should be written, and another for the
  * parent to acknowledge it understood this new condition. */
-int aofCreatePipes(void) {
+int aofCreatePipes() {
     int fds[6] = {-1, -1, -1, -1, -1, -1};
     int j;
 
@@ -1297,7 +1297,7 @@ error:
     return C_ERR;
 }
 
-void aofClosePipes(void) {
+void aofClosePipes() {
     server.el->aeDeleteFileEvent(server.aof_pipe_read_ack_from_child,AE_READABLE);
     server.el->aeDeleteFileEvent(server.aof_pipe_write_data_to_child,AE_WRITABLE);
     close(server.aof_pipe_write_data_to_child);
@@ -1324,7 +1324,7 @@ void aofClosePipes(void) {
  *    finally will rename(2) the temp file in the actual file name.
  *    The the new file is reopened as the new append only file. Profit!
  */
-int rewriteAppendOnlyFileBackground(void) {
+int rewriteAppendOnlyFileBackground() {
     pid_t childpid;
     long long start;
 
@@ -1408,7 +1408,7 @@ void aofRemoveTempFile(pid_t childpid) {
  * to check the size of the file. This is useful after a rewrite or after
  * a restart, normally the size is updated just adding the write length
  * to the current length, that is much faster. */
-void aofUpdateCurrentSize(void) {
+void aofUpdateCurrentSize() {
     struct redis_stat sb;
     mstime_t latency;
 
