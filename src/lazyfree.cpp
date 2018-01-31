@@ -28,21 +28,22 @@ size_t lazyfreeGetPendingObjectsCount() {
  *
  * For lists the function returns the number of elements in the quicklist
  * representing the list. */
-size_t lazyfreeGetFreeEffort(robj *obj) {
+size_t lazyfreeGetFreeEffort(robj *obj)
+{
     if (obj->type == OBJ_LIST) {
         quicklist *ql = (quicklist *)obj->ptr;
-        return ql->m_num_ql_nodes;
+        return (size_t)ql->m_num_ql_nodes;
     } else if (obj->type == OBJ_SET && obj->encoding == OBJ_ENCODING_HT) {
         dict *ht = (dict *)obj->ptr;
-        return ht->dictSize();
+        return (size_t)ht->dictSize();
     } else if (obj->type == OBJ_ZSET && obj->encoding == OBJ_ENCODING_SKIPLIST){
         zset *zs = (zset *)obj->ptr;
-        return zs->zsl->m_length;
+        return (size_t)zs->zsl->length();
     } else if (obj->type == OBJ_HASH && obj->encoding == OBJ_ENCODING_HT) {
         dict *ht = (dict *)obj->ptr;
-        return ht->dictSize();
+        return (size_t)ht->dictSize();
     } else {
-        return 1; /* Everything else is a single allocation. */
+        return (size_t)1; /* Everything else is a single allocation. */
     }
 }
 

@@ -980,18 +980,18 @@ int rewriteSortedSetObject(rio *r, robj *key, robj *o) {
  *
  * The function returns 0 on error, non-zero on success. */
 static int rioWriteHashIteratorCursor(rio *r, hashTypeIterator *hi, int what) {
-    if (hi->encoding == OBJ_ENCODING_ZIPLIST) {
+    if (hi->encoding() == OBJ_ENCODING_ZIPLIST) {
         unsigned char *vstr = NULL;
         unsigned int vlen = UINT_MAX;
         long long vll = LLONG_MAX;
 
-        hashTypeCurrentFromZiplist(hi, what, &vstr, &vlen, &vll);
+        hi->hashTypeCurrentFromZiplist(what, &vstr, &vlen, &vll);
         if (vstr)
             return r->rioWriteBulkString((char*)vstr, vlen);
         else
             return r->rioWriteBulkLongLong(vll);
-    } else if (hi->encoding == OBJ_ENCODING_HT) {
-        sds value = hashTypeCurrentFromHashTable(hi, what);
+    } else if (hi->encoding() == OBJ_ENCODING_HT) {
+        sds value = hi->hashTypeCurrentFromHashTable(what);
         return r->rioWriteBulkString(value, sdslen(value));
     }
 
@@ -1001,12 +1001,13 @@ static int rioWriteHashIteratorCursor(rio *r, hashTypeIterator *hi, int what) {
 
 /* Emit the commands needed to rebuild a hash object.
  * The function returns 0 on error, 1 on success. */
-int rewriteHashObject(rio *r, robj *key, robj *o) {
-    hashTypeIterator *hi;
+int rewriteHashObject(rio *r, robj *key, robj *o)
+{
+
     long long count = 0, items = hashTypeLength(o);
 
-    hi = hashTypeInitIterator(o);
-    while (hashTypeNext(hi) != C_ERR) {
+    hashTypeIterator hi(o);
+    while (hi.hashTypeNext() != C_ERR) {
         if (count == 0) {
             int cmd_items = (items > AOF_REWRITE_ITEMS_PER_CMD) ?
                 AOF_REWRITE_ITEMS_PER_CMD : items;
@@ -1016,13 +1017,11 @@ int rewriteHashObject(rio *r, robj *key, robj *o) {
             if (r->rioWriteBulkObject(key) == 0) return 0;
         }
 
-        if (rioWriteHashIteratorCursor(r, hi, OBJ_HASH_KEY) == 0) return 0;
-        if (rioWriteHashIteratorCursor(r, hi, OBJ_HASH_VALUE) == 0) return 0;
+        if (rioWriteHashIteratorCursor(r, &hi, OBJ_HASH_KEY) == 0) return 0;
+        if (rioWriteHashIteratorCursor(r, &hi, OBJ_HASH_VALUE) == 0) return 0;
         if (++count == AOF_REWRITE_ITEMS_PER_CMD) count = 0;
         items--;
     }
-
-    hashTypeReleaseIterator(hi);
 
     return 1;
 }

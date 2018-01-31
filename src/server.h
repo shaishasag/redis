@@ -794,6 +794,7 @@ public:
     inline zskiplistNode* header() {return m_header;}
     inline zskiplistNode* tail()   {return m_tail;}
     inline unsigned long length()  {return m_length;}
+    inline int level() {return m_level;}
 
     unsigned long zslDeleteRangeByScore(zrangespec *range, dict *dict);
     unsigned long zslDeleteRangeByLex(zlexrangespec *range, dict *dict);
@@ -1308,14 +1309,29 @@ struct setTypeIterator{
  * hashes involves both fields and values. Because it is possible that
  * not both are required, store pointers in the iterator to avoid
  * unnecessary memory allocation for fields/values. */
-struct hashTypeIterator {
-    robj *subject;
-    int encoding;
+struct hashTypeIterator
+{
+    hashTypeIterator(robj* in_subject);
+    ~hashTypeIterator();
+    int hashTypeNext();
+    void hashTypeCurrentFromZiplist(int what,
+                                unsigned char **vstr,
+                                unsigned int *vlen,
+                                long long *vll);
+    sds hashTypeCurrentFromHashTable(int what);
+    void hashTypeCurrentObject(int what, unsigned char **vstr, unsigned int *vlen, long long *vll);
+    sds hashTypeCurrentObjectNewSds(int what);
+    int encoding() {return m_encoding;}
 
-    unsigned char *fptr, *vptr;
+private:
+    robj *m_subject;
+    int m_encoding;
 
-    dictIterator *di;
-    dictEntry *de;
+    unsigned char* m_fptr;
+    unsigned char* m_vptr;
+
+    dictIterator *m_di;
+    dictEntry *m_de;
 };
 
 #define OBJ_HASH_KEY 1
@@ -1703,14 +1719,6 @@ int hashTypeDelete(robj *o, sds key);
 unsigned long hashTypeLength(const robj *o);
 hashTypeIterator *hashTypeInitIterator(robj *subject);
 void hashTypeReleaseIterator(hashTypeIterator *hi);
-int hashTypeNext(hashTypeIterator *hi);
-void hashTypeCurrentFromZiplist(hashTypeIterator *hi, int what,
-                                unsigned char **vstr,
-                                unsigned int *vlen,
-                                long long *vll);
-sds hashTypeCurrentFromHashTable(hashTypeIterator *hi, int what);
-void hashTypeCurrentObject(hashTypeIterator *hi, int what, unsigned char **vstr, unsigned int *vlen, long long *vll);
-sds hashTypeCurrentObjectNewSds(hashTypeIterator *hi, int what);
 robj *hashTypeLookupWriteOrCreate(client *c, robj *key);
 robj *hashTypeGetValueObject(robj *o, sds field);
 int hashTypeSet(robj *o, sds field, sds value, int flags);

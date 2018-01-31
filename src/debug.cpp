@@ -224,21 +224,21 @@ void computeDatasetDigest(unsigned char *final) {
                     serverPanic("Unknown sorted set encoding");
                 }
             } else if (o->type == OBJ_HASH) {
-                hashTypeIterator *hi = hashTypeInitIterator(o);
-                while (hashTypeNext(hi) != C_ERR) {
+                hashTypeIterator hi(o);
+                while (hi.hashTypeNext() != C_ERR) {
                     unsigned char eledigest[20];
                     sds sdsele;
 
                     memset(eledigest,0,20);
-                    sdsele = hashTypeCurrentObjectNewSds(hi,OBJ_HASH_KEY);
+                    sdsele = hi.hashTypeCurrentObjectNewSds(OBJ_HASH_KEY);
                     mixDigest(eledigest,sdsele,sdslen(sdsele));
                     sdsfree(sdsele);
-                    sdsele = hashTypeCurrentObjectNewSds(hi,OBJ_HASH_VALUE);
+                    sdsele = hi.hashTypeCurrentObjectNewSds(OBJ_HASH_VALUE);
                     mixDigest(eledigest,sdsele,sdslen(sdsele));
                     sdsfree(sdsele);
                     xorDigest(digest,eledigest,20);
                 }
-                hashTypeReleaseIterator(hi);
+
             } else if (o->type == OBJ_MODULE) {
                 RedisModuleDigest md;
                 moduleValue* mv = (moduleValue*)o->ptr;
@@ -621,7 +621,7 @@ void serverLogObjectDebugInfo(const robj *o) {
     } else if (o->type == OBJ_ZSET) {
         serverLog(LL_WARNING,"Sorted set size: %d", (int) zsetLength(o));
         if (o->encoding == OBJ_ENCODING_SKIPLIST)
-            serverLog(LL_WARNING,"Skiplist level: %d", (int) ((const zset*)o->ptr)->zsl->m_level);
+            serverLog(LL_WARNING,"Skiplist level: %d", (int) ((const zset*)o->ptr)->zsl->level());
     }
 }
 

@@ -322,38 +322,51 @@ unsigned long hashTypeLength(const robj *o) {
     return length;
 }
 
-hashTypeIterator *hashTypeInitIterator(robj *subject) {
-    hashTypeIterator* hi = (hashTypeIterator*)zmalloc(sizeof(hashTypeIterator));
-    hi->subject = subject;
-    hi->encoding = subject->encoding;
-
-    if (hi->encoding == OBJ_ENCODING_ZIPLIST) {
-        hi->fptr = NULL;
-        hi->vptr = NULL;
-    } else if (hi->encoding == OBJ_ENCODING_HT) {
-        hi->di = dictGetIterator((dict*)subject->ptr);
-    } else {
-        serverPanic("Unknown hash encoding");
-    }
+hashTypeIterator *hashTypeInitIterator(robj *subject)
+{
+    hashTypeIterator* hi = new (zmalloc(sizeof(hashTypeIterator))) hashTypeIterator(subject);
     return hi;
 }
 
-void hashTypeReleaseIterator(hashTypeIterator *hi) {
-    if (hi->encoding == OBJ_ENCODING_HT)
-        dictReleaseIterator(hi->di);
+hashTypeIterator::hashTypeIterator(robj* in_subject)
+: m_subject(in_subject)
+, m_encoding(in_subject->encoding)
+, m_fptr(NULL)
+, m_vptr(NULL)
+, m_di(NULL)
+, m_de(NULL)
+{
+    if (m_encoding == OBJ_ENCODING_ZIPLIST) {
+    } else if (m_encoding == OBJ_ENCODING_HT) {
+        m_di = dictGetIterator((dict*)in_subject->ptr);
+    } else {
+        serverPanic("Unknown hash encoding");
+    }
+}
+
+void hashTypeReleaseIterator(hashTypeIterator *hi)
+{
+    hi->~hashTypeIterator();
     zfree(hi);
+}
+
+hashTypeIterator::~hashTypeIterator()
+{
+    if (m_encoding == OBJ_ENCODING_HT)
+        dictReleaseIterator(m_di);
 }
 
 /* Move to the next entry in the hash. Return C_OK when the next entry
  * could be found and C_ERR when the iterator reaches the end. */
-int hashTypeNext(hashTypeIterator *hi) {
-    if (hi->encoding == OBJ_ENCODING_ZIPLIST) {
+int hashTypeIterator::hashTypeNext()
+{
+    if (m_encoding == OBJ_ENCODING_ZIPLIST) {
         unsigned char *zl;
         unsigned char *fptr, *vptr;
 
-        zl = (unsigned char *)hi->subject->ptr;
-        fptr = hi->fptr;
-        vptr = hi->vptr;
+        zl = (unsigned char *)m_subject->ptr;
+        fptr = m_fptr;
+        vptr = m_vptr;
 
         if (fptr == NULL) {
             /* Initialize cursor */
@@ -371,10 +384,11 @@ int hashTypeNext(hashTypeIterator *hi) {
         serverAssert(vptr != NULL);
 
         /* fptr, vptr now point to the first or next pair */
-        hi->fptr = fptr;
-        hi->vptr = vptr;
-    } else if (hi->encoding == OBJ_ENCODING_HT) {
-        if ((hi->de = hi->di->dictNext()) == NULL) return C_ERR;
+        m_fptr = fptr;
+        m_vptr = vptr;
+    } else if (m_encoding == OBJ_ENCODING_HT) {
+        if ((m_de = m_di->dictNext()) == NULL)
+            return C_ERR;
     } else {
         serverPanic("Unknown hash encoding");
     }
@@ -383,20 +397,20 @@ int hashTypeNext(hashTypeIterator *hi) {
 
 /* Get the field or value at iterator cursor, for an iterator on a hash value
  * encoded as a ziplist. Prototype is similar to `hashTypeGetFromZiplist`. */
-void hashTypeCurrentFromZiplist(hashTypeIterator *hi, int what,
+void hashTypeIterator::hashTypeCurrentFromZiplist(int what,
                                 unsigned char **vstr,
                                 unsigned int *vlen,
                                 long long *vll)
 {
     int ret;
 
-    serverAssert(hi->encoding == OBJ_ENCODING_ZIPLIST);
+    serverAssert(m_encoding == OBJ_ENCODING_ZIPLIST);
 
     if (what & OBJ_HASH_KEY) {
-        ret = ziplistGet(hi->fptr, vstr, vlen, vll);
+        ret = ziplistGet(m_fptr, vstr, vlen, vll);
         serverAssert(ret);
     } else {
-        ret = ziplistGet(hi->vptr, vstr, vlen, vll);
+        ret = ziplistGet(m_vptr, vstr, vlen, vll);
         serverAssert(ret);
     }
 }
@@ -404,13 +418,14 @@ void hashTypeCurrentFromZiplist(hashTypeIterator *hi, int what,
 /* Get the field or value at iterator cursor, for an iterator on a hash value
  * encoded as a hash table. Prototype is similar to
  * `hashTypeGetFromHashTable`. */
-sds hashTypeCurrentFromHashTable(hashTypeIterator *hi, int what) {
-    serverAssert(hi->encoding == OBJ_ENCODING_HT);
+sds hashTypeIterator::hashTypeCurrentFromHashTable(int what)
+{
+    serverAssert(m_encoding == OBJ_ENCODING_HT);
 
     if (what & OBJ_HASH_KEY) {
-        return (sds)hi->de->dictGetKey();
+        return (sds)m_de->dictGetKey();
     } else {
-        return (sds)hi->de->dictGetVal();
+        return (sds)m_de->dictGetVal();
     }
 }
 
@@ -424,12 +439,13 @@ sds hashTypeCurrentFromHashTable(hashTypeIterator *hi, int what) {
  * If *vll is populated *vstr is set to NULL, so the caller
  * can always check the function return by checking the return value
  * type checking if vstr == NULL. */
-void hashTypeCurrentObject(hashTypeIterator *hi, int what, unsigned char **vstr, unsigned int *vlen, long long *vll) {
-    if (hi->encoding == OBJ_ENCODING_ZIPLIST) {
+void hashTypeIterator::hashTypeCurrentObject(int what, unsigned char **vstr, unsigned int *vlen, long long *vll)
+{
+    if (m_encoding == OBJ_ENCODING_ZIPLIST) {
         *vstr = NULL;
-        hashTypeCurrentFromZiplist(hi, what, vstr, vlen, vll);
-    } else if (hi->encoding == OBJ_ENCODING_HT) {
-        sds ele = hashTypeCurrentFromHashTable(hi, what);
+        hashTypeCurrentFromZiplist(what, vstr, vlen, vll);
+    } else if (m_encoding == OBJ_ENCODING_HT) {
+        sds ele = hashTypeCurrentFromHashTable(what);
         *vstr = (unsigned char*) ele;
         *vlen = sdslen(ele);
     } else {
@@ -439,13 +455,15 @@ void hashTypeCurrentObject(hashTypeIterator *hi, int what, unsigned char **vstr,
 
 /* Return the key or value at the current iterator position as a new
  * SDS string. */
-sds hashTypeCurrentObjectNewSds(hashTypeIterator *hi, int what) {
+sds hashTypeIterator::hashTypeCurrentObjectNewSds(int what)
+{
     unsigned char *vstr;
     unsigned int vlen;
     long long vll;
 
-    hashTypeCurrentObject(hi,what,&vstr,&vlen,&vll);
-    if (vstr) return sdsnewlen(vstr,vlen);
+    hashTypeCurrentObject(what, &vstr, &vlen, &vll);
+    if (vstr)
+        return sdsnewlen(vstr,vlen);
     return sdsfromlonglong(vll);
 }
 
@@ -470,18 +488,17 @@ void hashTypeConvertZiplist(robj *o, int enc) {
         /* Nothing to do... */
 
     } else if (enc == OBJ_ENCODING_HT) {
-        hashTypeIterator *hi;
         dict *_dict;
         int ret;
 
-        hi = hashTypeInitIterator(o);
+        hashTypeIterator hi(o);
         _dict = dictCreate(&hashDictType, NULL);
 
-        while (hashTypeNext(hi) != C_ERR) {
+        while (hi.hashTypeNext() != C_ERR) {
             sds key, value;
 
-            key = hashTypeCurrentObjectNewSds(hi,OBJ_HASH_KEY);
-            value = hashTypeCurrentObjectNewSds(hi,OBJ_HASH_VALUE);
+            key = hi.hashTypeCurrentObjectNewSds(OBJ_HASH_KEY);
+            value = hi.hashTypeCurrentObjectNewSds(OBJ_HASH_VALUE);
             ret = _dict->dictAdd(key, value);
             if (ret != DICT_OK) {
                 serverLogHexDump(LL_WARNING,"ziplist with dup elements dump",
@@ -489,7 +506,7 @@ void hashTypeConvertZiplist(robj *o, int enc) {
                 serverPanic("Ziplist corruption detected");
             }
         }
-        hashTypeReleaseIterator(hi);
+
         zfree(o->ptr);
         o->encoding = OBJ_ENCODING_HT;
         o->ptr = _dict;
@@ -747,19 +764,20 @@ void hstrlenCommand(client *c) {
     addReplyLongLong(c,hashTypeGetValueLength(o,(sds)c->argv[2]->ptr));
 }
 
-static void addHashIteratorCursorToReply(client *c, hashTypeIterator *hi, int what) {
-    if (hi->encoding == OBJ_ENCODING_ZIPLIST) {
+static void addHashIteratorCursorToReply(client *c, hashTypeIterator *hi, int what)
+{
+    if (hi->encoding() == OBJ_ENCODING_ZIPLIST) {
         unsigned char *vstr = NULL;
         unsigned int vlen = UINT_MAX;
         long long vll = LLONG_MAX;
 
-        hashTypeCurrentFromZiplist(hi, what, &vstr, &vlen, &vll);
+        hi->hashTypeCurrentFromZiplist(what, &vstr, &vlen, &vll);
         if (vstr)
             addReplyBulkCBuffer(c, vstr, vlen);
         else
             addReplyBulkLongLong(c, vll);
-    } else if (hi->encoding == OBJ_ENCODING_HT) {
-        sds value = hashTypeCurrentFromHashTable(hi, what);
+    } else if (hi->encoding() == OBJ_ENCODING_HT) {
+        sds value = hi->hashTypeCurrentFromHashTable(what);
         addReplyBulkCBuffer(c, value, sdslen(value));
     } else {
         serverPanic("Unknown hash encoding");
@@ -768,7 +786,7 @@ static void addHashIteratorCursorToReply(client *c, hashTypeIterator *hi, int wh
 
 void genericHgetallCommand(client *c, int flags) {
     robj *o;
-    hashTypeIterator *hi;
+
     int multiplier = 0;
     int length, count = 0;
 
@@ -781,19 +799,18 @@ void genericHgetallCommand(client *c, int flags) {
     length = hashTypeLength(o) * multiplier;
     addReplyMultiBulkLen(c, length);
 
-    hi = hashTypeInitIterator(o);
-    while (hashTypeNext(hi) != C_ERR) {
+    hashTypeIterator hi(o);
+    while (hi.hashTypeNext() != C_ERR) {
         if (flags & OBJ_HASH_KEY) {
-            addHashIteratorCursorToReply(c, hi, OBJ_HASH_KEY);
+            addHashIteratorCursorToReply(c, &hi, OBJ_HASH_KEY);
             count++;
         }
         if (flags & OBJ_HASH_VALUE) {
-            addHashIteratorCursorToReply(c, hi, OBJ_HASH_VALUE);
+            addHashIteratorCursorToReply(c, &hi, OBJ_HASH_VALUE);
             count++;
         }
     }
 
-    hashTypeReleaseIterator(hi);
     serverAssert(count == length);
 }
 
