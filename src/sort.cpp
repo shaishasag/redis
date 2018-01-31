@@ -433,7 +433,7 @@ void sortCommand(client *c) {
         dictEntry *setele;
         sds sdsele;
         dictIterator di(set);
-        while((setele = dictNext(&di)) != NULL) {
+        while((setele = di.dictNext()) != NULL) {
             sdsele =  (sds)setele->dictGetKey();
             vector[j].obj = createStringObject(sdsele,sdslen(sdsele));
             vector[j].u.score = 0;

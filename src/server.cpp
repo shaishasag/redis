@@ -2008,7 +2008,7 @@ void resetCommandTableStats(void) {
     dictEntry *de;
 
     dictIterator di(server.commands, 1);
-    while((de = dictNext(&di)) != NULL) {
+    while((de = di.dictNext()) != NULL) {
         c = (struct redisCommand *) de->dictGetVal();
         c->microseconds = 0;
         c->calls = 0;
@@ -2742,7 +2742,7 @@ void commandCommand(client *c) {
     if (c->argc == 1) {
         addReplyMultiBulkLen(c, server.commands->dictSize());
         dictIterator di(server.commands);
-        while ((de = dictNext(&di)) != NULL) {
+        while ((de = di.dictNext()) != NULL) {
             addReplyCommand(c, (struct redisCommand *)de->dictGetVal());
         }
     } else if (!strcasecmp((const char*)c->argv[1]->ptr, "info")) {
@@ -3282,7 +3282,7 @@ sds genRedisInfoString(const char *section) {
         struct redisCommand *c;
         dictEntry *de;
         dictIterator di(server.commands, 1);
-        while((de = dictNext(&di)) != NULL) {
+        while((de = di.dictNext()) != NULL) {
             c = (struct redisCommand *) de->dictGetVal();
             if (!c->calls) continue;
             info = sdscatprintf(info,

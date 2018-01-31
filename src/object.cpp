@@ -737,7 +737,7 @@ size_t objectComputeSize(robj *o, size_t sample_size) {
             d = (dict *)o->ptr;
             dictIterator di(d);
             asize = sizeof(*o)+sizeof(dict)+(sizeof(struct dictEntry*)*d->dictSlots());
-            while((de = dictNext(&di)) != NULL && samples < sample_size) {
+            while((de = di.dictNext()) != NULL && samples < sample_size) {
                 ele = (sds)de->dictGetKey();
                 elesize += sizeof(struct dictEntry) + sdsAllocSize(ele);
                 samples++;
@@ -774,7 +774,7 @@ size_t objectComputeSize(robj *o, size_t sample_size) {
             d = (dict *)o->ptr;
             dictIterator di(d);
             asize = sizeof(*o)+sizeof(dict)+(sizeof(struct dictEntry*)*d->dictSlots());
-            while((de = dictNext(&di)) != NULL && samples < sample_size) {
+            while((de = di.dictNext()) != NULL && samples < sample_size) {
                 ele = (sds)de->dictGetKey();
                 ele2 = (sds)de->dictGetVal();
                 elesize += sdsAllocSize(ele) + sdsAllocSize(ele2);

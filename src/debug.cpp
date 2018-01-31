@@ -135,7 +135,7 @@ void computeDatasetDigest(unsigned char *final) {
         mixDigest(final,&aux,sizeof(aux));
 
         /* Iterate this DB writing every entry */
-        while((de = dictNext(&di)) != NULL) {
+        while((de = di.dictNext()) != NULL) {
             sds key;
             robj *keyobj, *o;
             long long expiretime;
@@ -210,7 +210,7 @@ void computeDatasetDigest(unsigned char *final) {
                     dictIterator di(zs->_dict);
                     dictEntry *de;
 
-                    while((de = dictNext(&di)) != NULL) {
+                    while((de = di.dictNext()) != NULL) {
                         sds sdsele = (sds)de->dictGetKey();
                         double* score = (double*)de->dictGetVal();
 
@@ -543,11 +543,11 @@ void debugCommand(client *c) {
         }
 
         stats = sdscatprintf(stats,"[Dictionary HT]\n");
-        dictGetStats(buf,sizeof(buf),server.db[dbid].m_dict);
+        server.db[dbid].m_dict->dictGetStats(buf,sizeof(buf));
         stats = sdscat(stats,buf);
 
         stats = sdscatprintf(stats,"[Expires HT]\n");
-        dictGetStats(buf,sizeof(buf),server.db[dbid].m_expires);
+        server.db[dbid].m_expires->dictGetStats(buf,sizeof(buf));
         stats = sdscat(stats,buf);
 
         addReplyBulkSds(c,stats);

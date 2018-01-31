@@ -64,7 +64,8 @@
 /* Unused arguments generate annoying warnings... */
 #define DICT_NOTUSED(V) ((void) V)
 class dict;
-class dictEntry {
+class dictEntry
+{
 public:
     friend class dict;
 
@@ -104,7 +105,8 @@ private:
     dictEntry *m_next;
 } ;
 
-struct dictType {
+struct dictType
+{
     uint64_t (*hashFunction)(const void *key);
     void *(*keyDup)(void *privdata, const void *key);
     void *(*valDup)(void *privdata, const void *obj);
@@ -115,7 +117,8 @@ struct dictType {
 
 /* This is our hash table structure. Every dictionary has two of this as we
  * implement incremental rehashing, for the old to the new table. */
-class dictht {
+class dictht
+{
 public:
     dictht(const unsigned long new_size = 0);
     dictht(dictht&& in_move_me);
@@ -152,13 +155,14 @@ typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
 
 // remove declarations of functions that became class members
 // get rid of macros that should be member functions
-class dict {
+class dict
+{
 public:
     dict();
     dict(dictType *in_type, void *in_privDataPtr);
     ~dict();
 
-    inline bool dictIsRehashing() { return rehashidx != -1;}
+    inline bool dictIsRehashing() { return m_rehashidx != -1;}
     int dictResize();
     int dictExpand(unsigned long size);
     int dictRehash(int n);
@@ -181,58 +185,59 @@ public:
     void dictEmpty(void(callback)(void*));
     unsigned int dictGetHash(const void *key);
     dictEntry** dictFindEntryRefByPtrAndHash(const void *oldptr, unsigned int hash);
+    void dictGetStats(char *buf, size_t bufsize);
 
 // previously macros
     inline void dictFreeVal(dictEntry *entry)
     {
-        if (type->valDestructor)
-            type->valDestructor(privdata, entry->dictGetVal());
+        if (m_type->valDestructor)
+            m_type->valDestructor(m_privdata, entry->dictGetVal());
     }
 
     inline void dictSetVal(dictEntry *entry, void* _val_)
     {
-        if (type->valDup)
-            entry->dictSetVal(type->valDup(privdata, _val_));
+        if (m_type->valDup)
+            entry->dictSetVal(m_type->valDup(m_privdata, _val_));
         else
             entry->dictSetVal(_val_);
     }
 
     inline void dictFreeKey(dictEntry *entry)
     {
-        if (type->keyDestructor)
-            type->keyDestructor(privdata, entry->key());
+        if (m_type->keyDestructor)
+            m_type->keyDestructor(m_privdata, entry->key());
     }
 
     inline void dictSetKey(dictEntry *entry, void* _key_)
     {
-        if (type->keyDup)
-            entry->dictSetKey(type->keyDup(privdata, _key_));
+        if (m_type->keyDup)
+            entry->dictSetKey(m_type->keyDup(m_privdata, _key_));
         else
             entry->dictSetKey(_key_);
     }
 
     inline bool dictCompareKeys(const void* key1, const void* key2)
     {
-        bool retVal = type->keyCompare ?
-                        type->keyCompare(privdata, key1, key2) :
+        bool retVal = m_type->keyCompare ?
+                        m_type->keyCompare(m_privdata, key1, key2) :
                         key1 == key2;
         return retVal;
     }
 
-    inline uint64_t dictHashKey(const void* key) { return type->hashFunction(key);}
-    inline unsigned long dictSlots() { return ht[0].size()+ht[1].size(); }
-    inline unsigned long dictSize() { return ht[0].used()+ht[1].used(); }
+    inline uint64_t dictHashKey(const void* key) { return m_type->hashFunction(key);}
+    inline unsigned long dictSlots() { return m_ht[0].size()+m_ht[1].size(); }
+    inline unsigned long dictSize() { return m_ht[0].used()+m_ht[1].used(); }
 //private:
     int _dictKeyIndex(const void *key, unsigned int hash, dictEntry **existing);
     int _dictExpandIfNeeded();
     dictEntry *dictGenericDelete(const void *key, int nofree);
     int _dictClear(dictht *ht, void(callback)(void *));
     
-    dictType *type;
-    void *privdata;
-    dictht ht[2];
-    long rehashidx; /* rehashing not in progress if rehashidx == -1 */
-    unsigned long iterators; /* number of iterators currently running */
+    dictType *m_type;
+    void *m_privdata;
+    dictht m_ht[2];
+    long m_rehashidx; /* rehashing not in progress if rehashidx == -1 */
+    unsigned long m_iterators; /* number of iterators currently running */
 } ;
 
 std::ostream& operator<<(std::ostream& os, dict& out_me);
@@ -241,19 +246,22 @@ std::ostream& operator<<(std::ostream& os, dict& out_me);
  * dictAdd, dictFind, and other functions against the dictionary even while
  * iterating. Otherwise it is a non safe iterator, and only dictNext()
  * should be called while iterating. */
-class dictIterator {
+class dictIterator
+{
 public:
     dictIterator(dict *in_d, int in_safe=0);
     ~dictIterator();
-    
-    dict *d;
-    long index;
-    int table;
-    int safe;
-    dictEntry *entry;
-    dictEntry *nextEntry;
+    dictEntry* dictNext();
+
+private:
+    dict *m_d;
+    long m_index;
+    int m_table;
+    int m_safe;
+    dictEntry *m_entry;
+    dictEntry *m_nextEntry;
     /* unsafe iterator fingerprint for misuse detection. */
-    long long fingerprint;
+    long long m_fingerprint;
 };
 
 /* This is the initial size of every hash table */
@@ -266,17 +274,15 @@ dict *dictCreate(dictType *type, void *privDataPtr);
 void dictRelease(dict *d);
 dictIterator *dictGetIterator(dict *d);
 dictIterator *dictGetSafeIterator(dict *d);
-dictEntry *dictNext(dictIterator *iter);
 void dictReleaseIterator(dictIterator *iter);
-void dictGetStats(char *buf, size_t bufsize, dict *d);
 uint64_t dictGenHashFunction(const void *key, int len);
 uint64_t dictGenCaseHashFunction(const unsigned char *buf, int len);
-void dictEnableResize(void);
-void dictDisableResize(void);
+void dictEnableResize();
+void dictDisableResize();
 
 int dictRehashMilliseconds(dict *d, int ms);
 void dictSetHashFunctionSeed(uint8_t *seed);
-uint8_t *dictGetHashFunctionSeed(void);
+uint8_t *dictGetHashFunctionSeed();
 
 /* Hash table types */
 extern dictType dictTypeHeapStringCopyKey;

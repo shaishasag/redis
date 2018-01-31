@@ -106,7 +106,7 @@ void blockClient(client *c, int btype) {
 /* This function is called in the beforeSleep() function of the event loop
  * in order to process the pending input buffer of clients that were
  * unblocked after a blocking operation. */
-void processUnblockedClients(void) {
+void processUnblockedClients() {
     listNode *ln;
     client *c;
 

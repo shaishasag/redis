@@ -155,7 +155,7 @@ void setTypeReleaseIterator(setTypeIterator *si) {
  * When there are no longer elements -1 is returned. */
 int setTypeNext(setTypeIterator *si, sds *sdsele, int64_t *llele) {
     if (si->encoding == OBJ_ENCODING_HT) {
-        dictEntry *de = dictNext(si->di);
+        dictEntry *de = si->di->dictNext();
         if (de == NULL) return -1;
         *sdsele = (sds)de->dictGetKey();
         *llele = -123456789; /* Not needed. Defensive. */
@@ -741,7 +741,7 @@ void srandmemberWithCountCommand(client *c) {
         addReplyMultiBulkLen(c,count);
         {
             dictIterator di((dict*)d);
-            while((de = dictNext(&di)) != NULL)
+            while((de = di.dictNext()) != NULL)
                 addReplyBulk(c,(robj *)de->dictGetKey());
         }
         dictRelease(d);

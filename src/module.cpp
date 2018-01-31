@@ -2732,7 +2732,7 @@ moduleType *moduleTypeLookupModuleByName(const char *name) {
     dictEntry *de;
 
     dictIterator di(modules);
-    while ((de = dictNext(&di)) != NULL) {
+    while ((de = di.dictNext()) != NULL) {
         struct RedisModule* module = (RedisModule*)de->dictGetVal();
         listNode *ln;
 
@@ -2768,7 +2768,7 @@ moduleType *moduleTypeLookupModuleByID(uint64_t id) {
     dictIterator di(modules);
     dictEntry *de;
 
-    while ((de = dictNext(&di)) != NULL && mt == NULL) {
+    while ((de = di.dictNext()) != NULL && mt == NULL) {
         struct RedisModule* module = (RedisModule*)de->dictGetVal();
         listNode *ln;
 
@@ -3751,7 +3751,7 @@ void moduleUnregisterCommands(RedisModule *module) {
     /* Unregister all the commands registered by this module. */
     dictIterator di(server.commands, 1);
     dictEntry *de;
-    while ((de = dictNext(&di)) != NULL) {
+    while ((de = di.dictNext()) != NULL) {
         struct redisCommand* cmd = (redisCommand*)de->dictGetVal();
         if (cmd->proc == RedisModuleCommandDispatcher) {
             RedisModuleCommandProxy *cp =
@@ -3889,7 +3889,7 @@ void moduleCommand(client *c) {
         dictEntry *de;
 
         addReplyMultiBulkLen(c,modules->dictSize());
-        while ((de = dictNext(&di)) != NULL) {
+        while ((de = di.dictNext()) != NULL) {
             sds name = (sds)de->dictGetKey();
             struct RedisModule* module = (RedisModule*)de->dictGetVal();
             addReplyMultiBulkLen(c,4);

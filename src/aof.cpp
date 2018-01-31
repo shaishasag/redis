@@ -40,8 +40,8 @@
 #include <sys/wait.h>
 #include <sys/param.h>
 
-void aofUpdateCurrentSize(void);
-void aofClosePipes(void);
+void aofUpdateCurrentSize();
+void aofClosePipes();
 
 /* ----------------------------------------------------------------------------
  * AOF rewrite buffer implementation.
@@ -59,10 +59,12 @@ void aofClosePipes(void);
 
 #define AOF_RW_BUF_BLOCK_SIZE (1024*1024*10)    /* 10 MB per block */
 
-typedef struct aofrwblock {
-    unsigned long used, free;
-    char buf[AOF_RW_BUF_BLOCK_SIZE];
-} aofrwblock;
+struct aofrwblock
+{
+    unsigned long m_used;
+    unsigned long m_free;
+    char m_buf[AOF_RW_BUF_BLOCK_SIZE];
+};
 
 /* This function free the old AOF rewrite buffer if needed, and initialize
  * a fresh new one. It tests for server.aof_rewrite_buf_blocks equal to NULL
@@ -76,14 +78,14 @@ void aofRewriteBufferReset() {
 }
 
 /* Return the current size of the AOF rewrite buffer. */
-unsigned long aofRewriteBufferSize(void) {
+unsigned long aofRewriteBufferSize() {
     listNode *ln;
     unsigned long size = 0;
 
     listIter li(server.aof_rewrite_buf_blocks);
     while((ln = li.listNext())) {
         aofrwblock *block = (aofrwblock *)ln->listNodeValue();
-        size += block->used;
+        size += block->m_used;
     }
     return size;
 }
@@ -92,31 +94,30 @@ unsigned long aofRewriteBufferSize(void) {
  * rewrite. We send pieces of our AOF differences buffer so that the final
  * write when the child finishes the rewrite will be small. */
 void aofChildWriteDiffData(aeEventLoop *el, int fd, void *privdata, int mask) {
-    listNode *ln;
-    aofrwblock *block;
-    ssize_t nwritten;
     UNUSED(el);
     UNUSED(fd);
     UNUSED(privdata);
     UNUSED(mask);
 
     while(1) {
-        ln = server.aof_rewrite_buf_blocks->listFirst();
-        block = ln ? (aofrwblock *)ln->listNodeValue() : NULL;
+        listNode* ln = server.aof_rewrite_buf_blocks->listFirst();
+        aofrwblock* block = ln ? (aofrwblock *)ln->listNodeValue() : NULL;
         if (server.aof_stop_sending_diff || !block) {
             server.el->aeDeleteFileEvent(server.aof_pipe_write_data_to_child,
                               AE_WRITABLE);
             return;
         }
-        if (block->used > 0) {
-            nwritten = write(server.aof_pipe_write_data_to_child,
-                             block->buf,block->used);
-            if (nwritten <= 0) return;
-            memmove(block->buf,block->buf+nwritten,block->used-nwritten);
-            block->used -= nwritten;
-            block->free += nwritten;
+        if (block->m_used > 0) {
+            ssize_t nwritten = write(server.aof_pipe_write_data_to_child,
+                             block->m_buf,block->m_used);
+            if (nwritten <= 0)
+                return;
+            memmove(block->m_buf,block->m_buf+nwritten,block->m_used-nwritten);
+            block->m_used -= nwritten;
+            block->m_free += nwritten;
         }
-        if (block->used == 0) server.aof_rewrite_buf_blocks->listDelNode(ln);
+        if (block->m_used == 0)
+            server.aof_rewrite_buf_blocks->listDelNode(ln);
     }
 }
 
@@ -129,27 +130,25 @@ void aofRewriteBufferAppend(unsigned char *s, unsigned long len) {
         /* If we already got at least an allocated block, try appending
          * at least some piece into it. */
         if (block) {
-            unsigned long thislen = (block->free < len) ? block->free : len;
+            unsigned long thislen = (block->m_free < len) ? block->m_free : len;
             if (thislen) {  /* The current block is not already full. */
-                memcpy(block->buf+block->used, s, thislen);
-                block->used += thislen;
-                block->free -= thislen;
+                memcpy(block->m_buf+block->m_used, s, thislen);
+                block->m_used += thislen;
+                block->m_free -= thislen;
                 s += thislen;
                 len -= thislen;
             }
         }
 
         if (len) { /* First block to allocate, or need another block. */
-            int numblocks;
-
-            block = (aofrwblock *)zmalloc(sizeof(*block));
-            block->free = AOF_RW_BUF_BLOCK_SIZE;
-            block->used = 0;
+            block = (aofrwblock *)zmalloc(sizeof(aofrwblock));
+            block->m_free = AOF_RW_BUF_BLOCK_SIZE;
+            block->m_used = 0;
             server.aof_rewrite_buf_blocks->listAddNodeTail(block);
 
             /* Log every time we cross more 10 or 100 blocks, respectively
              * as a notice or warning. */
-            numblocks = server.aof_rewrite_buf_blocks->listLength();
+            int numblocks = server.aof_rewrite_buf_blocks->listLength();
             if (((numblocks+1) % 10) == 0) {
                 int level = ((numblocks+1) % 100) == 0 ? LL_WARNING :
                                                          LL_NOTICE;
@@ -177,13 +176,13 @@ ssize_t aofRewriteBufferWrite(int fd) {
     listIter li(server.aof_rewrite_buf_blocks);
     while((ln = li.listNext())) {
         aofrwblock *block = (aofrwblock *)ln->listNodeValue();
-        ssize_t nwritten;
 
-        if (block->used) {
-            nwritten = write(fd,block->buf,block->used);
-            if (nwritten != (ssize_t)block->used) {
-                if (nwritten == 0) errno = EIO;
-                return -1;
+        if (block->m_used) {
+            ssize_t nwritten = write(fd, block->m_buf, block->m_used);
+            if (nwritten != (ssize_t)block->m_used) {
+                if (nwritten == 0)
+                    errno = EIO;
+                return (ssize_t)-1;
             }
             count += nwritten;
         }
@@ -886,7 +885,7 @@ int rewriteSetObject(rio *r, robj *key, robj *o) {
         dictIterator di((dict *)o->ptr);
         dictEntry *de;
 
-        while((de = dictNext(&di)) != NULL) {
+        while((de = di.dictNext()) != NULL) {
             sds ele = (sds)de->dictGetKey();
             if (count == 0) {
                 int cmd_items = (items > AOF_REWRITE_ITEMS_PER_CMD) ?
@@ -951,7 +950,7 @@ int rewriteSortedSetObject(rio *r, robj *key, robj *o) {
         dictIterator di((dict *)zs->_dict);
         dictEntry *de;
 
-        while((de = dictNext(&di)) != NULL) {
+        while((de = di.dictNext()) != NULL) {
             sds ele = (sds)de->dictGetKey();
             double* score = (double*)de->dictGetVal();
 
@@ -1076,7 +1075,7 @@ int rewriteAppendOnlyFileRio(rio *aof) {
 
         /* Iterate this DB writing every entry */
         dictIterator di(d, 1);
-        while((de = dictNext(&di)) != NULL) {
+        while((de = di.dictNext()) != NULL) {
             sds keystr;
             robj key, *o;
             long long expiretime;

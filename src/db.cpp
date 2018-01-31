@@ -513,7 +513,7 @@ void keysCommand(client *c) {
 
     dictIterator di(c->db->m_dict, 1);
     allkeys = (pattern[0] == '*' && pattern[1] == '\0');
-    while((de = dictNext(&di)) != NULL) {
+    while((de = di.dictNext()) != NULL) {
         sds key = (sds)de->dictGetKey();
         robj *keyobj;
 
@@ -947,7 +947,7 @@ void moveCommand(client *c) {
 void scanDatabaseForReadyLists(redisDb *db) {
     dictEntry *de;
     dictIterator di(db->m_blocking_keys, 1);
-    while((de = dictNext(&di)) != NULL) {
+    while((de = di.dictNext()) != NULL) {
         robj *key = (robj *)de->dictGetKey();
         robj *value = lookupKey(db,key,LOOKUP_NOTOUCH);
         if (value && value->type == OBJ_LIST)

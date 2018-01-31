@@ -62,17 +62,17 @@ size_t rioBufferIO::rioWriteSelf(const void *buf, size_t len)
 {
     m_ptr = sdscatlen(m_ptr, (char*)buf, len);
     m_pos += len;
-    return 1;
+    return (size_t)1;
 }
 
 /* Returns 1 or 0 for success/failure. */
 size_t rioBufferIO::rioReadSelf(void *buf, size_t len)
 {
     if (sdslen(m_ptr)-m_pos < len)
-        return 0; /* not enough buffer to return len bytes. */
+        return (size_t)0; /* not enough buffer to return len bytes. */
     memcpy(buf, m_ptr + m_pos, len);
     m_pos += len;
-    return 1;
+    return (size_t)1;
 }
 
 /* Returns read/write position in buffer. */
@@ -84,7 +84,7 @@ off_t rioBufferIO::rioTellSelf() {
 rioBufferIO::rioBufferIO(sds s)
 : rio()
 , m_ptr(s)
-, m_pos(0)
+, m_pos((off_t)0)
 {}
 
 /* --------------------- Stdio file pointer implementation ------------------- */
@@ -92,9 +92,7 @@ rioBufferIO::rioBufferIO(sds s)
 /* Returns 1 or 0 for success/failure. */
 size_t rioFileIO::rioWriteSelf(const void *buf, size_t len)
 {
-    size_t retval;
-
-    retval = fwrite(buf, len, 1, m_fp);
+    size_t retval = fwrite(buf, len, 1, m_fp);
     m_buffered += len;
 
     if (m_autosync &&
@@ -129,8 +127,8 @@ int rioFileIO::rioFlushSelf()
 rioFileIO::rioFileIO(FILE* in_fp)
 : rio()
 , m_fp(in_fp)
-, m_buffered(0)
-, m_autosync(0)
+, m_buffered((off_t)0)
+, m_autosync((off_t)0)
 {
 }
 
@@ -171,7 +169,7 @@ size_t rioFdsetIO::rioWriteSelf(const void *buf, size_t len)
         int broken = 0;
         for (j = 0; j < m_numfds; j++) {
             if (m_state[j] != 0) {
-                /* Skip FDs alraedy in error. */
+                /* Skip FDs already in error. */
                 broken++;
                 continue;
             }
@@ -200,7 +198,7 @@ size_t rioFdsetIO::rioWriteSelf(const void *buf, size_t len)
             }
         }
         if (broken == m_numfds)
-            return 0; /* All the FDs in error. */
+            return (size_t)0; /* All the FDs in error. */
 
         p += count;
         len -= count;
@@ -210,7 +208,7 @@ size_t rioFdsetIO::rioWriteSelf(const void *buf, size_t len)
     if (doflush)
         sdsclear(m_buf);
 
-    return 1;
+    return (size_t)1;
 }
 
 /* Returns 1 or 0 for success/failure. */
@@ -233,7 +231,7 @@ int rioFdsetIO::rioFlushSelf()
 {
     /* Our flush is implemented by the write method, that recognizes a
      * buffer set to NULL with a count of zero as a flush request. */
-    return rioWriteSelf(NULL,0);
+    return rioWriteSelf(NULL, 0);
 }
 
 
@@ -289,15 +287,14 @@ void rioFileIO::rioSetAutoSync(off_t bytes)
 size_t rio::rioWriteBulkCount(char prefix, int count)
 {
     char cbuf[128];
-    int clen;
 
     cbuf[0] = prefix;
-    clen = 1+ll2string(cbuf+1,sizeof(cbuf)-1,count);
+    int clen = 1+ll2string(cbuf+1,sizeof(cbuf)-1,count);
     cbuf[clen++] = '\r';
     cbuf[clen++] = '\n';
     if (rioWrite(cbuf, clen) == 0)
-        return 0;
-    return clen;
+        return (size_t)0;
+    return (size_t)clen;
 }
 
 /* Write binary-safe string in the format: "$<count>\r\n<payload>\r\n". */
@@ -306,11 +303,11 @@ size_t rio::rioWriteBulkString(const char *buf, size_t len)
     size_t nwritten;
 
     if ((nwritten = rioWriteBulkCount('$',len)) == 0)
-        return 0;
+        return (size_t)0;
     if (len > 0 && rioWrite(buf,len) == 0)
-        return 0;
-    if (rioWrite("\r\n",2) == 0)
-        return 0;
+        return (size_t)0;
+    if (rioWrite("\r\n", 2) == 0)
+        return (size_t)0;
     return nwritten+len+2;
 }
 
@@ -318,9 +315,7 @@ size_t rio::rioWriteBulkString(const char *buf, size_t len)
 size_t rio::rioWriteBulkLongLong(long long l)
 {
     char lbuf[32];
-    unsigned int llen;
-
-    llen = ll2string(lbuf,sizeof(lbuf),l);
+    unsigned int llen = ll2string(lbuf, sizeof(lbuf), l);
     return rioWriteBulkString(lbuf, llen);
 }
 
@@ -328,8 +323,6 @@ size_t rio::rioWriteBulkLongLong(long long l)
 size_t rio::rioWriteBulkDouble(double d)
 {
     char dbuf[128];
-    unsigned int dlen;
-
-    dlen = snprintf(dbuf, sizeof(dbuf), "%.17g", d);
+    unsigned int dlen = snprintf(dbuf, sizeof(dbuf), "%.17g", d);
     return rioWriteBulkString(dbuf, dlen);
 }

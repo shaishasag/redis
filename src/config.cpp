@@ -170,7 +170,7 @@ void queueLoadModule(sds path, sds *argv, int argc) {
 }
 
 void loadServerConfigFromString(char *config) {
-    char *err = NULL;
+    const char *err = NULL;
     int linenum = 0, totlines, i;
     int slaveof_linenum = 0;
     sds *lines;
@@ -1850,7 +1850,7 @@ void rewriteConfigRemoveOrphaned(struct rewriteConfigState *state) {
     dictIterator di(state->option_to_line);
     dictEntry *de;
 
-    while((de = dictNext(&di)) != NULL) {
+    while((de = di.dictNext()) != NULL) {
         list* l = (list*)de->dictGetVal();
         sds option = (sds)de->dictGetKey();
 

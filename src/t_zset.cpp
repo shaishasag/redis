@@ -1836,7 +1836,7 @@ void zuiInitIterator(zsetopsrc *op) {
         } else if (op->encoding == OBJ_ENCODING_HT) {
             it->ht._dict = (dict *)op->subject->ptr;
             it->ht.di = dictGetIterator((dict*)op->subject->ptr);
-            it->ht.de = dictNext(it->ht.di);
+            it->ht.de = it->ht.di->dictNext();
         } else {
             serverPanic("Unknown set encoding");
         }
@@ -1945,7 +1945,7 @@ int zuiNext(zsetopsrc *op, zsetopval *val) {
             val->score = 1.0;
 
             /* Move to next element. */
-            it->ht.de = dictNext(it->ht.di);
+            it->ht.de = it->ht.di->dictNext();
         } else {
             serverPanic("Unknown set encoding");
         }
@@ -2328,7 +2328,7 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
              * right size, in order to save rehashing time. */
             dstzset->_dict->dictExpand(accumulator->dictSize());
 
-            while((de = dictNext(&di)) != NULL) {
+            while((de = di.dictNext()) != NULL) {
                 sds ele = (sds)de->dictGetKey();
                 score = de->dictGetDoubleVal();
                 znode = zslInsert(dstzset->zsl,score,ele);

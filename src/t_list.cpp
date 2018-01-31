@@ -667,7 +667,7 @@ void unblockClientWaitingData(client *c) {
     {
         dictIterator di(c->bpop.keys);
         /* The client may wait for multiple keys, so unblock it for every key. */
-        while((de = dictNext(&di)) != NULL) {
+        while((de = di.dictNext()) != NULL) {
             robj *key = (robj *)de->dictGetKey();
 
             /* Remove this client from the list of clients waiting for this key. */

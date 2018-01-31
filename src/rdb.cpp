@@ -681,7 +681,7 @@ ssize_t rdbSaveObject(rio *rdb, robj *o) {
             if ((n = rdbSaveLen(rdb,set->dictSize())) == -1) return -1;
             nwritten += n;
 
-            while((de = dictNext(&di)) != NULL) {
+            while((de = di.dictNext()) != NULL) {
                 sds ele = (sds)de->dictGetKey();
                 if ((n = rdbSaveRawString(rdb,(unsigned char*)ele,sdslen(ele)))
                     == -1) return -1;
@@ -747,7 +747,7 @@ ssize_t rdbSaveObject(rio *rdb, robj *o) {
             if ((n = rdbSaveLen(rdb,((dict*)o->ptr)->dictSize())) == -1) return -1;
             nwritten += n;
 
-            while((de = dictNext(&di)) != NULL) {
+            while((de = di.dictNext()) != NULL) {
                 sds field = (sds)de->dictGetKey();
                 sds value = (sds)de->dictGetVal();
 
@@ -877,7 +877,6 @@ int rdbSaveInfoAuxFields(rio *rdb, int flags, rdbSaveInfo *rsi) {
  * integer pointed by 'error' is set to the value of errno just after the I/O
  * error. */
 int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
-    dictIterator *di = NULL;
     dictEntry *de;
     char magic[10];
     int j;
@@ -888,13 +887,16 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
     if (server.rdb_checksum)
         rdb->m_update_cksum_func = rio::rioGenericUpdateChecksum;
     snprintf(magic,sizeof(magic),"REDIS%04d",RDB_VERSION);
-    if (rdbWriteRaw(rdb,magic,9) == -1) goto werr;
-    if (rdbSaveInfoAuxFields(rdb,flags,rsi) == -1) goto werr;
+    if (rdbWriteRaw(rdb, magic, 9) == -1)
+        goto werr;
+    if (rdbSaveInfoAuxFields(rdb,flags,rsi) == -1)
+        goto werr;
 
     for (j = 0; j < server.dbnum; j++) {
         redisDb *db = server.db+j;
         dict *d = db->m_dict;
-        if (d->dictSize() == 0) continue;
+        if (d->dictSize() == 0)
+            continue;
 
         /* Write the SELECT DB opcode */
         if (rdbSaveType(rdb,RDB_OPCODE_SELECTDB) == -1) goto werr;
@@ -917,7 +919,7 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
 
         /* Iterate this DB writing every entry */
         dictIterator di(d, 1);
-        while((de = dictNext(&di)) != NULL) {
+        while((de = di.dictNext()) != NULL) {
             sds keystr = (sds)de->dictGetKey();
             robj key;
             robj* o = (robj*)de->dictGetVal();
@@ -945,7 +947,7 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
      * master will send us. */
     if (rsi && server.lua_scripts->dictSize()) {
         dictIterator di(server.lua_scripts);
-        while((de = dictNext(&di)) != NULL) {
+        while((de = di.dictNext()) != NULL) {
             robj* body = (robj*)de->dictGetVal();
             if (rdbSaveAuxField(rdb,(void*)"lua",3,body->ptr,sdslen((sds)body->ptr)) == -1)
                 goto werr;
@@ -957,13 +959,12 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
      * to be able to process any EVALSHA inside the replication backlog the
      * master will send us. */
     if (rsi && server.lua_scripts->dictSize()) {
-        di = dictGetIterator(server.lua_scripts);
-        while((de = dictNext(di)) != NULL) {
+        dictIterator di(server.lua_scripts);
+        while((de = di.dictNext()) != NULL) {
             robj *body = (redisObject *)de->dictGetVal();
             if (rdbSaveAuxField(rdb,(void*)"lua",3,body->ptr,sdslen((const sds)body->ptr)) == -1)
                 goto werr;
         }
-        dictReleaseIterator(di);
     }
 
     /* EOF opcode */

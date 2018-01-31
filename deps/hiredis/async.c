@@ -275,7 +275,6 @@ static void __redisRunCallback(redisAsyncContext *ac, redisCallback *cb, redisRe
 static void __redisAsyncFree(redisAsyncContext *ac) {
     redisContext *c = &(ac->c);
     redisCallback cb;
-    dictIterator *it;
     dictEntry *de;
 
     /* Execute pending callbacks with NULL reply. */
@@ -287,18 +286,18 @@ static void __redisAsyncFree(redisAsyncContext *ac) {
         __redisRunCallback(ac,&cb,NULL);
 
     /* Run subscription callbacks callbacks with NULL reply */
-    it = dictGetIterator(ac->sub.channels);
-    while ((de = dictNext(it)) != NULL)
-        __redisRunCallback(ac,dictGetEntryVal(de),NULL);
-    dictReleaseIterator(it);
-    dictRelease(ac->sub.channels);
-
-    it = dictGetIterator(ac->sub.patterns);
-    while ((de = dictNext(it)) != NULL)
-        __redisRunCallback(ac,dictGetEntryVal(de),NULL);
-    dictReleaseIterator(it);
-    dictRelease(ac->sub.patterns);
-
+    {
+        dictIterator it1(ac->sub.channels);
+        while ((de = it1.dictNext()) != NULL)
+            __redisRunCallback(ac, dictGetEntryVal(de), NULL);
+        dictRelease(ac->sub.channels);
+    }
+    {
+        dictIterator it2(ac->sub.patterns);
+        while ((de = it2.dictNext()) != NULL)
+            __redisRunCallback(ac, dictGetEntryVal(de), NULL);
+        dictRelease(ac->sub.patterns);
+    }
     /* Signal event lib to clean up */
     _EL_CLEANUP(ac);
 

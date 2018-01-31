@@ -136,7 +136,7 @@ int latencyResetEvent(char *event_to_reset) {
     int resets = 0;
 
     dictIterator di(server.latency_events, 1);
-    while((de = dictNext(&di)) != NULL) {
+    while((de = di.dictNext()) != NULL) {
         char *event = (char *)de->dictGetKey();
 
         if (event_to_reset == NULL || strcasecmp(event,event_to_reset) == 0) {
@@ -246,7 +246,7 @@ sds createLatencyReport(void) {
     int eventnum = 0;
 
     dictIterator di(server.latency_events, 1);
-    while((de = dictNext(&di)) != NULL) {
+    while((de = di.dictNext()) != NULL) {
         char *event = (char *)de->dictGetKey();
         latencyTimeSeries* ts = (latencyTimeSeries*)de->dictGetVal();
         struct latencyStats ls;
@@ -493,7 +493,7 @@ void latencyCommandReplyWithLatestEvents(client *c) {
 
     addReplyMultiBulkLen(c,server.latency_events->dictSize());
     dictIterator di(server.latency_events);
-    while((de = dictNext(&di)) != NULL) {
+    while((de = di.dictNext()) != NULL) {
         char *event = (char *)de->dictGetKey();
         latencyTimeSeries* ts = (latencyTimeSeries*)de->dictGetVal();
         int last = (ts->idx + LATENCY_TS_LEN - 1) % LATENCY_TS_LEN;

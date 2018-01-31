@@ -93,7 +93,7 @@ void lazyfreeFreeSlotsMapFromBioThread(rax *sl);
 #define REDIS_THREAD_STACK_SIZE (1024*1024*4)
 
 /* Initialize the background system, spawning the thread. */
-void bioInit(void) {
+void bioInit() {
     pthread_attr_t attr;
     pthread_t thread;
     size_t stacksize;

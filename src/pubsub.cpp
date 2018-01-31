@@ -181,7 +181,7 @@ int pubsubUnsubscribeAllChannels(client *c, int notify) {
     int count = 0;
 
     dictIterator di(c->pubsub_channels, 1);
-    while((de = dictNext(&di)) != NULL) {
+    while((de = di.dictNext()) != NULL) {
         robj *channel = (robj *)de->dictGetKey();
 
         count += pubsubUnsubscribeChannel(c,channel,notify);
@@ -334,7 +334,7 @@ void pubsubCommand(client *c) {
         void *replylen;
 
         replylen = addDeferredMultiBulkLength(c);
-        while((de = dictNext(&di)) != NULL) {
+        while((de = di.dictNext()) != NULL) {
             robj *cobj = (robj *)de->dictGetKey();
             sds channel = (sds)cobj->ptr;
 

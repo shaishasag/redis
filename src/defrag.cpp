@@ -334,7 +334,7 @@ int defragKey(redisDb *db, dictEntry *de) {
         if (ob->encoding == OBJ_ENCODING_HT) {
             d = ob->ptr;
             dictIterator di(d);
-            while((de = dictNext(&di)) != NULL) {
+            while((de = di.dictNext()) != NULL) {
                 sds sdsele = (sds)de->dictGetKey();
                 if ((newsds = activeDefragSds(sdsele)))
                     defragged++, de->key = newsds;
@@ -367,7 +367,7 @@ int defragKey(redisDb *db, dictEntry *de) {
                 defragged++, zs->zsl->header = newheader;
             d = zs->_dict;
             dictIterator di(d);
-            while((de = dictNext(&di)) != NULL) {
+            while((de = di.dictNext()) != NULL) {
                 double* newscore;
                 sds sdsele = (sds)de->dictGetKey();
                 if ((newsds = activeDefragSds(sdsele)))
@@ -390,7 +390,7 @@ int defragKey(redisDb *db, dictEntry *de) {
         } else if (ob->encoding == OBJ_ENCODING_HT) {
             d = ob->ptr;
             dictIterator di(d);
-            while((de = dictNext(&di)) != NULL) {
+            while((de = di.dictNext()) != NULL) {
                 sds sdsele = (sds)de->dictGetKey();
                 if ((newsds = activeDefragSds(sdsele)))
                     defragged++, de->key = newsds;

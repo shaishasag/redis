@@ -374,7 +374,7 @@ int hashTypeNext(hashTypeIterator *hi) {
         hi->fptr = fptr;
         hi->vptr = vptr;
     } else if (hi->encoding == OBJ_ENCODING_HT) {
-        if ((hi->de = dictNext(hi->di)) == NULL) return C_ERR;
+        if ((hi->de = hi->di->dictNext()) == NULL) return C_ERR;
     } else {
         serverPanic("Unknown hash encoding");
     }
