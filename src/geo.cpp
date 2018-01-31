@@ -275,7 +275,7 @@ int geoArray::geoGetPointsInRange(robj *zobj, double min, double max, double lon
         zskiplist *zsl = zs->zsl;
         zskiplistNode *ln;
 
-        if ((ln = zslFirstInRange(zsl, &range)) == NULL) {
+        if ((ln = zsl->zslFirstInRange(&range)) == NULL) {
             /* Nothing exists starting at our min.  No results. */
             return 0;
         }
@@ -662,7 +662,7 @@ void georadiusGeneric(client *c, int flags) {
             size_t elelen = sdslen(gp.m_member);
 
             if (maxelelen < elelen) maxelelen = elelen;
-            zskiplistNode *znode = zslInsert(zs->zsl,score,gp.m_member);
+            zskiplistNode *znode = zs->zsl->zslInsert(score,gp.m_member);
             serverAssert(zs->_dict->dictAdd(gp.m_member,&znode->score) == DICT_OK);
             gp.pop_member();
         }

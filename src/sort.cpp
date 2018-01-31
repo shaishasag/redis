@@ -33,8 +33,6 @@
 #include "pqsort.h" /* Partial qsort for SORT+LIMIT */
 #include <math.h> /* isnan() */
 
-zskiplistNode* zslGetElementByRank(zskiplist *zsl, unsigned long rank);
-
 redisSortOperation *createSortOperation(int type, robj *pattern) {
     redisSortOperation* so = (redisSortOperation*)zmalloc(sizeof(*so));
     so->type = type;
@@ -407,13 +405,13 @@ void sortCommand(client *c) {
         if (desc) {
             long zsetlen = ((zset*)sortval->ptr)->_dict->dictSize();
 
-            ln = zsl->tail;
+            ln = zsl->tail();
             if (start > 0)
-                ln = zslGetElementByRank(zsl,zsetlen-start);
+                ln = zsl->zslGetElementByRank(zsetlen-start);
         } else {
-            ln = zsl->header->level[0].forward;
+            ln = zsl->header()->level[0].forward;
             if (start > 0)
-                ln = zslGetElementByRank(zsl,start+1);
+                ln = zsl->zslGetElementByRank(start+1);
         }
 
         while(rangelen--) {

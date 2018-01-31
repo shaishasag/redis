@@ -755,7 +755,7 @@ size_t objectComputeSize(robj *o, size_t sample_size) {
         } else if (o->encoding == OBJ_ENCODING_SKIPLIST) {
             d = ((zset*)o->ptr)->_dict;
             zskiplist *zsl = ((zset*)o->ptr)->zsl;
-            zskiplistNode *znode = zsl->header->level[0].forward;
+            zskiplistNode *znode = zsl->m_header->level[0].forward;
             asize = sizeof(*o)+sizeof(zset)+(sizeof(struct dictEntry*)*d->dictSlots());
             while(znode != NULL && samples < sample_size) {
                 elesize += sdsAllocSize(znode->ele);

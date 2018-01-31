@@ -773,10 +773,43 @@ struct zskiplistNode {
     } level[];
 };
 
-struct zskiplist {
-    struct zskiplistNode *header, *tail;
-    unsigned long length;
-    int level;
+struct zrangespec;
+struct zlexrangespec;
+class zskiplist
+{
+public:
+    zskiplist();
+    ~zskiplist();
+
+    zskiplistNode *zslInsert(double score, sds ele);
+    int zslDelete(double score, sds ele, zskiplistNode **node);
+    zskiplistNode *zslFirstInRange(zrangespec *range);
+    zskiplistNode *zslLastInRange(zrangespec *range);
+    zskiplistNode *zslFirstInLexRange(zlexrangespec *range);
+    zskiplistNode *zslLastInLexRange(zlexrangespec *range);
+    unsigned long zslGetRank(double score, sds o);
+
+    void free_header_only();
+
+    inline zskiplistNode* header() {return m_header;}
+    inline zskiplistNode* tail()   {return m_tail;}
+    inline unsigned long length()  {return m_length;}
+
+    unsigned long zslDeleteRangeByScore(zrangespec *range, dict *dict);
+    unsigned long zslDeleteRangeByLex(zlexrangespec *range, dict *dict);
+    unsigned long zslDeleteRangeByRank(unsigned int start, unsigned int end, dict *dict);
+    zskiplistNode* zslGetElementByRank(unsigned long rank);
+    int zslIsInLexRange(zlexrangespec *range);
+
+private:
+
+    void zslDeleteNode(zskiplistNode *x, zskiplistNode **update);
+    int zslIsInRange(zrangespec *range);
+
+    zskiplistNode* m_header;
+    zskiplistNode* m_tail;
+    unsigned long m_length;
+    int m_level;
 };
 
 struct zset {
@@ -1572,11 +1605,9 @@ struct zlexrangespec{
 
 zskiplist *zslCreate();
 void zslFree(zskiplist *zsl);
-zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele);
 unsigned char *zzlInsert(unsigned char *zl, sds ele, double score);
-int zslDelete(zskiplist *zsl, double score, sds ele, zskiplistNode **node);
-zskiplistNode *zslFirstInRange(zskiplist *zsl, zrangespec *range);
-zskiplistNode *zslLastInRange(zskiplist *zsl, zrangespec *range);
+
+
 double zzlGetScore(unsigned char *sptr);
 void zzlNext(unsigned char *zl, unsigned char **eptr, unsigned char **sptr);
 void zzlPrev(unsigned char *zl, unsigned char **eptr, unsigned char **sptr);
@@ -1586,7 +1617,6 @@ unsigned int zsetLength(const robj *zobj);
 void zsetConvert(robj *zobj, int encoding);
 void zsetConvertToZiplistIfNeeded(robj *zobj, size_t maxelelen);
 int zsetScore(robj *zobj, sds member, double *score);
-unsigned long zslGetRank(zskiplist *zsl, double score, sds o);
 int zsetAdd(robj *zobj, double score, sds ele, int *flags, double *newscore);
 long zsetRank(robj *zobj, sds ele, int reverse);
 int zsetDel(robj *zobj, sds ele);
@@ -1597,8 +1627,6 @@ void zslFreeLexRange(zlexrangespec *spec);
 int zslParseLexRange(robj *min, robj *max, zlexrangespec *spec);
 unsigned char *zzlFirstInLexRange(unsigned char *zl, zlexrangespec *range);
 unsigned char *zzlLastInLexRange(unsigned char *zl, zlexrangespec *range);
-zskiplistNode *zslFirstInLexRange(zskiplist *zsl, zlexrangespec *range);
-zskiplistNode *zslLastInLexRange(zskiplist *zsl, zlexrangespec *range);
 int zzlLexValueGteMin(unsigned char *p, zlexrangespec *spec);
 int zzlLexValueLteMax(unsigned char *p, zlexrangespec *spec);
 int zslLexValueGteMin(sds value, zlexrangespec *spec);

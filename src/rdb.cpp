@@ -76,7 +76,7 @@ static int rdbWriteRaw(rio *rdb, void *p, size_t len)
 }
 
 int rdbSaveType(rio *rdb, unsigned char type) {
-    return rdbWriteRaw(rdb,&type,1);
+    return rdbWriteRaw(rdb,&type, sizeof(type));
 }
 
 /* Load a "type" in RDB format, that is a one byte unsigned integer.
@@ -84,24 +84,27 @@ int rdbSaveType(rio *rdb, unsigned char type) {
  * "types" like the end-of-file type, the EXPIRE type, and so forth. */
 int rdbLoadType(rio *rdb) {
     unsigned char type;
-    if (rdb->rioRead(&type,1) == 0) return -1;
+    if (rdb->rioRead(&type, sizeof(type)) == 0)
+        return -1;
     return type;
 }
 
 time_t rdbLoadTime(rio *rdb) {
     int32_t t32;
-    if (rdb->rioRead(&t32,4) == 0) return -1;
+    if (rdb->rioRead(&t32, sizeof(t32)) == 0)
+        return (time_t)-1;
     return (time_t)t32;
 }
 
 int rdbSaveMillisecondTime(rio *rdb, long long t) {
     int64_t t64 = (int64_t) t;
-    return rdbWriteRaw(rdb,&t64, 8);
+    return rdbWriteRaw(rdb, &t64, sizeof(t64));
 }
 
 long long rdbLoadMillisecondTime(rio *rdb) {
     int64_t t64;
-    if (rdb->rioRead(&t64,8) == 0) return -1;
+    if (rdb->rioRead(&t64, sizeof(t64)) == 0)
+        return -1;
     return (long long)t64;
 }
 
@@ -252,10 +255,11 @@ void *rdbLoadIntegerObject(rio *rdb, int enctype, int flags, size_t *lenptr) {
         rdbExitReportCorruptRDB("Unknown RDB integer encoding type %d",enctype);
     }
     if (plain || sds) {
-        char buf[LONG_STR_SIZE], *p;
-        int len = ll2string(buf,sizeof(buf),val);
-        if (lenptr) *lenptr = len;
-        p = plain ? (char*)zmalloc(len) : sdsnewlen(NULL,len);
+        char buf[LONG_STR_SIZE];
+        int len = ll2string(buf, sizeof(buf), val);
+        if (lenptr)
+            *lenptr = len;
+        char* p = plain ? (char*)zmalloc(len) : sdsnewlen(NULL,len);
         memcpy(p,buf,len);
         return p;
     } else if (encode) {
@@ -708,7 +712,8 @@ ssize_t rdbSaveObject(rio *rdb, robj *o) {
             zset* zs = (zset*)o->ptr;
             zskiplist *zsl = zs->zsl;
 
-            if ((n = rdbSaveLen(rdb,zsl->length)) == -1) return -1;
+            if ((n = rdbSaveLen(rdb, zsl->length())) == -1)
+                return -1;
             nwritten += n;
 
             /* We save the skiplist elements from the greatest to the smallest
@@ -717,7 +722,7 @@ ssize_t rdbSaveObject(rio *rdb, robj *o) {
              * element will always be the smaller, so adding to the skiplist
              * will always immediately stop at the head, making the insertion
              * O(1) instead of O(log(N)). */
-            zskiplistNode *zn = zsl->tail;
+            zskiplistNode *zn = zsl->tail();
             while (zn != NULL) {
                 if ((n = rdbSaveRawString(rdb,
                     (unsigned char*)zn->ele,sdslen(zn->ele))) == -1)
@@ -1264,7 +1269,7 @@ robj *rdbLoadObject(int rdbtype, rio *rdb) {
             /* Don't care about integer-encoded strings. */
             if (sdslen(sdsele) > maxelelen) maxelelen = sdslen(sdsele);
 
-            znode = zslInsert(zs->zsl,score,sdsele);
+            znode = zs->zsl->zslInsert(score,sdsele);
             zs->_dict->dictAdd(sdsele,&znode->score);
         }
 
