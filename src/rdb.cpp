@@ -1012,7 +1012,6 @@ int rdbSave(char *filename, rdbSaveInfo *rsi) {
     char tmpfile[256];
     char cwd[MAXPATHLEN]; /* Current working dir path for error messages. */
     FILE *fp;
-    rio rdb;
     int error = 0;
 
     snprintf(tmpfile,256,"temp-%d.rdb", (int) getpid());
@@ -1028,7 +1027,7 @@ int rdbSave(char *filename, rdbSaveInfo *rsi) {
         return C_ERR;
     }
 
-    rioInitWithFile(&rdb,fp);
+    rioFileIO rdb(fp);
     if (rdbSaveRio(&rdb,&error,RDB_SAVE_NONE,rsi) == C_ERR) {
         errno = error;
         goto werr;
@@ -1519,7 +1518,7 @@ int rdbLoadRio(rio *rdb, rdbSaveInfo *rsi) {
 
     rdb->m_update_cksum_func = rdbLoadProgressCallback;
     rdb->m_max_processing_chunk = server.loading_process_events_interval_bytes;
-    if (rdb->rioRead(buf,9) == 0) goto eoferr;
+    if (rdb->rioRead(buf, 9) == 0) goto eoferr;
     buf[9] = '\0';
     if (memcmp(buf,"REDIS",5) != 0) {
         serverLog(LL_WARNING,"Wrong signature trying to load DB from file");
@@ -1681,13 +1680,13 @@ eoferr: /* unexpected end of file is handled here with a fatal exit */
  * loading code will fiil the information fields in the structure. */
 int rdbLoad(char *filename, rdbSaveInfo *rsi) {
     FILE *fp;
-    rio rdb;
     int retval;
 
     if ((fp = fopen(filename,"r")) == NULL) return C_ERR;
     startLoading(fp);
-    rioInitWithFile(&rdb,fp);
-    retval = rdbLoadRio(&rdb,rsi);
+
+    rioFileIO rdb(fp);
+    retval = rdbLoadRio(&rdb, rsi);
     fclose(fp);
     stopLoading();
     return retval;
@@ -1888,9 +1887,8 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
     if ((childpid = fork()) == 0) {
         /* Child */
         int retval;
-        rio slave_sockets;
+        rioFdsetIO slave_sockets(fds,numfds);
 
-        rioInitWithFdset(&slave_sockets,fds,numfds);
         zfree(fds);
 
         closeListeningSockets(0);
@@ -1935,7 +1933,7 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
             *len = numfds;
             for (j = 0; j < numfds; j++) {
                 *ids++ = clientids[j];
-                *ids++ = slave_sockets.io.fdset.state[j];
+                *ids++ = slave_sockets.m_state[j];
             }
 
             /* Write the message to the parent. If we have no good slaves or
@@ -1952,7 +1950,7 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
             zfree(msg);
         }
         zfree(clientids);
-        rioFreeFdset(&slave_sockets);
+
         exitFromChild((retval == C_OK) ? 0 : 1);
     } else {
         /* Parent */

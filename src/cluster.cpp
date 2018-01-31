@@ -4620,13 +4620,12 @@ void clusterCommand(client *c) {
 
 /* Generates a DUMP-format representation of the object 'o', adding it to the
  * io stream pointed by 'rio'. This function can't fail. */
-void createDumpPayload(rio *payload, robj *o) {
+void createDumpPayload(rioBufferIO *payload, robj *o) {
     unsigned char buf[2];
     uint64_t crc;
 
     /* Serialize the object in a RDB-like format. It consist of an object type
      * byte followed by the serialized object. This is understood by RESTORE. */
-    rioInitWithBuffer(payload,sdsempty());
     serverAssert(rdbSaveObjectType(payload,o));
     serverAssert(rdbSaveObject(payload,o));
 
@@ -4640,13 +4639,13 @@ void createDumpPayload(rio *payload, robj *o) {
     /* RDB version */
     buf[0] = RDB_VERSION & 0xff;
     buf[1] = (RDB_VERSION >> 8) & 0xff;
-    payload->io.buffer.ptr = sdscatlen(payload->io.buffer.ptr,buf,2);
+    payload->m_ptr = sdscatlen(payload->m_ptr,buf,2);
 
     /* CRC64 */
-    crc = crc64(0,(unsigned char*)payload->io.buffer.ptr,
-                sdslen(payload->io.buffer.ptr));
+    crc = crc64(0,(unsigned char*)payload->m_ptr,
+                sdslen(payload->m_ptr));
     memrev64ifbe(&crc);
-    payload->io.buffer.ptr = sdscatlen(payload->io.buffer.ptr,&crc,8);
+    payload->m_ptr = sdscatlen(payload->m_ptr,&crc,8);
 }
 
 /* Verify that the RDB version of the dump payload matches the one of this Redis
@@ -4677,7 +4676,6 @@ int verifyDumpPayload(unsigned char *p, size_t len) {
  * complement of RESTORE and can be useful for different applications. */
 void dumpCommand(client *c) {
     robj *o, *dumpobj;
-    rio payload;
 
     /* Check if the key is here. */
     if ((o = lookupKeyRead(c->db,c->argv[1])) == NULL) {
@@ -4686,10 +4684,11 @@ void dumpCommand(client *c) {
     }
 
     /* Create the DUMP encoded representation. */
-    createDumpPayload(&payload,o);
+    rioBufferIO payload(sdsempty());
+    createDumpPayload(&payload, o);
 
     /* Transfer to the client */
-    dumpobj = createObject(OBJ_STRING,payload.io.buffer.ptr);
+    dumpobj = createObject(OBJ_STRING, payload.m_ptr);
     addReplyBulk(c,dumpobj);
     decrRefCount(dumpobj);
     return;
@@ -4698,7 +4697,6 @@ void dumpCommand(client *c) {
 /* RESTORE key ttl serialized-value [REPLACE] */
 void restoreCommand(client *c) {
     long long ttl;
-    rio payload;
     int j, type, replace = 0;
     robj *obj;
 
@@ -4733,7 +4731,8 @@ void restoreCommand(client *c) {
         return;
     }
 
-    rioInitWithBuffer(&payload, (sds)c->argv[3]->ptr);
+    rioBufferIO payload((sds)c->argv[3]->ptr);
+
     if (((type = rdbLoadObjectType(&payload)) == -1) ||
         ((obj = rdbLoadObject(type,&payload)) == NULL))
     {
@@ -4881,7 +4880,6 @@ void migrateCommand(client *c) {
     robj **ov = NULL; /* Objects to migrate. */
     robj **kv = NULL; /* Key names. */
     robj **newargv = NULL; /* Used to rewrite the command as DEL ... keys ... */
-    rio cmd, payload;
     int may_retry = 1;
     int write_error = 0;
     int argv_rewritten = 0;
@@ -4959,8 +4957,7 @@ try_again:
         zfree(ov); zfree(kv);
         return; /* error sent to the client by migrateGetSocket() */
     }
-
-    rioInitWithBuffer(&cmd,sdsempty());
+    rioBufferIO cmd(sdsempty());
 
     /* Send the SELECT command if the current DB is not already selected. */
     int select = cs->last_dbid != dbid; /* Should we emit SELECT? */
@@ -4992,28 +4989,30 @@ try_again:
 
         /* Emit the payload argument, that is the serialized object using
          * the DUMP format. */
-        createDumpPayload(&payload,ov[j]);
+        rioBufferIO payload(sdsempty());
+        createDumpPayload(&payload, ov[j]);
+
         serverAssertWithInfo(c,NULL,
-            cmd.rioWriteBulkString(payload.io.buffer.ptr,
-                               sdslen(payload.io.buffer.ptr)));
-        sdsfree(payload.io.buffer.ptr);
+            cmd.rioWriteBulkString(payload.m_ptr,
+                               sdslen(payload.m_ptr)));
+        sdsfree(payload.m_ptr);
 
         /* Add the REPLACE option to the RESTORE command if it was specified
          * as a MIGRATE option. */
         if (replace)
-            serverAssertWithInfo(c,NULL,cmd.rioWriteBulkString("REPLACE",7));
+            serverAssertWithInfo(c, NULL, cmd.rioWriteBulkString("REPLACE",7));
     }
 
     /* Transfer the query to the other node in 64K chunks. */
     errno = 0;
     {
-        sds buf = cmd.io.buffer.ptr;
+        sds buf = cmd.m_ptr;
         size_t pos = 0, towrite;
         int nwritten = 0;
 
         while ((towrite = sdslen(buf)-pos) > 0) {
             towrite = (towrite > (64*1024) ? (64*1024) : towrite);
-            nwritten = syncWrite(cs->fd,buf+pos,towrite,timeout);
+            nwritten = syncWrite(cs->fd, buf+pos, towrite, timeout);
             if (nwritten != (signed)towrite) {
                 write_error = 1;
                 goto socket_err;
@@ -5112,7 +5111,7 @@ try_again:
          * the curretly selected socket to -1 to force SELECT the next time. */
     }
 
-    sdsfree(cmd.io.buffer.ptr);
+    sdsfree(cmd.m_ptr);
     zfree(ov); zfree(kv); zfree(newargv);
     return;
 
@@ -5122,7 +5121,7 @@ try_again:
 socket_err:
     /* Cleanup we want to perform in both the retry and no retry case.
      * Note: Closing the migrate socket will also force SELECT next time. */
-    sdsfree(cmd.io.buffer.ptr);
+    sdsfree(cmd.m_ptr);
 
     /* If the command was rewritten as DEL and there was a socket error,
      * we already closed the socket earlier. While migrateCloseSocket()

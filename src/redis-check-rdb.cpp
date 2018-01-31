@@ -32,7 +32,7 @@
 
 #include <stdarg.h>
 
-void createSharedObjects(void);
+void createSharedObjects();
 void rdbLoadProgressCallback(rio *r, const void *buf, size_t len);
 long long rdbLoadMillisecondTime(rio *rdb);
 int rdbCheckMode = 0;
@@ -89,7 +89,7 @@ char *rdb_type_string[] = {
 };
 
 /* Show a few stats collected into 'rdbstate' */
-void rdbShowGenericInfo(void) {
+void rdbShowGenericInfo() {
     printf("[info] %lu keys read\n", rdbstate.keys);
     printf("[info] %lu expires\n", rdbstate.expires);
     printf("[info] %lu already expired\n", rdbstate.already_expired);
@@ -160,7 +160,7 @@ void rdbCheckHandleCrash(int sig, siginfo_t *info, void *secret) {
     exit(1);
 }
 
-void rdbCheckSetupSignals(void) {
+void rdbCheckSetupSignals() {
     struct sigaction act;
 
     sigemptyset(&act.sa_mask);
@@ -176,20 +176,22 @@ void rdbCheckSetupSignals(void) {
  * 1 is returned.
  * The file is specified as a filename in 'rdbfilename' if 'fp' is not NULL,
  * otherwise the already open file 'fp' is checked. */
-int redis_check_rdb(char *rdbfilename, FILE *fp) {
+int redis_check_rdb(char *rdbfilename, FILE *fp)
+{
     uint64_t dbid;
     int type, rdbver;
     char buf[1024];
     long long expiretime, now = mstime();
-    static rio rdb; /* Pointed by global struct riostate. */
+    static rioFileIO rdb; /* Pointed by global struct riostate. */
 
     int closefile = (fp == NULL);
     if (fp == NULL && (fp = fopen(rdbfilename,"r")) == NULL) return 1;
 
-    rioInitWithFile(&rdb,fp);
+    rdb = rioFileIO(fp);
     rdbstate.rio = &rdb;
     rdb.m_update_cksum_func = rdbLoadProgressCallback;
-    if (rdb.rioRead(buf,9) == 0) goto eoferr;
+    if (rdb.rioRead(buf, 9) == 0)
+        goto eoferr;
     buf[9] = '\0';
     if (memcmp(buf,"REDIS",5) != 0) {
         rdbCheckError("Wrong signature trying to load DB from file");
@@ -313,7 +315,8 @@ int redis_check_rdb(char *rdbfilename, FILE *fp) {
         }
     }
 
-    if (closefile) fclose(fp);
+    if (closefile)
+        fclose(fp);
     return 0;
 
 eoferr: /* unexpected end of file is handled here with a fatal exit */
@@ -323,7 +326,8 @@ eoferr: /* unexpected end of file is handled here with a fatal exit */
         rdbCheckError("Unexpected EOF reading RDB file");
     }
 err:
-    if (closefile) fclose(fp);
+    if (closefile)
+        fclose(fp);
     return 1;
 }
 
@@ -353,11 +357,12 @@ int redis_check_rdb_main(int argc, char **argv, FILE *fp) {
     rdbCheckMode = 1;
     rdbCheckInfo("Checking RDB file %s", argv[1]);
     rdbCheckSetupSignals();
-    int retval = redis_check_rdb(argv[1],fp);
+    int retval = redis_check_rdb(argv[1], fp);
     if (retval == 0) {
         rdbCheckInfo("\\o/ RDB looks OK! \\o/");
         rdbShowGenericInfo();
     }
-    if (fp) return (retval == 0) ? C_OK : C_ERR;
+    if (fp)
+        return (retval == 0) ? C_OK : C_ERR;
     exit(retval);
 }

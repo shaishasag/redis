@@ -663,11 +663,12 @@ int loadAppendOnlyFile(char *filename) {
         if (fseek(fp,0,SEEK_SET) == -1) goto readerr;
     } else {
         /* RDB preamble. Pass loading the RDB functions. */
-        rio rdb;
 
         serverLog(LL_NOTICE,"Reading RDB preamble from AOF file...");
-        if (fseek(fp,0,SEEK_SET) == -1) goto readerr;
-        rioInitWithFile(&rdb,fp);
+        if (fseek(fp,0,SEEK_SET) == -1)
+            goto readerr;
+
+        rioFileIO rdb(fp);
         if (rdbLoadRio(&rdb,NULL) != C_OK) {
             serverLog(LL_WARNING,"Error reading the RDB preamble of the AOF file, AOF loading aborted");
             goto readerr;
@@ -1138,7 +1139,6 @@ werr:
  * and ZADD. However at max AOF_REWRITE_ITEMS_PER_CMD items per time
  * are inserted using a single command. */
 int rewriteAppendOnlyFile(char *filename) {
-    rio aof;
     FILE *fp;
     char tmpfile[256];
     char byte;
@@ -1155,7 +1155,7 @@ int rewriteAppendOnlyFile(char *filename) {
     }
 
     server.aof_child_diff = sdsempty();
-    rioInitWithFile(&aof,fp);
+    rioFileIO aof(fp);
 
     if (server.aof_rewrite_incremental_fsync)
         aof.rioSetAutoSync(AOF_AUTOSYNC_BYTES);
