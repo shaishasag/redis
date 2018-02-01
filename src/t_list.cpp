@@ -213,7 +213,7 @@ void pushGenericCommand(client *c, int where) {
     robj *lobj = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[1]);
 
     if (lobj && lobj->type != OBJ_LIST) {
-        addReply(c,shared.wrongtypeerr);
+        c->addReply(shared.wrongtypeerr);
         return;
     }
 
@@ -286,7 +286,7 @@ void linsertCommand(client *c) {
     } else if (strcasecmp((const char*)c->m_argv[2]->ptr,"before") == 0) {
         where = LIST_HEAD;
     } else {
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     }
 
@@ -310,7 +310,7 @@ void linsertCommand(client *c) {
         server.dirty++;
     } else {
         /* Notify client of a failed insert */
-        addReply(c,shared.cnegone);
+        c->addReply(shared.cnegone);
         return;
     }
 
@@ -343,7 +343,7 @@ void lindexCommand(client *c) {
             addReplyBulk(c,value);
             decrRefCount(value);
         } else {
-            addReply(c,shared.nullbulk);
+            c->addReply(shared.nullbulk);
         }
     } else {
         serverPanic("Unknown list encoding");
@@ -364,9 +364,9 @@ void lsetCommand(client *c) {
         int replaced = quicklistReplaceAtIndex(ql, index,
                                                value->ptr, sdslen((sds)value->ptr));
         if (!replaced) {
-            addReply(c,shared.outofrangeerr);
+            c->addReply(shared.outofrangeerr);
         } else {
-            addReply(c,shared.ok);
+            c->addReply(shared.ok);
             signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
             notifyKeyspaceEvent(NOTIFY_LIST,"lset",c->m_argv[1],c->m_cur_selected_db->m_id);
             server.dirty++;
@@ -382,7 +382,7 @@ void popGenericCommand(client *c, int where) {
 
     robj *value = listTypePop(o,where);
     if (value == NULL) {
-        addReply(c,shared.nullbulk);
+        c->addReply(shared.nullbulk);
     } else {
         const char *event = (where == LIST_HEAD) ? "lpop" : "rpop";
 
@@ -426,7 +426,7 @@ void lrangeCommand(client *c) {
     /* Invariant: start >= 0, so this test will be true when end < 0.
      * The range is empty when start > end or start >= length. */
     if (start > end || start >= llen) {
-        addReply(c,shared.emptymultibulk);
+        c->addReply(shared.emptymultibulk);
         return;
     }
     if (end >= llen) end = llen-1;
@@ -498,7 +498,7 @@ void ltrimCommand(client *c) {
     }
     signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
     server.dirty++;
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 }
 
 void lremCommand(client *c) {
@@ -588,7 +588,7 @@ void rpoplpushCommand(client *c) {
     if (listTypeLength(sobj) == 0) {
         /* This may only happen after loading very old RDB files. Recent
          * versions of Redis delete keys of empty lists. */
-        addReply(c,shared.nullbulk);
+        c->addReply(shared.nullbulk);
     } else {
         robj *dobj = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[2]);
         robj *touchedkey = c->m_argv[1];
@@ -905,7 +905,7 @@ void blockingPopGenericCommand(client *c, int where) {
         o = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[j]);
         if (o != NULL) {
             if (o->type != OBJ_LIST) {
-                addReply(c,shared.wrongtypeerr);
+                c->addReply(shared.wrongtypeerr);
                 return;
             } else {
                 if (listTypeLength(o) != 0) {
@@ -941,7 +941,7 @@ void blockingPopGenericCommand(client *c, int where) {
     /* If we are inside a MULTI/EXEC and the list is empty the only thing
      * we can do is treating it as a timeout (even with timeout 0). */
     if (c->m_flags & CLIENT_MULTI) {
-        addReply(c,shared.nullmultibulk);
+        c->addReply(shared.nullmultibulk);
         return;
     }
 
@@ -969,14 +969,14 @@ void brpoplpushCommand(client *c) {
         if (c->m_flags & CLIENT_MULTI) {
             /* Blocking against an empty list in a multi state
              * returns immediately. */
-            addReply(c, shared.nullbulk);
+            c->addReply( shared.nullbulk);
         } else {
             /* The list is empty and the client blocks. */
             blockForKeys(c, c->m_argv + 1, 1, timeout, c->m_argv[2]);
         }
     } else {
         if (key->type != OBJ_LIST) {
-            addReply(c, shared.wrongtypeerr);
+            c->addReply( shared.wrongtypeerr);
         } else {
             /* The list exists and has elements, so
              * the regular rpoplpushCommand is executed. */

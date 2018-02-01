@@ -559,7 +559,7 @@ void georadiusGeneric(client *c, int flags) {
                 storedist = 1;
                 i++;
             } else {
-                addReply(c, shared.syntaxerr);
+                c->addReply( shared.syntaxerr);
                 return;
             }
         }
@@ -587,7 +587,7 @@ void georadiusGeneric(client *c, int flags) {
 
     /* If no matching results, the user gets an empty reply. */
     if (ga.used() == 0 && storekey == NULL) {
-        addReply(c, shared.emptymultibulk);
+        c->addReply( shared.emptymultibulk);
         return;
     }
 
@@ -721,7 +721,7 @@ void geohashCommand(client *c) {
     for (j = 2; j < c->m_argc; j++) {
         double score;
         if (!zobj || zsetScore(zobj, (sds)c->m_argv[j]->ptr, &score) == C_ERR) {
-            addReply(c,shared.nullbulk);
+            c->addReply(shared.nullbulk);
         } else {
             /* The internal format we use for geocoding is a bit different
              * than the standard, since we use as initial latitude range
@@ -732,7 +732,7 @@ void geohashCommand(client *c) {
             /* Decode... */
             double xy[2];
             if (!decodeGeohash(score,xy)) {
-                addReply(c,shared.nullbulk);
+                c->addReply(shared.nullbulk);
                 continue;
             }
 
@@ -774,12 +774,12 @@ void geoposCommand(client *c) {
     for (j = 2; j < c->m_argc; j++) {
         double score;
         if (!zobj || zsetScore(zobj, (sds)c->m_argv[j]->ptr, &score) == C_ERR) {
-            addReply(c,shared.nullmultibulk);
+            c->addReply(shared.nullmultibulk);
         } else {
             /* Decode... */
             double xy[2];
             if (!decodeGeohash(score,xy)) {
-                addReply(c,shared.nullmultibulk);
+                c->addReply(shared.nullmultibulk);
                 continue;
             }
             addReplyMultiBulkLen(c,2);
@@ -802,7 +802,7 @@ void geodistCommand(client *c) {
         to_meter = extractUnitOrReply(c,c->m_argv[4]);
         if (to_meter < 0) return;
     } else if (c->m_argc > 5) {
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     }
 
@@ -816,13 +816,13 @@ void geodistCommand(client *c) {
     if (zsetScore(zobj, (sds)c->m_argv[2]->ptr, &score1) == C_ERR ||
         zsetScore(zobj, (sds)c->m_argv[3]->ptr, &score2) == C_ERR)
     {
-        addReply(c,shared.nullbulk);
+        c->addReply(shared.nullbulk);
         return;
     }
 
     /* Decode & compute the distance. */
     if (!decodeGeohash(score1,xyxy) || !decodeGeohash(score2,xyxy+2))
-        addReply(c,shared.nullbulk);
+        c->addReply(shared.nullbulk);
     else
         addReplyDoubleDistance(c,
             geohashGetDistance(xyxy[0],xyxy[1],xyxy[2],xyxy[3]) / to_meter);

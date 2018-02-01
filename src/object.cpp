@@ -351,7 +351,7 @@ robj *resetRefCount(robj *obj) {
 
 int checkType(client *c, robj *o, int type) {
     if (o->type != type) {
-        addReply(c,shared.wrongtypeerr);
+        c->addReply(shared.wrongtypeerr);
         return 1;
     }
     return 0;
@@ -1003,7 +1003,7 @@ robj *objectCommandLookup(client *c, robj *key) {
 robj *objectCommandLookupOrReply(client *c, robj *key, robj *reply) {
     robj *o = objectCommandLookup(c,key);
 
-    if (!o) addReply(c, reply);
+    if (!o) c->addReply( reply);
     return o;
 }
 
@@ -1076,13 +1076,13 @@ void memoryCommand(client *c) {
                 if (getLongLongFromObjectOrReply(c,c->m_argv[j+1],&samples,NULL)
                      == C_ERR) return;
                 if (samples < 0) {
-                    addReply(c,shared.syntaxerr);
+                    c->addReply(shared.syntaxerr);
                     return;
                 }
                 if (samples == 0) samples = LLONG_MAX;;
                 j++; /* skip option argument. */
             } else {
-                addReply(c,shared.syntaxerr);
+                c->addReply(shared.syntaxerr);
                 return;
             }
         }
@@ -1172,13 +1172,13 @@ void memoryCommand(client *c) {
         if (!je_mallctl("arenas.narenas", &narenas, &sz, NULL, 0)) {
             sprintf(tmp, "arena.%d.purge", narenas);
             if (!je_mallctl(tmp, NULL, 0, NULL, 0)) {
-                addReply(c, shared.ok);
+                c->addReply( shared.ok);
                 return;
             }
         }
         addReplyError(c, "Error purging dirty pages");
 #else
-        addReply(c, shared.ok);
+        c->addReply( shared.ok);
         /* Nothing to do for other allocators. */
 #endif
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"help") && c->m_argc == 2) {

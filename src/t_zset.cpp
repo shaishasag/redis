@@ -1558,7 +1558,7 @@ void zaddGenericCommand(client *c, int flags) {
      * we expect any number of score-element pairs. */
     elements = c->m_argc-scoreidx;
     if (elements % 2 || !elements) {
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     }
     elements /= 2; /* Now this holds the number of score-element pairs. */
@@ -1599,7 +1599,7 @@ void zaddGenericCommand(client *c, int flags) {
         dbAdd(c->m_cur_selected_db,key,zobj);
     } else {
         if (zobj->type != OBJ_ZSET) {
-            addReply(c,shared.wrongtypeerr);
+            c->addReply(shared.wrongtypeerr);
             goto cleanup;
         }
     }
@@ -1627,7 +1627,7 @@ reply_to_client:
         if (processed)
             addReplyDouble(c,score);
         else
-            addReply(c,shared.nullbulk);
+            c->addReply(shared.nullbulk);
     } else { /* ZADD. */
         addReplyLongLong(c,ch ? added+updated : added);
     }
@@ -1720,7 +1720,7 @@ void zremrangeGenericCommand(client *c, int rangetype) {
         /* Invariant: start >= 0, so this test will be true when end < 0.
          * The range is empty when start > end or start >= length. */
         if (start > end || start >= llen) {
-            addReply(c,shared.czero);
+            c->addReply(shared.czero);
             goto cleanup;
         }
         if (end >= llen) end = llen-1;
@@ -2194,7 +2194,7 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
 
     /* test if the expected number of keys would overflow */
     if (setnum > c->m_argc-3) {
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     }
 
@@ -2205,7 +2205,7 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
         if (obj != NULL) {
             if (obj->type != OBJ_ZSET && obj->type != OBJ_SET) {
                 zfree(src);
-                addReply(c,shared.wrongtypeerr);
+                c->addReply(shared.wrongtypeerr);
                 return;
             }
 
@@ -2249,13 +2249,13 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
                     aggregate = REDIS_AGGR_MAX;
                 } else {
                     zfree(src);
-                    addReply(c,shared.syntaxerr);
+                    c->addReply(shared.syntaxerr);
                     return;
                 }
                 j++; remaining--;
             } else {
                 zfree(src);
-                addReply(c,shared.syntaxerr);
+                c->addReply(shared.syntaxerr);
                 return;
             }
         }
@@ -2388,7 +2388,7 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
         server.dirty++;
     } else {
         decrRefCount(dstobj);
-        addReply(c,shared.czero);
+        c->addReply(shared.czero);
         if (touched) {
             signalModifiedKey(c->m_cur_selected_db,dstkey);
             notifyKeyspaceEvent(NOTIFY_GENERIC,"del",dstkey,c->m_cur_selected_db->m_id);
@@ -2421,7 +2421,7 @@ void zrangeGenericCommand(client *c, int reverse) {
     if (c->m_argc == 5 && !strcasecmp((const char*)c->m_argv[4]->ptr,"withscores")) {
         withscores = 1;
     } else if (c->m_argc >= 5) {
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     }
 
@@ -2437,7 +2437,7 @@ void zrangeGenericCommand(client *c, int reverse) {
     /* Invariant: start >= 0, so this test will be true when end < 0.
      * The range is empty when start > end or start >= length. */
     if (start > end || start >= llen) {
-        addReply(c,shared.emptymultibulk);
+        c->addReply(shared.emptymultibulk);
         return;
     }
     if (end >= llen) end = llen-1;
@@ -2561,7 +2561,7 @@ void genericZrangebyscoreCommand(client *c, int reverse) {
                 }
                 pos += 3; remaining -= 3;
             } else {
-                addReply(c,shared.syntaxerr);
+                c->addReply(shared.syntaxerr);
                 return;
             }
         }
@@ -2588,7 +2588,7 @@ void genericZrangebyscoreCommand(client *c, int reverse) {
 
         /* No "first" element in the specified interval. */
         if (eptr == NULL) {
-            addReply(c, shared.emptymultibulk);
+            c->addReply( shared.emptymultibulk);
             return;
         }
 
@@ -2656,7 +2656,7 @@ void genericZrangebyscoreCommand(client *c, int reverse) {
 
         /* No "first" element in the specified interval. */
         if (ln == NULL) {
-            addReply(c, shared.emptymultibulk);
+            c->addReply( shared.emptymultibulk);
             return;
         }
 
@@ -2742,7 +2742,7 @@ void zcountCommand(client *c) {
 
         /* No "first" element */
         if (eptr == NULL) {
-            addReply(c, shared.czero);
+            c->addReply( shared.czero);
             return;
         }
 
@@ -2823,7 +2823,7 @@ void zlexcountCommand(client *c) {
         /* No "first" element */
         if (eptr == NULL) {
             zslFreeLexRange(&range);
-            addReply(c, shared.czero);
+            c->addReply( shared.czero);
             return;
         }
 
@@ -2909,7 +2909,7 @@ void genericZrangebylexCommand(client *c, int reverse) {
                 pos += 3; remaining -= 3;
             } else {
                 zslFreeLexRange(&range);
-                addReply(c,shared.syntaxerr);
+                c->addReply(shared.syntaxerr);
                 return;
             }
         }
@@ -2939,7 +2939,7 @@ void genericZrangebylexCommand(client *c, int reverse) {
 
         /* No "first" element in the specified interval. */
         if (eptr == NULL) {
-            addReply(c, shared.emptymultibulk);
+            c->addReply( shared.emptymultibulk);
             zslFreeLexRange(&range);
             return;
         }
@@ -3003,7 +3003,7 @@ void genericZrangebylexCommand(client *c, int reverse) {
 
         /* No "first" element in the specified interval. */
         if (ln == NULL) {
-            addReply(c, shared.emptymultibulk);
+            c->addReply( shared.emptymultibulk);
             zslFreeLexRange(&range);
             return;
         }
@@ -3076,7 +3076,7 @@ void zscoreCommand(client *c) {
         checkType(c,zobj,OBJ_ZSET)) return;
 
     if (zsetScore(zobj,(sds)c->m_argv[2]->ptr,&score) == C_ERR) {
-        addReply(c,shared.nullbulk);
+        c->addReply(shared.nullbulk);
     } else {
         addReplyDouble(c,score);
     }
@@ -3096,7 +3096,7 @@ void zrankGenericCommand(client *c, int reverse) {
     if (rank >= 0) {
         addReplyLongLong(c,rank);
     } else {
-        addReply(c,shared.nullbulk);
+        c->addReply(shared.nullbulk);
     }
 }
 

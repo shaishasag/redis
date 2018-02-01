@@ -395,7 +395,7 @@ void expireGenericCommand(client *c, long long basetime, int unit) {
 
     /* No key, return zero. */
     if (lookupKeyWrite(c->m_cur_selected_db,key) == NULL) {
-        addReply(c,shared.czero);
+        c->addReply(shared.czero);
         return;
     }
 
@@ -418,11 +418,11 @@ void expireGenericCommand(client *c, long long basetime, int unit) {
         rewriteClientCommandVector(c,2,aux,key);
         signalModifiedKey(c->m_cur_selected_db,key);
         notifyKeyspaceEvent(NOTIFY_GENERIC,"del",key,c->m_cur_selected_db->m_id);
-        addReply(c, shared.cone);
+        c->addReply( shared.cone);
         return;
     } else {
         setExpire(c,c->m_cur_selected_db,key,when);
-        addReply(c,shared.cone);
+        c->addReply(shared.cone);
         signalModifiedKey(c->m_cur_selected_db,key);
         notifyKeyspaceEvent(NOTIFY_GENERIC,"expire",key,c->m_cur_selected_db->m_id);
         server.dirty++;
@@ -487,13 +487,13 @@ void pttlCommand(client *c) {
 void persistCommand(client *c) {
     if (lookupKeyWrite(c->m_cur_selected_db,c->m_argv[1])) {
         if (removeExpire(c->m_cur_selected_db,c->m_argv[1])) {
-            addReply(c,shared.cone);
+            c->addReply(shared.cone);
             server.dirty++;
         } else {
-            addReply(c,shared.czero);
+            c->addReply(shared.czero);
         }
     } else {
-        addReply(c,shared.czero);
+        c->addReply(shared.czero);
     }
 }
 

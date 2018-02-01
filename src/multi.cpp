@@ -89,7 +89,7 @@ void multiCommand(client *c) {
         return;
     }
     c->m_flags |= CLIENT_MULTI;
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 }
 
 void discardCommand(client *c) {
@@ -98,7 +98,7 @@ void discardCommand(client *c) {
         return;
     }
     discardTransaction(c);
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 }
 
 /* Send a MULTI command to all the slaves and AOF file. Check the execCommand
@@ -131,7 +131,7 @@ void execCommand(client *c) {
      * (technically it is not an error but a special behavior), while
      * in the second an EXECABORT error is returned. */
     if (c->m_flags & (CLIENT_DIRTY_CAS|CLIENT_DIRTY_EXEC)) {
-        addReply(c, c->m_flags & CLIENT_DIRTY_EXEC ? shared.execaborterr :
+        c->addReply( c->m_flags & CLIENT_DIRTY_EXEC ? shared.execaborterr :
                                                   shared.nullmultibulk);
         discardTransaction(c);
         goto handle_monitor;
@@ -321,11 +321,11 @@ void watchCommand(client *c) {
     }
     for (j = 1; j < c->m_argc; j++)
         watchForKey(c,c->m_argv[j]);
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 }
 
 void unwatchCommand(client *c) {
     unwatchAllKeys(c);
     c->m_flags &= (~CLIENT_DIRTY_CAS);
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 }

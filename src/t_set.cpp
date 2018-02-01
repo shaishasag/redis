@@ -287,7 +287,7 @@ void saddCommand(client *c) {
         dbAdd(c->m_cur_selected_db,c->m_argv[1],_set);
     } else {
         if (_set->type != OBJ_SET) {
-            addReply(c,shared.wrongtypeerr);
+            c->addReply(shared.wrongtypeerr);
             return;
         }
     }
@@ -339,7 +339,7 @@ void smoveCommand(client *c) {
 
     /* If the source key does not exist return 0 */
     if (srcset == NULL) {
-        addReply(c,shared.czero);
+        c->addReply(shared.czero);
         return;
     }
 
@@ -350,14 +350,14 @@ void smoveCommand(client *c) {
 
     /* If srcset and dstset are equal, SMOVE is a no-op */
     if (srcset == dstset) {
-        addReply(c,setTypeIsMember(srcset,(sds)ele->ptr) ?
+        c->addReply(setTypeIsMember(srcset,(sds)ele->ptr) ?
             shared.cone : shared.czero);
         return;
     }
 
     /* If the element cannot be removed from the src set, return 0. */
     if (!setTypeRemove(srcset,(sds)ele->ptr)) {
-        addReply(c,shared.czero);
+        c->addReply(shared.czero);
         return;
     }
     notifyKeyspaceEvent(NOTIFY_SET,"srem",c->m_argv[1],c->m_cur_selected_db->m_id);
@@ -383,7 +383,7 @@ void smoveCommand(client *c) {
         server.dirty++;
         notifyKeyspaceEvent(NOTIFY_SET,"sadd",c->m_argv[2],c->m_cur_selected_db->m_id);
     }
-    addReply(c,shared.cone);
+    c->addReply(shared.cone);
 }
 
 void sismemberCommand(client *c) {
@@ -393,9 +393,9 @@ void sismemberCommand(client *c) {
         checkType(c,set,OBJ_SET)) return;
 
     if (setTypeIsMember(set,(sds)c->m_argv[2]->ptr))
-        addReply(c,shared.cone);
+        c->addReply(shared.cone);
     else
-        addReply(c,shared.czero);
+        c->addReply(shared.czero);
 }
 
 void scardCommand(client *c) {
@@ -425,7 +425,7 @@ void spopWithCountCommand(client *c) {
     if (l >= 0) {
         count = (unsigned long) l;
     } else {
-        addReply(c,shared.outofrangeerr);
+        c->addReply(shared.outofrangeerr);
         return;
     }
 
@@ -437,7 +437,7 @@ void spopWithCountCommand(client *c) {
     /* If count is zero, serve an empty multibulk ASAP to avoid special
      * cases later. */
     if (count == 0) {
-        addReply(c,shared.emptymultibulk);
+        c->addReply(shared.emptymultibulk);
         return;
     }
 
@@ -578,7 +578,7 @@ void spopCommand(client *c) {
         spopWithCountCommand(c);
         return;
     } else if (c->m_argc > 3) {
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     }
 
@@ -656,7 +656,7 @@ void srandmemberWithCountCommand(client *c) {
 
     /* If count is zero, serve it ASAP to avoid special cases later. */
     if (count == 0) {
-        addReply(c,shared.emptymultibulk);
+        c->addReply(shared.emptymultibulk);
         return;
     }
 
@@ -773,7 +773,7 @@ void srandmemberCommand(client *c) {
         srandmemberWithCountCommand(c);
         return;
     } else if (c->m_argc > 3) {
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     }
 
@@ -827,9 +827,9 @@ void sinterGenericCommand(client *c, robj **setkeys,
                     signalModifiedKey(c->m_cur_selected_db, dstkey);
                     server.dirty++;
                 }
-                addReply(c, shared.czero);
+                c->addReply( shared.czero);
             } else {
-                addReply(c, shared.emptymultibulk);
+                c->addReply( shared.emptymultibulk);
             }
             return;
         }
@@ -919,7 +919,7 @@ void sinterGenericCommand(client *c, robj **setkeys,
                 dstkey,c->m_cur_selected_db->m_id);
         } else {
             decrRefCount(dstset);
-            addReply(c,shared.czero);
+            c->addReply(shared.czero);
             if (deleted)
                 notifyKeyspaceEvent(NOTIFY_GENERIC,"del",
                     dstkey,c->m_cur_selected_db->m_id);
@@ -1093,7 +1093,7 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
                 dstkey,c->m_cur_selected_db->m_id);
         } else {
             decrRefCount(dstset);
-            addReply(c,shared.czero);
+            c->addReply(shared.czero);
             if (deleted)
                 notifyKeyspaceEvent(NOTIFY_GENERIC,"del",
                     dstkey,c->m_cur_selected_db->m_id);

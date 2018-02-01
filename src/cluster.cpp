@@ -4093,7 +4093,7 @@ void clusterCommand(client *c) {
             addReplyErrorFormat(c,"Invalid node address specified: %s:%s",
                             (char*)c->m_argv[2]->ptr, (char*)c->m_argv[3]->ptr);
         } else {
-            addReply(c,shared.ok);
+            c->addReply(shared.ok);
         }
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"nodes") && c->m_argc == 2) {
         /* CLUSTER NODES */
@@ -4117,7 +4117,7 @@ void clusterCommand(client *c) {
         }
         myself->clusterDelNodeSlots();
         clusterDoBeforeSleep(CLUSTER_TODO_UPDATE_STATE|CLUSTER_TODO_SAVE_CONFIG);
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if ((!strcasecmp((const char*)c->m_argv[1]->ptr,"addslots") ||
                !strcasecmp((const char*)c->m_argv[1]->ptr,"delslots")) && c->m_argc >= 3)
     {
@@ -4167,7 +4167,7 @@ void clusterCommand(client *c) {
         }
         zfree(slots);
         clusterDoBeforeSleep(CLUSTER_TODO_UPDATE_STATE|CLUSTER_TODO_SAVE_CONFIG);
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"setslot") && c->m_argc >= 4) {
         /* SETSLOT 10 MIGRATING <node ID> */
         /* SETSLOT 10 IMPORTING <node ID> */
@@ -4264,7 +4264,7 @@ void clusterCommand(client *c) {
             return;
         }
         clusterDoBeforeSleep(CLUSTER_TODO_SAVE_CONFIG|CLUSTER_TODO_UPDATE_STATE);
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"bumpepoch") && c->m_argc == 2) {
         /* CLUSTER BUMPEPOCH */
         int retval = clusterBumpConfigEpochWithoutConsensus();
@@ -4347,12 +4347,12 @@ void clusterCommand(client *c) {
         addReplySds(c,sdscatprintf(sdsempty(),"$%lu\r\n",
             (unsigned long)sdslen(info)));
         addReplySds(c,info);
-        addReply(c,shared.crlf);
+        c->addReply(shared.crlf);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"saveconfig") && c->m_argc == 2) {
         int retval = clusterSaveConfig(1);
 
         if (retval == 0)
-            addReply(c,shared.ok);
+            c->addReply(shared.ok);
         else
             addReplyErrorFormat(c,"error saving the cluster node config: %s",
                 strerror(errno));
@@ -4419,7 +4419,7 @@ void clusterCommand(client *c) {
         clusterDelNode(n);
         clusterDoBeforeSleep(CLUSTER_TODO_UPDATE_STATE|
                              CLUSTER_TODO_SAVE_CONFIG);
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"replicate") && c->m_argc == 3) {
         /* CLUSTER REPLICATE <NODE ID> */
         clusterNode *n = clusterLookupNode((const char *)c->m_argv[2]->ptr);
@@ -4456,7 +4456,7 @@ void clusterCommand(client *c) {
         /* Set the master. */
         clusterSetMaster(n);
         clusterDoBeforeSleep(CLUSTER_TODO_UPDATE_STATE|CLUSTER_TODO_SAVE_CONFIG);
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"slaves") && c->m_argc == 3) {
         /* CLUSTER SLAVES <NODE ID> */
         clusterNode *n = clusterLookupNode((const char *)c->m_argv[2]->ptr);
@@ -4504,7 +4504,7 @@ void clusterCommand(client *c) {
                 takeover = 1;
                 force = 1; /* Takeover also implies force. */
             } else {
-                addReply(c,shared.syntaxerr);
+                c->addReply(shared.syntaxerr);
                 return;
             }
         }
@@ -4545,7 +4545,7 @@ void clusterCommand(client *c) {
             serverLog(LL_WARNING,"Manual failover user request accepted.");
             clusterSendMFStart(myself->m_slaveof);
         }
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"set-config-epoch") && c->m_argc == 3)
     {
         /* CLUSTER SET-CONFIG-EPOCH <epoch>
@@ -4580,7 +4580,7 @@ void clusterCommand(client *c) {
              * will assign an unique config to this node. */
             clusterDoBeforeSleep(CLUSTER_TODO_UPDATE_STATE|
                                  CLUSTER_TODO_SAVE_CONFIG);
-            addReply(c,shared.ok);
+            c->addReply(shared.ok);
         }
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"reset") &&
                (c->m_argc == 2 || c->m_argc == 3))
@@ -4595,7 +4595,7 @@ void clusterCommand(client *c) {
             } else if (!strcasecmp((const char*)c->m_argv[2]->ptr,"soft")) {
                 hard = 0;
             } else {
-                addReply(c,shared.syntaxerr);
+                c->addReply(shared.syntaxerr);
                 return;
             }
         }
@@ -4608,7 +4608,7 @@ void clusterCommand(client *c) {
             return;
         }
         clusterReset(hard);
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else {
         addReplyError(c,"Wrong CLUSTER subcommand or number of arguments");
     }
@@ -4679,7 +4679,7 @@ void dumpCommand(client *c) {
 
     /* Check if the key is here. */
     if ((o = lookupKeyRead(c->m_cur_selected_db,c->m_argv[1])) == NULL) {
-        addReply(c,shared.nullbulk);
+        c->addReply(shared.nullbulk);
         return;
     }
 
@@ -4705,14 +4705,14 @@ void restoreCommand(client *c) {
         if (!strcasecmp((const char*)c->m_argv[j]->ptr,"replace")) {
             replace = 1;
         } else {
-            addReply(c,shared.syntaxerr);
+            c->addReply(shared.syntaxerr);
             return;
         }
     }
 
     /* Make sure this key does not already exist here... */
     if (!replace && lookupKeyWrite(c->m_cur_selected_db,c->m_argv[1]) != NULL) {
-        addReply(c,shared.busykeyerr);
+        c->addReply(shared.busykeyerr);
         return;
     }
 
@@ -4747,7 +4747,7 @@ void restoreCommand(client *c) {
     dbAdd(c->m_cur_selected_db,c->m_argv[1],obj);
     if (ttl) setExpire(c,c->m_cur_selected_db,c->m_argv[1],mstime()+ttl);
     signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
     server.dirty++;
 }
 
@@ -4913,7 +4913,7 @@ void migrateCommand(client *c) {
             num_keys = c->m_argc - j - 1;
             break; /* All the remaining args are keys. */
         } else {
-            addReply(c,shared.syntaxerr);
+            c->addReply(shared.syntaxerr);
             return;
         }
     }
@@ -5105,7 +5105,7 @@ try_again:
          * still the SELECT command succeeded (otherwise the code jumps to
          * socket_err label. */
         cs->last_dbid = dbid;
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else {
         /* On error we already sent it in the for loop above, and set
          * the curretly selected socket to -1 to force SELECT the next time. */
@@ -5161,7 +5161,7 @@ void askingCommand(client *c) {
         return;
     }
     c->m_flags |= CLIENT_ASKING;
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 }
 
 /* The READONLY command is used by clients to enter the read-only mode.
@@ -5173,13 +5173,13 @@ void readonlyCommand(client *c) {
         return;
     }
     c->m_flags |= CLIENT_READONLY;
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 }
 
 /* The READWRITE command just clears the READONLY command state. */
 void readwriteCommand(client *c) {
     c->m_flags &= ~CLIENT_READONLY;
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 }
 
 /* Return the pointer to the cluster node that is able to serve the command.

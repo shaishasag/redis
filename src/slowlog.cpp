@@ -142,7 +142,7 @@ void slowlogReset() {
 void slowlogCommand(client *c) {
     if (c->m_argc == 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"reset")) {
         slowlogReset();
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (c->m_argc == 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"len")) {
         addReplyLongLong(c,server.slowlog->listLength());
     } else if ((c->m_argc == 2 || c->m_argc == 3) &&

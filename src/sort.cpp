@@ -203,7 +203,7 @@ void sortCommand(client *c) {
                    sortval->type != OBJ_LIST &&
                    sortval->type != OBJ_ZSET)
     {
-        addReply(c,shared.wrongtypeerr);
+        c->addReply(shared.wrongtypeerr);
         return;
     }
 
@@ -270,7 +270,7 @@ void sortCommand(client *c) {
             getop++;
             j++;
         } else {
-            addReply(c,shared.syntaxerr);
+            c->addReply(shared.syntaxerr);
             syntax_error++;
             break;
         }
@@ -515,7 +515,7 @@ void sortCommand(client *c) {
 
                 if (sop->type == SORT_OP_GET) {
                     if (!val) {
-                        addReply(c,shared.nullbulk);
+                        c->addReply(shared.nullbulk);
                     } else {
                         addReplyBulk(c,val);
                         decrRefCount(val);

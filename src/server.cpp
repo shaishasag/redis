@@ -2322,7 +2322,7 @@ int processCommand(client *c) {
      * when FORCE_REPLICATION is enabled and would be implemented in
      * a regular command proc. */
     if (!strcasecmp((const char*)c->m_argv[0]->ptr,"quit")) {
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
         c->m_flags |= CLIENT_CLOSE_AFTER_REPLY;
         return C_ERR;
     }
@@ -2347,7 +2347,7 @@ int processCommand(client *c) {
     if (server.requirepass && !c->m_authenticated && c->m_cmd->proc != authCommand)
     {
         flagTransaction(c);
-        addReply(c,shared.noautherr);
+        c->addReply(shared.noautherr);
         return C_OK;
     }
 
@@ -2392,7 +2392,7 @@ int processCommand(client *c) {
          * is trying to execute is denied during OOM conditions? Error. */
         if ((c->m_cmd->m_flags & CMD_DENYOOM) && retval == C_ERR) {
             flagTransaction(c);
-            addReply(c, shared.oomerr);
+            c->addReply( shared.oomerr);
             return C_OK;
         }
     }
@@ -2409,7 +2409,7 @@ int processCommand(client *c) {
     {
         flagTransaction(c);
         if (server.aof_last_write_status == C_OK)
-            addReply(c, shared.bgsaveerr);
+            c->addReply( shared.bgsaveerr);
         else
             addReplySds(c,
                 sdscatprintf(sdsempty(),
@@ -2427,7 +2427,7 @@ int processCommand(client *c) {
         server.repl_good_slaves_count < server.repl_min_slaves_to_write)
     {
         flagTransaction(c);
-        addReply(c, shared.noreplicaserr);
+        c->addReply( shared.noreplicaserr);
         return C_OK;
     }
 
@@ -2437,7 +2437,7 @@ int processCommand(client *c) {
         !(c->m_flags & CLIENT_MASTER) &&
         c->m_cmd->m_flags & CMD_WRITE)
     {
-        addReply(c, shared.roslaveerr);
+        c->addReply( shared.roslaveerr);
         return C_OK;
     }
 
@@ -2459,14 +2459,14 @@ int processCommand(client *c) {
         !(c->m_cmd->m_flags & CMD_STALE))
     {
         flagTransaction(c);
-        addReply(c, shared.masterdownerr);
+        c->addReply( shared.masterdownerr);
         return C_OK;
     }
 
     /* Loading DB? Return an error if the command has not the
      * CMD_LOADING flag. */
     if (server.loading && !(c->m_cmd->m_flags & CMD_LOADING)) {
-        addReply(c, shared.loadingerr);
+        c->addReply( shared.loadingerr);
         return C_OK;
     }
 
@@ -2482,7 +2482,7 @@ int processCommand(client *c) {
           tolower(((char*)c->m_argv[1]->ptr)[0]) == 'k'))
     {
         flagTransaction(c);
-        addReply(c, shared.slowscripterr);
+        c->addReply( shared.slowscripterr);
         return C_OK;
     }
 
@@ -2492,7 +2492,7 @@ int processCommand(client *c) {
         c->m_cmd->proc != multiCommand && c->m_cmd->proc != watchCommand)
     {
         queueMultiCommand(c);
-        addReply(c,shared.queued);
+        c->addReply(shared.queued);
     } else {
         call(c,CMD_CALL_FULL);
         c->m_last_write_global_replication_offset = server.master_repl_offset;
@@ -2640,7 +2640,7 @@ void authCommand(client *c) {
         addReplyError(c,"Client sent AUTH, but no password is set");
     } else if (!time_independent_strcmp((const char*)c->m_argv[1]->ptr, (const char*)server.requirepass)) {
       c->m_authenticated = 1;
-      addReply(c,shared.ok);
+      c->addReply(shared.ok);
     } else {
       c->m_authenticated = 0;
       addReplyError(c,"invalid password");
@@ -2658,7 +2658,7 @@ void pingCommand(client *c) {
     }
 
     if (c->m_flags & CLIENT_PUBSUB) {
-        addReply(c,shared.mbulkhdr[2]);
+        c->addReply(shared.mbulkhdr[2]);
         addReplyBulkCBuffer(c,"pong",4);
         if (c->m_argc == 1)
             addReplyBulkCBuffer(c,"",0);
@@ -2666,7 +2666,7 @@ void pingCommand(client *c) {
             addReplyBulk(c,c->m_argv[1]);
     } else {
         if (c->m_argc == 1)
-            addReply(c,shared.pong);
+            c->addReply(shared.pong);
         else
             addReplyBulk(c,c->m_argv[1]);
     }
@@ -2699,7 +2699,7 @@ int addReplyCommandFlag(client *c, struct redisCommand *cmd, int f, char *reply)
 /* Output the representation of a Redis command. Used by the COMMAND command. */
 void addReplyCommand(client *c, struct redisCommand *cmd) {
     if (!cmd) {
-        addReply(c, shared.nullbulk);
+        c->addReply( shared.nullbulk);
     } else {
         /* We are adding: command name, arg count, flags, first, last, offset */
         addReplyMultiBulkLen(c, 6);
@@ -3324,7 +3324,7 @@ void infoCommand(client *c) {
     const char *section = c->m_argc == 2 ? (char *)c->m_argv[1]->ptr : "default";
 
     if (c->m_argc > 2) {
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     }
     addReplyBulkSds(c, genRedisInfoString(section));
@@ -3336,7 +3336,7 @@ void monitorCommand(client *c) {
 
     c->m_flags |= (CLIENT_SLAVE|CLIENT_MONITOR);
     server.monitors->listAddNodeTail(c);
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 }
 
 /* =================================== Main! ================================ */

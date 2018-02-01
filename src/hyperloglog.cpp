@@ -1189,7 +1189,7 @@ void pfaddCommand(client *c) {
         server.dirty++;
         HLL_INVALIDATE_CACHE(hdr);
     }
-    addReply(c, updated ? shared.cone : shared.czero);
+    c->addReply( updated ? shared.cone : shared.czero);
 }
 
 /* PFCOUNT var -> approximated cardinality of set. */
@@ -1238,7 +1238,7 @@ void pfcountCommand(client *c) {
     if (o == NULL) {
         /* No key? Cardinality is zero since no element was added, otherwise
          * we would have a key as HLLADD creates it as a side effect. */
-        addReply(c,shared.czero);
+        c->addReply(shared.czero);
     } else {
         if (isHLLObjectOrReply(c,o) != C_OK) return;
         o = dbUnshareStringValue(c->m_cur_selected_db,c->m_argv[1],o);
@@ -1340,7 +1340,7 @@ void pfmergeCommand(client *c) {
      * since in theory this is a mass-add of elements. */
     notifyKeyspaceEvent(NOTIFY_STRING,"pfadd",c->m_argv[1],c->m_cur_selected_db->m_id);
     server.dirty++;
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 }
 
 /* ========================== Testing / Debugging  ========================== */
@@ -1444,7 +1444,7 @@ void pfselftestCommand(client *c) {
     }
 
     /* Success! */
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 
 cleanup:
     sdsfree(bitcounters);
@@ -1545,7 +1545,7 @@ void pfdebugCommand(client *c) {
             conv = 1;
             server.dirty++; /* Force propagation on encoding change. */
         }
-        addReply(c,conv ? shared.cone : shared.czero);
+        c->addReply(conv ? shared.cone : shared.czero);
     } else {
         addReplyErrorFormat(c,"Unknown PFDEBUG subcommand '%s'", cmd);
     }

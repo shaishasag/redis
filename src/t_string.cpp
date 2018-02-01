@@ -80,7 +80,7 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
     if ((flags & OBJ_SET_NX && lookupKeyWrite(c->m_cur_selected_db,key) != NULL) ||
         (flags & OBJ_SET_XX && lookupKeyWrite(c->m_cur_selected_db,key) == NULL))
     {
-        addReply(c, abort_reply ? abort_reply : shared.nullbulk);
+        c->addReply( abort_reply ? abort_reply : shared.nullbulk);
         return;
     }
     setKey(c->m_cur_selected_db,key,val);
@@ -89,7 +89,7 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
     notifyKeyspaceEvent(NOTIFY_STRING,"set",key,c->m_cur_selected_db->m_id);
     if (expire) notifyKeyspaceEvent(NOTIFY_GENERIC,
         "expire",key,c->m_cur_selected_db->m_id);
-    addReply(c, ok_reply ? ok_reply : shared.ok);
+    c->addReply( ok_reply ? ok_reply : shared.ok);
 }
 
 /* SET key value [NX] [XX] [EX <seconds>] [PX <milliseconds>] */
@@ -130,7 +130,7 @@ void setCommand(client *c) {
             expire = next;
             j++;
         } else {
-            addReply(c,shared.syntaxerr);
+            c->addReply(shared.syntaxerr);
             return;
         }
     }
@@ -161,7 +161,7 @@ int getGenericCommand(client *c) {
         return C_OK;
 
     if (o->type != OBJ_STRING) {
-        addReply(c,shared.wrongtypeerr);
+        c->addReply(shared.wrongtypeerr);
         return C_ERR;
     } else {
         addReplyBulk(c,o);
@@ -198,7 +198,7 @@ void setrangeCommand(client *c) {
     if (o == NULL) {
         /* Return 0 when setting nothing on a non-existing string */
         if (sdslen(value) == 0) {
-            addReply(c,shared.czero);
+            c->addReply(shared.czero);
             return;
         }
 
@@ -264,7 +264,7 @@ void getrangeCommand(client *c) {
 
     /* Convert negative indexes */
     if (start < 0 && end < 0 && start > end) {
-        addReply(c,shared.emptybulk);
+        c->addReply(shared.emptybulk);
         return;
     }
     if (start < 0) start = strlen+start;
@@ -276,7 +276,7 @@ void getrangeCommand(client *c) {
     /* Precondition: end >= 0 && end < strlen, so the only condition where
      * nothing can be returned is: start > end. */
     if (start > end || strlen == 0) {
-        addReply(c,shared.emptybulk);
+        c->addReply(shared.emptybulk);
     } else {
         addReplyBulkCBuffer(c,(char*)str+start,end-start+1);
     }
@@ -289,10 +289,10 @@ void mgetCommand(client *c) {
     for (j = 1; j < c->m_argc; j++) {
         robj *o = lookupKeyRead(c->m_cur_selected_db,c->m_argv[j]);
         if (o == NULL) {
-            addReply(c,shared.nullbulk);
+            c->addReply(shared.nullbulk);
         } else {
             if (o->type != OBJ_STRING) {
-                addReply(c,shared.nullbulk);
+                c->addReply(shared.nullbulk);
             } else {
                 addReplyBulk(c,o);
             }
@@ -316,7 +316,7 @@ void msetGenericCommand(client *c, int nx) {
             }
         }
         if (busykeys) {
-            addReply(c, shared.czero);
+            c->addReply( shared.czero);
             return;
         }
     }
@@ -327,7 +327,7 @@ void msetGenericCommand(client *c, int nx) {
         notifyKeyspaceEvent(NOTIFY_STRING,"set",c->m_argv[j],c->m_cur_selected_db->m_id);
     }
     server.dirty += (c->m_argc-1)/2;
-    addReply(c, nx ? shared.cone : shared.ok);
+    c->addReply( nx ? shared.cone : shared.ok);
 }
 
 void msetCommand(client *c) {
@@ -371,9 +371,9 @@ void incrDecrCommand(client *c, long long incr) {
     signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
     notifyKeyspaceEvent(NOTIFY_STRING,"incrby",c->m_argv[1],c->m_cur_selected_db->m_id);
     server.dirty++;
-    addReply(c,shared.colon);
-    addReply(c,_new);
-    addReply(c,shared.crlf);
+    c->addReply(shared.colon);
+    c->addReply(_new);
+    c->addReply(shared.crlf);
 }
 
 void incrCommand(client *c) {

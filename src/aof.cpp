@@ -1392,7 +1392,7 @@ void bgrewriteaofCommand(client *c) {
     } else if (rewriteAppendOnlyFileBackground() == C_OK) {
         addReplyStatus(c,"Background append only file rewriting started");
     } else {
-        addReply(c,shared.err);
+        c->addReply(shared.err);
     }
 }
 

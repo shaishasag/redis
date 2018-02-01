@@ -151,14 +151,14 @@ robj *lookupKeyWrite(redisDb *db, robj *key) {
 robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply) {
     robj *o = lookupKeyRead(c->m_cur_selected_db, key);
     if (!o)
-        addReply(c,reply);
+        c->addReply(reply);
     return o;
 }
 
 robj *lookupKeyWriteOrReply(client *c, robj *key, robj *reply) {
     robj *o = lookupKeyWrite(c->m_cur_selected_db, key);
     if (!o)
-        addReply(c,reply);
+        c->addReply(reply);
     return o;
 }
 
@@ -388,7 +388,7 @@ int getFlushCommandFlags(client *c, int *flags) {
     /* Parse the optional ASYNC option. */
     if (c->m_argc > 1) {
         if (c->m_argc > 2 || strcasecmp((const char*)c->m_argv[1]->ptr,"async")) {
-            addReply(c,shared.syntaxerr);
+            c->addReply(shared.syntaxerr);
             return C_ERR;
         }
         *flags = EMPTYDB_ASYNC;
@@ -407,7 +407,7 @@ void flushdbCommand(client *c) {
     if (getFlushCommandFlags(c,&flags) == C_ERR) return;
     signalFlushedDb(c->m_cur_selected_db->m_id);
     server.dirty += emptyDb(c->m_cur_selected_db->m_id,flags,NULL);
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 }
 
 /* FLUSHALL [ASYNC]
@@ -419,7 +419,7 @@ void flushallCommand(client *c) {
     if (getFlushCommandFlags(c,&flags) == C_ERR) return;
     signalFlushedDb(-1);
     server.dirty += emptyDb(-1,flags,NULL);
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
     if (server.rdb_child_pid != -1) {
         kill(server.rdb_child_pid,SIGUSR1);
         rdbRemoveTempFile(server.rdb_child_pid);
@@ -490,7 +490,7 @@ void selectCommand(client *c) {
     if (c->selectDb(id) == C_ERR) {
         addReplyError(c,"DB index is out of range");
     } else {
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     }
 }
 
@@ -498,7 +498,7 @@ void randomkeyCommand(client *c) {
     robj *key;
 
     if ((key = dbRandomKey(c->m_cur_selected_db)) == NULL) {
-        addReply(c,shared.nullbulk);
+        c->addReply(shared.nullbulk);
         return;
     }
 
@@ -621,7 +621,7 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
             }
 
             if (count < 1) {
-                addReply(c,shared.syntaxerr);
+                c->addReply(shared.syntaxerr);
                 goto cleanup;
             }
 
@@ -636,7 +636,7 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
 
             i += 2;
         } else {
-            addReply(c,shared.syntaxerr);
+            c->addReply(shared.syntaxerr);
             goto cleanup;
         }
     }
@@ -813,7 +813,7 @@ void shutdownCommand(client *c) {
     int flags = 0;
 
     if (c->m_argc > 2) {
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     } else if (c->m_argc == 2) {
         if (!strcasecmp((const char*)c->m_argv[1]->ptr,"nosave")) {
@@ -821,7 +821,7 @@ void shutdownCommand(client *c) {
         } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"save")) {
             flags |= SHUTDOWN_SAVE;
         } else {
-            addReply(c,shared.syntaxerr);
+            c->addReply(shared.syntaxerr);
             return;
         }
     }
@@ -850,7 +850,7 @@ void renameGenericCommand(client *c, int nx) {
         return;
 
     if (samekey) {
-        addReply(c,nx ? shared.czero : shared.ok);
+        c->addReply(nx ? shared.czero : shared.ok);
         return;
     }
 
@@ -859,7 +859,7 @@ void renameGenericCommand(client *c, int nx) {
     if (lookupKeyWrite(c->m_cur_selected_db,c->m_argv[2]) != NULL) {
         if (nx) {
             decrRefCount(o);
-            addReply(c,shared.czero);
+            c->addReply(shared.czero);
             return;
         }
         /* Overwrite: delete the old key before creating the new one
@@ -876,7 +876,7 @@ void renameGenericCommand(client *c, int nx) {
     notifyKeyspaceEvent(NOTIFY_GENERIC,"rename_to",
         c->m_argv[2],c->m_cur_selected_db->m_id);
     server.dirty++;
-    addReply(c,nx ? shared.cone : shared.ok);
+    c->addReply(nx ? shared.cone : shared.ok);
 }
 
 void renameCommand(client *c) {
@@ -906,7 +906,7 @@ void moveCommand(client *c) {
         dbid < INT_MIN || dbid > INT_MAX ||
         c->selectDb(dbid) == C_ERR)
     {
-        addReply(c,shared.outofrangeerr);
+        c->addReply(shared.outofrangeerr);
         return;
     }
     dst = c->m_cur_selected_db;
@@ -915,21 +915,21 @@ void moveCommand(client *c) {
     /* If the user is moving using as target the same
      * DB as the source DB it is probably an error. */
     if (src == dst) {
-        addReply(c,shared.sameobjecterr);
+        c->addReply(shared.sameobjecterr);
         return;
     }
 
     /* Check if the element exists and get a reference */
     o = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[1]);
     if (!o) {
-        addReply(c,shared.czero);
+        c->addReply(shared.czero);
         return;
     }
     expire = getExpire(c->m_cur_selected_db,c->m_argv[1]);
 
     /* Return zero if the key already exists in the target DB */
     if (lookupKeyWrite(dst,c->m_argv[1]) != NULL) {
-        addReply(c,shared.czero);
+        c->addReply(shared.czero);
         return;
     }
     dbAdd(dst,c->m_argv[1],o);
@@ -939,7 +939,7 @@ void moveCommand(client *c) {
     /* OK! key moved, free the entry in the source DB */
     dbDelete(src,c->m_argv[1]);
     server.dirty++;
-    addReply(c,shared.cone);
+    c->addReply(shared.cone);
 }
 
 /* Helper function for dbSwapDatabases(): scans the list of keys that have
@@ -1022,7 +1022,7 @@ void swapdbCommand(client *c) {
         return;
     } else {
         server.dirty++;
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     }
 }
 

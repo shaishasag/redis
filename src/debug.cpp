@@ -330,7 +330,7 @@ void debugCommand(client *c) {
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"oom")) {
         void* ptr = (void*)zmalloc(ULONG_MAX); /* Should trigger an out of memory. */
         zfree(ptr);
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"assert")) {
         if (c->m_argc >= 3) c->m_argv[2] = tryObjectEncoding(c->m_argv[2]);
         serverAssertWithInfo(c,c->m_argv[0],1 == 2);
@@ -338,7 +338,7 @@ void debugCommand(client *c) {
         rdbSaveInfo rsi, *rsiptr;
         rsiptr = rdbPopulateSaveInfo(&rsi);
         if (rdbSave(server.rdb_filename,rsiptr) != C_OK) {
-            addReply(c,shared.err);
+            c->addReply(shared.err);
             return;
         }
         emptyDb(-1,EMPTYDB_NO_FLAGS,NULL);
@@ -347,24 +347,24 @@ void debugCommand(client *c) {
             return;
         }
         serverLog(LL_WARNING,"DB reloaded by DEBUG RELOAD");
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"loadaof")) {
         if (server.aof_state == AOF_ON) flushAppendOnlyFile(1);
         emptyDb(-1,EMPTYDB_NO_FLAGS,NULL);
         if (loadAppendOnlyFile(server.aof_filename) != C_OK) {
-            addReply(c,shared.err);
+            c->addReply(shared.err);
             return;
         }
         server.dirty = 0; /* Prevent AOF / replication */
         serverLog(LL_WARNING,"Append Only File loaded by DEBUG LOADAOF");
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"object") && c->m_argc == 3) {
         dictEntry *de;
         robj *val;
         char *strenc;
 
         if ((de = c->m_cur_selected_db->m_dict->dictFind(c->m_argv[2]->ptr)) == NULL) {
-            addReply(c,shared.nokeyerr);
+            c->addReply(shared.nokeyerr);
             return;
         }
         val = (robj *)de->dictGetVal();
@@ -416,7 +416,7 @@ void debugCommand(client *c) {
         sds key;
 
         if ((de = c->m_cur_selected_db->m_dict->dictFind(c->m_argv[2]->ptr)) == NULL) {
-            addReply(c,shared.nokeyerr);
+            c->addReply(shared.nokeyerr);
             return;
         }
         val = (robj *)de->dictGetVal();
@@ -480,7 +480,7 @@ void debugCommand(client *c) {
             signalModifiedKey(c->m_cur_selected_db,key);
             decrRefCount(key);
         }
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"digest") && c->m_argc == 2) {
         unsigned char digest[20];
         sds d = sdsempty();
@@ -499,17 +499,17 @@ void debugCommand(client *c) {
         tv.tv_sec = utime / 1000000;
         tv.tv_nsec = (utime % 1000000) * 1000;
         nanosleep(&tv, NULL);
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"set-active-expire") &&
                c->m_argc == 3)
     {
         server.active_expire_enabled = atoi((const char *)c->m_argv[2]->ptr);
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"lua-always-replicate-commands") &&
                c->m_argc == 3)
     {
         server.lua_always_replicate_commands = atoi((const char *)c->m_argv[2]->ptr);
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"error") && c->m_argc == 3) {
         sds errstr = sdsnewlen("-",1);
 
@@ -553,7 +553,7 @@ void debugCommand(client *c) {
         serverLog(LL_WARNING,"Changing replication IDs after receiving DEBUG change-repl-id");
         changeReplicationId();
         clearReplicationId2();
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else {
         addReplyErrorFormat(c, "Unknown DEBUG subcommand or wrong number of arguments for '%s'",
             (char*)c->m_argv[1]->ptr);

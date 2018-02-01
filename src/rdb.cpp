@@ -2010,9 +2010,9 @@ void saveCommand(client *c) {
     rdbSaveInfo rsi, *rsiptr;
     rsiptr = rdbPopulateSaveInfo(&rsi);
     if (rdbSave(server.rdb_filename,rsiptr) == C_OK) {
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else {
-        addReply(c,shared.err);
+        c->addReply(shared.err);
     }
 }
 
@@ -2026,7 +2026,7 @@ void bgsaveCommand(client *c) {
         if (c->m_argc == 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"schedule")) {
             schedule = 1;
         } else {
-            addReply(c,shared.syntaxerr);
+            c->addReply(shared.syntaxerr);
             return;
         }
     }
@@ -2049,7 +2049,7 @@ void bgsaveCommand(client *c) {
     } else if (rdbSaveBackground(server.rdb_filename,rsiptr) == C_OK) {
         addReplyStatus(c,"Background saving started");
     } else {
-        addReply(c,shared.err);
+        c->addReply(shared.err);
     }
 }
 

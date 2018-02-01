@@ -213,8 +213,8 @@ void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) {
         listIter li(slaves);
         while((ln = li.listNext())) {
             client *slave = (client *)ln->listNodeValue();
-            if (slave->m_replication_state == SLAVE_STATE_WAIT_BGSAVE_START) continue;
-            addReply(slave,selectcmd);
+            if (slave->m_replication_state == SLAVE_STATE_WAIT_BGSAVE_START)continue;
+                slave->addReply(selectcmd);
         }
 
         if (dictid < 0 || dictid >= PROTO_SHARED_SELECT_CMDS)
@@ -331,7 +331,7 @@ void replicationFeedMonitors(client *c, list *monitors, int dictid, robj **argv,
     listIter li(monitors);
     while((ln = li.listNext())) {
         client *monitor = (client *)ln->listNodeValue();
-        addReply(monitor,cmdobj);
+        monitor->addReply(cmdobj);
     }
     decrRefCount(cmdobj);
 }
@@ -774,7 +774,7 @@ void replconfCommand(client *c) {
     if ((c->m_argc % 2) == 0) {
         /* Number of arguments must be odd to make sure that every
          * option has a corresponding value. */
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     }
 
@@ -832,7 +832,7 @@ void replconfCommand(client *c) {
             return;
         }
     }
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 }
 
 /* This function puts a slave in the online state, and should be called just
@@ -2019,7 +2019,7 @@ void slaveofCommand(client *c) {
             server.masterhost, server.masterport, client);
         sdsfree(client);
     }
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
 }
 
 /* ROLE command: provide information about the role of the instance

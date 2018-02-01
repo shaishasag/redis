@@ -2935,7 +2935,7 @@ void sentinelCommand(client *c) {
         /* Reply with a three-elements multi-bulk reply:
          * down state, leader, vote epoch. */
         addReplyMultiBulkLen(c,3);
-        addReply(c, isdown ? shared.cone : shared.czero);
+        c->addReply( isdown ? shared.cone : shared.czero);
         addReplyBulkCString(c, leader ? leader : "*");
         addReplyLongLong(c, (long long)leader_epoch);
         if (leader) sdsfree(leader);
@@ -2950,7 +2950,7 @@ void sentinelCommand(client *c) {
         if (c->m_argc != 3) goto numargserr;
         ri = sentinelGetMasterByName((char*)c->m_argv[2]->ptr);
         if (ri == NULL) {
-            addReply(c,shared.nullmultibulk);
+            c->addReply(shared.nullmultibulk);
         } else {
             sentinelAddr *addr = sentinelGetCurrentMasterAddress(ri);
 
@@ -2977,7 +2977,7 @@ void sentinelCommand(client *c) {
             ri->name);
         sentinelStartFailover(ri);
         ri->m_flags |= SRI_FORCE_FAILOVER;
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"pending-scripts")) {
         /* SENTINEL PENDING-SCRIPTS */
 
@@ -3026,12 +3026,12 @@ void sentinelCommand(client *c) {
         } else {
             sentinelFlushConfig();
             sentinelEvent(LL_WARNING,"+monitor",ri,"%@ quorum %d",ri->quorum);
-            addReply(c,shared.ok);
+            c->addReply(shared.ok);
         }
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"flushconfig")) {
         if (c->m_argc != 2) goto numargserr;
         sentinelFlushConfig();
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
         return;
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"remove")) {
         /* SENTINEL REMOVE <name> */
@@ -3043,7 +3043,7 @@ void sentinelCommand(client *c) {
         sentinelEvent(LL_WARNING,"-monitor",ri,"%@");
         sentinel.masters->dictDelete(c->m_argv[2]->ptr);
         sentinelFlushConfig();
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"ckquorum")) {
         /* SENTINEL CKQUORUM <name> */
         sentinelRedisInstance *ri;
@@ -3117,7 +3117,7 @@ void sentinelCommand(client *c) {
             if (ri->info)
                 addReplyBulkCBuffer(c,ri->info,sdslen(ri->info));
             else
-                addReply(c,shared.nullbulk);
+                c->addReply(shared.nullbulk);
 
             dictEntry *sde;
             dictIterator sdi(ri->slaves);
@@ -3128,7 +3128,7 @@ void sentinelCommand(client *c) {
                 if (sri->info)
                     addReplyBulkCBuffer(c,sri->info,sdslen(sri->info));
                 else
-                    addReply(c,shared.nullbulk);
+                    c->addReply(shared.nullbulk);
             }
         }
 
@@ -3159,7 +3159,7 @@ void sentinelCommand(client *c) {
                 return;
             }
         }
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else {
         addReplyErrorFormat(c,"Unknown sentinel subcommand '%s'",
                                (char*)c->m_argv[1]->ptr);
@@ -3184,7 +3184,7 @@ numargserr:
 /* SENTINEL INFO [section] */
 void sentinelInfoCommand(client *c) {
     if (c->m_argc > 2) {
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     }
 
@@ -3339,7 +3339,7 @@ void sentinelSetCommand(client *c) {
     }
 
     if (changes) sentinelFlushConfig();
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
     return;
 
 badfmt: /* Bad format errors */

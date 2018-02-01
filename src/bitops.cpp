@@ -557,7 +557,7 @@ void setbitCommand(client *c) {
     signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
     notifyKeyspaceEvent(NOTIFY_STRING,"setbit",c->m_argv[1],c->m_cur_selected_db->m_id);
     server.dirty++;
-    addReply(c, bitval ? shared.cone : shared.czero);
+    c->addReply( bitval ? shared.cone : shared.czero);
 }
 
 /* GETBIT key offset */
@@ -584,7 +584,7 @@ void getbitCommand(client *c) {
             bitval = llbuf[byte] & (1 << bit);
     }
 
-    addReply(c, bitval ? shared.cone : shared.czero);
+    c->addReply( bitval ? shared.cone : shared.czero);
 }
 
 /* BITOP op_name target_key src_key1 src_key2 src_key3 ... src_keyN */
@@ -609,7 +609,7 @@ void bitopCommand(client *c) {
     else if((opname[0] == 'n' || opname[0] == 'N') && !strcasecmp(opname,"not"))
         op = BITOP_NOT;
     else {
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     }
 
@@ -785,7 +785,7 @@ void bitcountCommand(client *c) {
             return;
         /* Convert negative indexes */
         if (start < 0 && end < 0 && start > end) {
-            addReply(c,shared.czero);
+            c->addReply(shared.czero);
             return;
         }
         if (start < 0) start = strlen+start;
@@ -799,14 +799,14 @@ void bitcountCommand(client *c) {
         end = strlen-1;
     } else {
         /* Syntax error. */
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     }
 
     /* Precondition: end >= 0 && end < strlen, so the only condition where
      * zero can be returned is: start > end. */
     if (start > end) {
-        addReply(c,shared.czero);
+        c->addReply(shared.czero);
     } else {
         long bytes = end-start+1;
 
@@ -864,7 +864,7 @@ void bitposCommand(client *c) {
         end = strlen-1;
     } else {
         /* Syntax error. */
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
         return;
     }
 
@@ -950,7 +950,7 @@ void bitfieldCommand(client *c) {
             }
             continue;
         } else {
-            addReply(c,shared.syntaxerr);
+            c->addReply(shared.syntaxerr);
             zfree(ops);
             return;
         }
@@ -1047,7 +1047,7 @@ void bitfieldCommand(client *c) {
                     setSignedBitfield((unsigned char *)o->ptr,thisop->offset,
                                       thisop->bits,newval);
                 } else {
-                    addReply(c,shared.nullbulk);
+                    c->addReply(shared.nullbulk);
                 }
             } else {
                 uint64_t oldval, newval, wrapped, retval;
@@ -1076,7 +1076,7 @@ void bitfieldCommand(client *c) {
                     setUnsignedBitfield((unsigned char *)o->ptr,thisop->offset,
                                         thisop->bits,newval);
                 } else {
-                    addReply(c,shared.nullbulk);
+                    c->addReply(shared.nullbulk);
                 }
             }
             changes++;

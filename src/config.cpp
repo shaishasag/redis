@@ -1154,7 +1154,7 @@ void configSetCommand(client *c) {
     }
 
     /* On success we just return a generic OK for all the options. */
-    addReply(c,shared.ok);
+    c->addReply(shared.ok);
     return;
 
 badfmt: /* Bad format errors */
@@ -2078,7 +2078,7 @@ void configCommand(client *c) {
         if (c->m_argc != 2) goto badarity;
         resetServerStats();
         resetCommandTableStats();
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"rewrite")) {
         if (c->m_argc != 2) goto badarity;
         if (server.configfile == NULL) {
@@ -2090,7 +2090,7 @@ void configCommand(client *c) {
             addReplyErrorFormat(c,"Rewriting config file: %s", strerror(errno));
         } else {
             serverLog(LL_WARNING,"CONFIG REWRITE executed with success.");
-            addReply(c,shared.ok);
+            c->addReply(shared.ok);
         }
     } else {
         addReplyError(c,

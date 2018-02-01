@@ -601,7 +601,7 @@ void latencyCommand(client *c) {
             addReplyLongLong(c,resets);
         }
     } else {
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
     }
     return;
 

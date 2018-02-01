@@ -682,9 +682,13 @@ struct readyList {
 struct client {
     int selectDb(int id);
 
+    // implemented in networking.cpp
+    int prepareClientToWrite();
     int  _addReplyToBuffer(const char *s, size_t len);
     void _addReplyObjectToList(robj *o);
     void _addReplySdsToList(sds s);
+    void _addReplyStringToList(const char *s, size_t len);
+    void addReply(robj *obj);
 
     uint64_t m_id;            /* Client incremental unique ID. */
     int m_fd;                 /* Client socket. */

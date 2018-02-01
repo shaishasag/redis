@@ -473,7 +473,7 @@ robj *hashTypeLookupWriteOrCreate(client *c, robj *key) {
         dbAdd(c->m_cur_selected_db,key,o);
     } else {
         if (o->type != OBJ_HASH) {
-            addReply(c,shared.wrongtypeerr);
+            c->addReply(shared.wrongtypeerr);
             return NULL;
         }
     }
@@ -534,10 +534,10 @@ void hsetnxCommand(client *c) {
     hashTypeTryConversion(o,c->m_argv,2,3);
 
     if (hashTypeExists(o, (sds)c->m_argv[2]->ptr)) {
-        addReply(c, shared.czero);
+        c->addReply( shared.czero);
     } else {
         hashTypeSet(o, (sds)c->m_argv[2]->ptr, (sds)c->m_argv[3]->ptr,HASH_SET_COPY);
-        addReply(c, shared.cone);
+        c->addReply( shared.cone);
         signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
         notifyKeyspaceEvent(NOTIFY_HASH,"hset",c->m_argv[1],c->m_cur_selected_db->m_id);
         server.dirty++;
@@ -566,7 +566,7 @@ void hsetCommand(client *c) {
         addReplyLongLong(c, created);
     } else {
         /* HMSET */
-        addReply(c, shared.ok);
+        c->addReply( shared.ok);
     }
     signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
     notifyKeyspaceEvent(NOTIFY_HASH,"hset",c->m_argv[1],c->m_cur_selected_db->m_id);
@@ -660,7 +660,7 @@ static void addHashFieldToReply(client *c, robj *o, sds field) {
     int ret;
 
     if (o == NULL) {
-        addReply(c, shared.nullbulk);
+        c->addReply( shared.nullbulk);
         return;
     }
 
@@ -671,7 +671,7 @@ static void addHashFieldToReply(client *c, robj *o, sds field) {
 
         ret = hashTypeGetFromZiplist(o, field, &vstr, &vlen, &vll);
         if (ret < 0) {
-            addReply(c, shared.nullbulk);
+            c->addReply( shared.nullbulk);
         } else {
             if (vstr) {
                 addReplyBulkCBuffer(c, vstr, vlen);
@@ -683,7 +683,7 @@ static void addHashFieldToReply(client *c, robj *o, sds field) {
     } else if (o->encoding == OBJ_ENCODING_HT) {
         sds value = hashTypeGetFromHashTable(o, field);
         if (value == NULL)
-            addReply(c, shared.nullbulk);
+            c->addReply( shared.nullbulk);
         else
             addReplyBulkCBuffer(c, value, sdslen(value));
     } else {
@@ -708,7 +708,7 @@ void hmgetCommand(client *c) {
      * hashes, where HMGET should respond with a series of null bulks. */
     o = lookupKeyRead(c->m_cur_selected_db, c->m_argv[1]);
     if (o != NULL && o->type != OBJ_HASH) {
-        addReply(c, shared.wrongtypeerr);
+        c->addReply( shared.wrongtypeerr);
         return;
     }
 
@@ -830,7 +830,7 @@ void hexistsCommand(client *c) {
     if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,o,OBJ_HASH)) return;
 
-    addReply(c, hashTypeExists(o,(sds)c->m_argv[2]->ptr) ? shared.cone : shared.czero);
+    c->addReply( hashTypeExists(o,(sds)c->m_argv[2]->ptr) ? shared.cone : shared.czero);
 }
 
 void hscanCommand(client *c) {

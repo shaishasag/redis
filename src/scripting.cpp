@@ -282,7 +282,7 @@ void luaReplyToRedisReply(client *c, lua_State *lua) {
         addReplyBulkCBuffer(c,(char*)lua_tostring(lua,-1),lua_strlen(lua,-1));
         break;
     case LUA_TBOOLEAN:
-        addReply(c,lua_toboolean(lua,-1) ? shared.cone : shared.nullbulk);
+        c->addReply(lua_toboolean(lua,-1) ? shared.cone : shared.nullbulk);
         break;
     case LUA_TNUMBER:
         addReplyLongLong(c,(long long)lua_tonumber(lua,-1));
@@ -334,7 +334,7 @@ void luaReplyToRedisReply(client *c, lua_State *lua) {
         }
         break;
     default:
-        addReply(c,shared.nullbulk);
+        c->addReply(shared.nullbulk);
     }
     lua_pop(lua,1);
 }
@@ -1317,7 +1317,7 @@ void evalGenericCommand(client *c, int evalsha) {
          * return an error. */
         if (evalsha) {
             lua_pop(lua,1); /* remove the error handler from the stack. */
-            addReply(c, shared.noscripterr);
+            c->addReply( shared.noscripterr);
             return;
         }
         if (luaCreateFunction(c,lua,c->m_argv[1]) == NULL) {
@@ -1456,7 +1456,7 @@ void evalShaCommand(client *c) {
          * not the right length. So we return an error ASAP, this way
          * evalGenericCommand() can be implemented without string length
          * sanity check */
-        addReply(c, shared.noscripterr);
+        c->addReply( shared.noscripterr);
         return;
     }
     if (!(c->m_flags & CLIENT_LUA_DEBUG))
@@ -1470,7 +1470,7 @@ void evalShaCommand(client *c) {
 void scriptCommand(client *c) {
     if (c->m_argc == 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"flush")) {
         scriptingReset();
-        addReply(c,shared.ok);
+        c->addReply(shared.ok);
         replicationScriptCacheFlush();
         server.dirty++; /* Propagating this command is a good idea. */
     } else if (c->m_argc >= 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"exists")) {
@@ -1479,9 +1479,9 @@ void scriptCommand(client *c) {
         addReplyMultiBulkLen(c, c->m_argc-2);
         for (j = 2; j < c->m_argc; j++) {
             if (server.lua_scripts->dictFind(c->m_argv[j]->ptr))
-                addReply(c,shared.cone);
+                c->addReply(shared.cone);
             else
-                addReply(c,shared.czero);
+                c->addReply(shared.czero);
         }
     } else if (c->m_argc == 3 && !strcasecmp((const char*)c->m_argv[1]->ptr,"load")) {
         sds sha = luaCreateFunction(c,server.lua,c->m_argv[2]);
@@ -1495,7 +1495,7 @@ void scriptCommand(client *c) {
             addReplySds(c,sdsnew("-UNKILLABLE Sorry the script already executed write commands against the dataset. You can either wait the script termination or kill the server in a hard way using the SHUTDOWN NOSAVE command.\r\n"));
         } else {
             server.lua_kill = 1;
-            addReply(c,shared.ok);
+            c->addReply(shared.ok);
         }
     } else if (c->m_argc == 3 && !strcasecmp((const char*)c->m_argv[1]->ptr,"debug")) {
         if (clientHasPendingReplies(c)) {
@@ -1504,13 +1504,13 @@ void scriptCommand(client *c) {
         }
         if (!strcasecmp((const char*)c->m_argv[2]->ptr,"no")) {
             ldbDisable(c);
-            addReply(c,shared.ok);
+            c->addReply(shared.ok);
         } else if (!strcasecmp((const char*)c->m_argv[2]->ptr,"yes")) {
             ldbEnable(c);
-            addReply(c,shared.ok);
+            c->addReply(shared.ok);
         } else if (!strcasecmp((const char*)c->m_argv[2]->ptr,"sync")) {
             ldbEnable(c);
-            addReply(c,shared.ok);
+            c->addReply(shared.ok);
             c->m_flags |= CLIENT_LUA_DEBUG_SYNC;
         } else {
             addReplyError(c,"Use SCRIPT DEBUG yes/sync/no");

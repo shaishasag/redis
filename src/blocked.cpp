@@ -159,7 +159,7 @@ void unblockClient(client *c) {
  * unblockClient() will be called with the same client as argument. */
 void replyToBlockedClientTimedOut(client *c) {
     if (c->m_blocking_op_type == BLOCKED_LIST) {
-        addReply(c,shared.nullmultibulk);
+        c->addReply(shared.nullmultibulk);
     } else if (c->m_blocking_op_type == BLOCKED_WAIT) {
         addReplyLongLong(c,replicationCountAcksByOffset(c->m_blocking_state.reploffset));
     } else if (c->m_blocking_op_type == BLOCKED_MODULE) {

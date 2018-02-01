@@ -1131,7 +1131,7 @@ int RM_ReplyWithString(RedisModuleCtx *ctx, RedisModuleString *str) {
 int RM_ReplyWithNull(RedisModuleCtx *ctx) {
     client *c = moduleGetReplyClient(ctx);
     if (c == NULL) return REDISMODULE_OK;
-    addReply(c,shared.nullbulk);
+    c->addReply(shared.nullbulk);
     return REDISMODULE_OK;
 }
 
@@ -3863,13 +3863,13 @@ void moduleCommand(client *c) {
         }
 
         if (moduleLoad((const char *)c->m_argv[2]->ptr,(void **)argv,argc) == C_OK)
-            addReply(c,shared.ok);
+            c->addReply(shared.ok);
         else
             addReplyError(c,
                 "Error loading the extension. Please check the server logs.");
     } else if (!strcasecmp(subcmd,"unload") && c->m_argc == 3) {
         if (moduleUnload((sds)c->m_argv[2]->ptr) == C_OK)
-            addReply(c,shared.ok);
+            c->addReply(shared.ok);
         else {
             char *errmsg;
             switch(errno) {
@@ -3900,7 +3900,7 @@ void moduleCommand(client *c) {
             addReplyLongLong(c,module->m_ver);
         }
     } else {
-        addReply(c,shared.syntaxerr);
+        c->addReply(shared.syntaxerr);
     }
 }
 
