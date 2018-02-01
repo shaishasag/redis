@@ -166,7 +166,7 @@ void computeDatasetDigest(unsigned char *final) {
             } else if (o->type == OBJ_SET) {
                 setTypeIterator *si = setTypeInitIterator(o);
                 sds sdsele;
-                while((sdsele = setTypeNextObject(si)) != NULL) {
+                while((sdsele = si->setTypeNextObject()) != NULL) {
                     xorDigest(digest,sdsele,sdslen(sdsele));
                     sdsfree(sdsele);
                 }

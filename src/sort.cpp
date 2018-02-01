@@ -379,7 +379,7 @@ void sortCommand(client *c) {
     } else if (sortval->type == OBJ_SET) {
         setTypeIterator *si = setTypeInitIterator(sortval);
         sds sdsele;
-        while((sdsele = setTypeNextObject(si)) != NULL) {
+        while((sdsele = si->setTypeNextObject()) != NULL) {
             vector[j].obj = createObject(OBJ_STRING,sdsele);
             vector[j].u.score = 0;
             vector[j].u.cmpobj = NULL;

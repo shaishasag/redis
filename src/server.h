@@ -1321,11 +1321,16 @@ struct listTypeEntry {
 };
 
 /* Structure to hold set iteration abstraction. */
-struct setTypeIterator{
-    robj *subject;
-    int encoding;
-    int ii; /* intset iterator */
-    dictIterator *di;
+class setTypeIterator : public genericIterator
+{
+public:
+    setTypeIterator(robj *subject);
+    ~setTypeIterator();
+    int setTypeNext(sds *sdsele, int64_t *llele);
+    sds setTypeNextObject();
+
+    int m_intset_iter; /* intset iterator */
+    dictIterator *m_dict_iter;
 };
 
 /* Structure to hold hash iteration abstraction. Note that iteration over
@@ -1720,8 +1725,6 @@ int setTypeRemove(robj *subject, sds value);
 int setTypeIsMember(robj *subject, sds value);
 setTypeIterator *setTypeInitIterator(robj *subject);
 void setTypeReleaseIterator(setTypeIterator *si);
-int setTypeNext(setTypeIterator *si, sds *sdsele, int64_t *llele);
-sds setTypeNextObject(setTypeIterator *si);
 int setTypeRandomElement(robj *setobj, sds *sdsele, int64_t *llele);
 unsigned long setTypeRandomElements(robj *set, unsigned long count, robj *aux_set);
 unsigned long setTypeSize(const robj *subject);

@@ -120,24 +120,37 @@ int setTypeIsMember(robj *subject, sds value) {
     return 0;
 }
 
-setTypeIterator *setTypeInitIterator(robj *subject) {
-    setTypeIterator* si = (setTypeIterator*)zmalloc(sizeof(setTypeIterator));
-    si->subject = subject;
-    si->encoding = subject->encoding;
-    if (si->encoding == OBJ_ENCODING_HT) {
-        si->di = dictGetIterator((dict*)subject->ptr);
-    } else if (si->encoding == OBJ_ENCODING_INTSET) {
-        si->ii = 0;
-    } else {
-        serverPanic("Unknown set encoding");
-    }
+setTypeIterator *setTypeInitIterator(robj *subject)
+{
+    setTypeIterator* si = new (zmalloc(sizeof(setTypeIterator))) setTypeIterator(subject);
     return si;
 }
 
-void setTypeReleaseIterator(setTypeIterator *si) {
-    if (si->encoding == OBJ_ENCODING_HT)
-        dictReleaseIterator(si->di);
+setTypeIterator::setTypeIterator(robj *subject)
+        : genericIterator(subject)
+, m_dict_iter(NULL)
+, m_intset_iter(0)
+{
+   if (m_encoding == OBJ_ENCODING_HT) {
+        m_dict_iter = dictGetIterator((dict*)subject->ptr);
+   } else if (m_encoding == OBJ_ENCODING_INTSET) {
+        m_intset_iter = 0;
+   } else {
+        serverPanic("Unknown set encoding");
+   }
+}
+
+void setTypeReleaseIterator(setTypeIterator *si)
+{
+    si->~setTypeIterator();
     zfree(si);
+}
+
+setTypeIterator::~setTypeIterator()
+{
+    if (m_encoding == OBJ_ENCODING_HT)
+        if (NULL != m_dict_iter)
+            dictReleaseIterator(m_dict_iter);
 }
 
 /* Move to the next entry in the set. Returns the object at the current
@@ -153,20 +166,22 @@ void setTypeReleaseIterator(setTypeIterator *si) {
  * used field with values which are easy to trap if misused.
  *
  * When there are no longer elements -1 is returned. */
-int setTypeNext(setTypeIterator *si, sds *sdsele, int64_t *llele) {
-    if (si->encoding == OBJ_ENCODING_HT) {
-        dictEntry *de = si->di->dictNext();
-        if (de == NULL) return -1;
+int setTypeIterator::setTypeNext(sds *sdsele, int64_t *llele)
+{
+    if (m_encoding == OBJ_ENCODING_HT) {
+        dictEntry *de = m_dict_iter->dictNext();
+        if (de == NULL)
+            return -1;
         *sdsele = (sds)de->dictGetKey();
         *llele = -123456789; /* Not needed. Defensive. */
-    } else if (si->encoding == OBJ_ENCODING_INTSET) {
-        if (!((intset*)si->subject->ptr)->intsetGet(si->ii++,llele))
+    } else if (m_encoding == OBJ_ENCODING_INTSET) {
+        if (!((intset*)m_subject->ptr)->intsetGet(m_intset_iter++,llele))
             return -1;
         *sdsele = NULL; /* Not needed. Defensive. */
     } else {
         serverPanic("Wrong set encoding in setTypeNext");
     }
-    return si->encoding;
+    return m_encoding;
 }
 
 /* The not copy on write friendly version but easy to use version
@@ -176,18 +191,18 @@ int setTypeNext(setTypeIterator *si, sds *sdsele, int64_t *llele) {
  *
  * This function is the way to go for write operations where COW is not
  * an issue. */
-sds setTypeNextObject(setTypeIterator *si) {
-    int64_t intele;
-    sds sdsele;
-    int encoding;
+sds setTypeIterator::setTypeNextObject()
+{
+    int64_t int_element;
+    sds sds_element;
 
-    encoding = setTypeNext(si,&sdsele,&intele);
-    switch(encoding) {
+    int the_encoding = setTypeNext(&sds_element, &int_element);
+    switch(the_encoding) {
         case -1:    return NULL;
         case OBJ_ENCODING_INTSET:
-            return sdsfromlonglong(intele);
+            return sdsfromlonglong(int_element);
         case OBJ_ENCODING_HT:
-            return sdsdup(sdsele);
+            return sdsdup(sds_element);
         default:
             serverPanic("Unsupported encoding");
     }
@@ -247,7 +262,7 @@ void setTypeConvert(robj *setobj, int enc) {
 
         /* To add the elements we extract integers and create redis objects */
         si = setTypeInitIterator(setobj);
-        while (setTypeNext(si,&element,&intele) != -1) {
+        while (si->setTypeNext(&element,&intele) != -1) {
             element = sdsfromlonglong(intele);
             int ret = d->dictAdd(element,NULL);
             serverAssert(ret == DICT_OK);
@@ -523,7 +538,7 @@ void spopWithCountCommand(client *c) {
         /* Tranfer the old set to the client and release it. */
         setTypeIterator *si;
         si = setTypeInitIterator(set);
-        while((encoding = setTypeNext(si,&sdsele,&llele)) != -1) {
+        while((encoding = si->setTypeNext(&sdsele,&llele)) != -1) {
             if (encoding == OBJ_ENCODING_INTSET) {
                 addReplyBulkLongLong(c,llele);
                 objele = createStringObjectFromLongLong(llele);
@@ -686,7 +701,7 @@ void srandmemberWithCountCommand(client *c) {
 
         /* Add all the elements into the temporary dictionary. */
         si = setTypeInitIterator(set);
-        while((encoding = setTypeNext(si,&ele,&llele)) != -1) {
+        while((encoding = si->setTypeNext(&ele,&llele)) != -1) {
             int retval = DICT_ERR;
 
             if (encoding == OBJ_ENCODING_INTSET) {
@@ -846,7 +861,7 @@ void sinterGenericCommand(client *c, robj **setkeys,
      * the element against all the other sets, if at least one set does
      * not include the element it is discarded */
     si = setTypeInitIterator(sets[0]);
-    while((encoding = setTypeNext(si,&elesds,&intobj)) != -1) {
+    while((encoding = si->setTypeNext(&elesds,&intobj)) != -1) {
         for (j = 1; j < setnum; j++) {
             if (sets[j] == sets[0]) continue;
             if (encoding == OBJ_ENCODING_INTSET) {
@@ -933,7 +948,6 @@ void sinterstoreCommand(client *c) {
 void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
                               robj *dstkey, int op) {
     robj **sets = (robj **)zmalloc(sizeof(robj*)*setnum);
-    setTypeIterator *si;
     robj *dstset = NULL;
     sds ele;
     int j, cardinality = 0;
@@ -998,8 +1012,8 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
         for (j = 0; j < setnum; j++) {
             if (!sets[j]) continue; /* non existing keys are like empty sets */
 
-            si = setTypeInitIterator(sets[j]);
-            while((ele = setTypeNextObject(si)) != NULL) {
+            setTypeIterator* si = setTypeInitIterator(sets[j]);
+            while((ele = si->setTypeNextObject()) != NULL) {
                 if (setTypeAdd(dstset,ele)) cardinality++;
                 sdsfree(ele);
             }
@@ -1014,8 +1028,8 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
          *
          * This way we perform at max N*M operations, where N is the size of
          * the first set, and M the number of sets. */
-        si = setTypeInitIterator(sets[0]);
-        while((ele = setTypeNextObject(si)) != NULL) {
+        setTypeIterator* si = setTypeInitIterator(sets[0]);
+        while((ele = si->setTypeNextObject()) != NULL) {
             for (j = 1; j < setnum; j++) {
                 if (!sets[j]) continue; /* no key is an empty set. */
                 if (sets[j] == sets[0]) break; /* same set! */
@@ -1040,8 +1054,8 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
         for (j = 0; j < setnum; j++) {
             if (!sets[j]) continue; /* non existing keys are like empty sets */
 
-            si = setTypeInitIterator(sets[j]);
-            while((ele = setTypeNextObject(si)) != NULL) {
+            setTypeIterator* si = setTypeInitIterator(sets[j]);
+            while((ele = si->setTypeNextObject()) != NULL) {
                 if (j == 0) {
                     if (setTypeAdd(dstset,ele)) cardinality++;
                 } else {
@@ -1060,8 +1074,8 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
     /* Output the content of the resulting set, if not in STORE mode */
     if (!dstkey) {
         addReplyMultiBulkLen(c,cardinality);
-        si = setTypeInitIterator(dstset);
-        while((ele = setTypeNextObject(si)) != NULL) {
+        setTypeIterator* si = setTypeInitIterator(dstset);
+        while((ele = si->setTypeNextObject()) != NULL) {
             addReplyBulkCBuffer(c,ele,sdslen(ele));
             sdsfree(ele);
         }
