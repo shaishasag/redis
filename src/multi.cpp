@@ -142,7 +142,7 @@ void execCommand(client *c) {
     orig_argv = c->m_argv;
     orig_argc = c->m_argc;
     orig_cmd = c->m_cmd;
-    addReplyMultiBulkLen(c,c->m_multi_exec_state.m_count);
+    c->addReplyMultiBulkLen(c->m_multi_exec_state.m_count);
     for (j = 0; j < c->m_multi_exec_state.m_count; j++) {
         c->m_argc = c->m_multi_exec_state.m_commands[j].argc;
         c->m_argv = c->m_multi_exec_state.m_commands[j].argv;

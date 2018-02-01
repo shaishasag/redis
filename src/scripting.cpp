@@ -279,13 +279,13 @@ void luaReplyToRedisReply(client *c, lua_State *lua) {
 
     switch(t) {
     case LUA_TSTRING:
-        addReplyBulkCBuffer(c,(char*)lua_tostring(lua,-1),lua_strlen(lua,-1));
+        c->addReplyBulkCBuffer((char*)lua_tostring(lua,-1),lua_strlen(lua,-1));
         break;
     case LUA_TBOOLEAN:
         c->addReply(lua_toboolean(lua,-1) ? shared.cone : shared.nullbulk);
         break;
     case LUA_TNUMBER:
-        addReplyLongLong(c,(long long)lua_tonumber(lua,-1));
+        c->addReplyLongLong((long long)lua_tonumber(lua,-1));
         break;
     case LUA_TTABLE:
         /* We need to check if it is an array, an error, or a status reply.
@@ -330,7 +330,7 @@ void luaReplyToRedisReply(client *c, lua_State *lua) {
                 luaReplyToRedisReply(c, lua);
                 mbulklen++;
             }
-            setDeferredMultiBulkLength(c,replylen,mbulklen);
+            c->setDeferredMultiBulkLength(replylen,mbulklen);
         }
         break;
     default:
@@ -1476,7 +1476,7 @@ void scriptCommand(client *c) {
     } else if (c->m_argc >= 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"exists")) {
         int j;
 
-        addReplyMultiBulkLen(c, c->m_argc-2);
+        c->addReplyMultiBulkLen( c->m_argc-2);
         for (j = 2; j < c->m_argc; j++) {
             if (server.lua_scripts->dictFind(c->m_argv[j]->ptr))
                 c->addReply(shared.cone);
@@ -1486,7 +1486,7 @@ void scriptCommand(client *c) {
     } else if (c->m_argc == 3 && !strcasecmp((const char*)c->m_argv[1]->ptr,"load")) {
         sds sha = luaCreateFunction(c,server.lua,c->m_argv[2]);
         if (sha == NULL) return; /* The error was sent by luaCreateFunction(). */
-        addReplyBulkCBuffer(c,sha,40);
+        c->addReplyBulkCBuffer(sha,40);
         forceCommandPropagation(c,PROPAGATE_REPL|PROPAGATE_AOF);
     } else if (c->m_argc == 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"kill")) {
         if (server.lua_caller == NULL) {

@@ -1401,7 +1401,7 @@ void configGetCommand(client *c) {
             keyspaceEventsFlagsToString(server.notify_keyspace_events));
 
         addReplyBulkCString(c,"notify-keyspace-events");
-        addReplyBulk(c,flagsobj);
+        c->addReplyBulk(flagsobj);
         decrRefCount(flagsobj);
         matches++;
     }
@@ -1413,7 +1413,7 @@ void configGetCommand(client *c) {
         sdsfree(aux);
         matches++;
     }
-    setDeferredMultiBulkLength(c,replylen,matches*2);
+    c->setDeferredMultiBulkLength(replylen,matches*2);
 }
 
 /*-----------------------------------------------------------------------------

@@ -2659,21 +2659,21 @@ void pingCommand(client *c) {
 
     if (c->m_flags & CLIENT_PUBSUB) {
         c->addReply(shared.mbulkhdr[2]);
-        addReplyBulkCBuffer(c,"pong",4);
+        c->addReplyBulkCBuffer("pong",4);
         if (c->m_argc == 1)
-            addReplyBulkCBuffer(c,"",0);
+            c->addReplyBulkCBuffer("",0);
         else
-            addReplyBulk(c,c->m_argv[1]);
+            c->addReplyBulk(c->m_argv[1]);
     } else {
         if (c->m_argc == 1)
             c->addReply(shared.pong);
         else
-            addReplyBulk(c,c->m_argv[1]);
+            c->addReplyBulk(c->m_argv[1]);
     }
 }
 
 void echoCommand(client *c) {
-    addReplyBulk(c,c->m_argv[1]);
+    c->addReplyBulk(c->m_argv[1]);
 }
 
 void timeCommand(client *c) {
@@ -2682,7 +2682,7 @@ void timeCommand(client *c) {
     /* gettimeofday() can only fail if &tv is a bad address so we
      * don't check for errors. */
     gettimeofday(&tv,NULL);
-    addReplyMultiBulkLen(c,2);
+    c->addReplyMultiBulkLen(2);
     addReplyBulkLongLong(c,tv.tv_sec);
     addReplyBulkLongLong(c,tv.tv_usec);
 }
@@ -2702,9 +2702,9 @@ void addReplyCommand(client *c, struct redisCommand *cmd) {
         c->addReply( shared.nullbulk);
     } else {
         /* We are adding: command name, arg count, flags, first, last, offset */
-        addReplyMultiBulkLen(c, 6);
+        c->addReplyMultiBulkLen( 6);
         addReplyBulkCString(c, cmd->name);
-        addReplyLongLong(c, cmd->arity);
+        c->addReplyLongLong( cmd->arity);
 
         int flagcount = 0;
         void *flaglen = c->addDeferredMultiBulkLength();
@@ -2727,11 +2727,11 @@ void addReplyCommand(client *c, struct redisCommand *cmd) {
             c->addReplyStatus( "movablekeys");
             flagcount += 1;
         }
-        setDeferredMultiBulkLength(c, flaglen, flagcount);
+        c->setDeferredMultiBulkLength( flaglen, flagcount);
 
-        addReplyLongLong(c, cmd->firstkey);
-        addReplyLongLong(c, cmd->lastkey);
-        addReplyLongLong(c, cmd->keystep);
+        c->addReplyLongLong( cmd->firstkey);
+        c->addReplyLongLong( cmd->lastkey);
+        c->addReplyLongLong( cmd->keystep);
     }
 }
 
@@ -2740,19 +2740,19 @@ void commandCommand(client *c) {
     dictEntry *de;
 
     if (c->m_argc == 1) {
-        addReplyMultiBulkLen(c, server.commands->dictSize());
+        c->addReplyMultiBulkLen( server.commands->dictSize());
         dictIterator di(server.commands);
         while ((de = di.dictNext()) != NULL) {
             addReplyCommand(c, (struct redisCommand *)de->dictGetVal());
         }
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr, "info")) {
         int i;
-        addReplyMultiBulkLen(c, c->m_argc-2);
+        c->addReplyMultiBulkLen( c->m_argc-2);
         for (i = 2; i < c->m_argc; i++) {
             addReplyCommand(c, (struct redisCommand *)server.commands->dictFetchValue(c->m_argv[i]->ptr));
         }
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr, "count") && c->m_argc == 2) {
-        addReplyLongLong(c, server.commands->dictSize());
+        c->addReplyLongLong( server.commands->dictSize());
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"getkeys") && c->m_argc >= 3) {
         struct redisCommand *cmd = lookupCommand((sds)c->m_argv[2]->ptr);
         int *keys, numkeys, j;
@@ -2768,8 +2768,8 @@ void commandCommand(client *c) {
         }
 
         keys = getKeysFromCommand(cmd,c->m_argv+2,c->m_argc-2,&numkeys);
-        addReplyMultiBulkLen(c,numkeys);
-        for (j = 0; j < numkeys; j++) addReplyBulk(c,c->m_argv[keys[j]+2]);
+        c->addReplyMultiBulkLen(numkeys);
+        for (j = 0; j < numkeys; j++) c->addReplyBulk(c->m_argv[keys[j]+2]);
         getKeysFreeResult(keys);
     } else {
         c->addReplyError( "Unknown subcommand or wrong number of arguments.");

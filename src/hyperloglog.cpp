@@ -1226,7 +1226,7 @@ void pfcountCommand(client *c) {
         }
 
         /* Compute cardinality of the resulting set. */
-        addReplyLongLong(c,hllCount(hdr,NULL));
+        c->addReplyLongLong(hllCount(hdr,NULL));
         return;
     }
 
@@ -1278,7 +1278,7 @@ void pfcountCommand(client *c) {
             signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
             server.dirty++;
         }
-        addReplyLongLong(c,card);
+        c->addReplyLongLong(card);
     }
 }
 
@@ -1481,12 +1481,12 @@ void pfdebugCommand(client *c) {
         }
 
         hdr = (hllhdr*)o->ptr;
-        addReplyMultiBulkLen(c,HLL_REGISTERS);
+        c->addReplyMultiBulkLen(HLL_REGISTERS);
         for (j = 0; j < HLL_REGISTERS; j++) {
             uint8_t val;
 
             HLL_DENSE_GET_REGISTER(val,hdr->registers,j);
-            addReplyLongLong(c,val);
+            c->addReplyLongLong(val);
         }
     }
     /* PFDEBUG DECODE <key> */
@@ -1522,7 +1522,7 @@ void pfdebugCommand(client *c) {
             }
         }
         decoded = sdstrim(decoded," ");
-        addReplyBulkCBuffer(c,decoded,sdslen(decoded));
+        c->addReplyBulkCBuffer(decoded,sdslen(decoded));
         sdsfree(decoded);
     }
     /* PFDEBUG ENCODING <key> */

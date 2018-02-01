@@ -227,7 +227,7 @@ void pushGenericCommand(client *c, int where) {
         listTypePush(lobj,c->m_argv[j],where);
         pushed++;
     }
-    addReplyLongLong(c, (lobj ? listTypeLength(lobj) : 0));
+    c->addReplyLongLong( (lobj ? listTypeLength(lobj) : 0));
     if (pushed) {
         const char *event = (where == LIST_HEAD) ? "lpush" : "rpush";
 
@@ -257,7 +257,7 @@ void pushxGenericCommand(client *c, int where) {
         pushed++;
     }
 
-    addReplyLongLong(c,listTypeLength(subject));
+    c->addReplyLongLong(listTypeLength(subject));
 
     if (pushed) {
         const char *event = (where == LIST_HEAD) ? "lpush" : "rpush";
@@ -314,13 +314,13 @@ void linsertCommand(client *c) {
         return;
     }
 
-    addReplyLongLong(c,listTypeLength(subject));
+    c->addReplyLongLong(listTypeLength(subject));
 }
 
 void llenCommand(client *c) {
     robj *o = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero);
     if (o == NULL || checkType(c,o,OBJ_LIST)) return;
-    addReplyLongLong(c,listTypeLength(o));
+    c->addReplyLongLong(listTypeLength(o));
 }
 
 void lindexCommand(client *c) {
@@ -340,7 +340,7 @@ void lindexCommand(client *c) {
             } else {
                 value = createStringObjectFromLongLong(entry.m_longval);
             }
-            addReplyBulk(c,value);
+            c->addReplyBulk(value);
             decrRefCount(value);
         } else {
             c->addReply(shared.nullbulk);
@@ -386,7 +386,7 @@ void popGenericCommand(client *c, int where) {
     } else {
         const char *event = (where == LIST_HEAD) ? "lpop" : "rpop";
 
-        addReplyBulk(c,value);
+        c->addReplyBulk(value);
         decrRefCount(value);
         notifyKeyspaceEvent(NOTIFY_LIST,event,c->m_argv[1],c->m_cur_selected_db->m_id);
         if (listTypeLength(o) == 0) {
@@ -433,7 +433,7 @@ void lrangeCommand(client *c) {
     rangelen = (end-start)+1;
 
     /* Return the result in form of a multi-bulk reply */
-    addReplyMultiBulkLen(c,rangelen);
+    c->addReplyMultiBulkLen(rangelen);
     if (o->encoding == OBJ_ENCODING_QUICKLIST)
     {
         listTypeIterator iter(o, start, LIST_TAIL);
@@ -444,7 +444,7 @@ void lrangeCommand(client *c) {
             iter.listTypeNext(&entry);
             quicklistEntry *qe = &entry.m_ql_entry;
             if (qe->m_value) {
-                addReplyBulkCBuffer(c,qe->m_value,qe->m_size);
+                c->addReplyBulkCBuffer(qe->m_value,qe->m_size);
             } else {
                 addReplyBulkLongLong(c,qe->m_longval);
             }
@@ -546,7 +546,7 @@ void lremCommand(client *c) {
         notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->m_argv[1],c->m_cur_selected_db->m_id);
     }
 
-    addReplyLongLong(c,removed);
+    c->addReplyLongLong(removed);
 }
 
 /* This is the semantic of this command:
@@ -577,7 +577,7 @@ void rpoplpushHandlePush(client *c, robj *dstkey, robj *dstobj, robj *value) {
     listTypePush(dstobj,value,LIST_HEAD);
     notifyKeyspaceEvent(NOTIFY_LIST,"lpush",dstkey,c->m_cur_selected_db->m_id);
     /* Always send the pushed value to the client. */
-    addReplyBulk(c,value);
+    c->addReplyBulk(value);
 }
 
 void rpoplpushCommand(client *c) {
@@ -766,9 +766,9 @@ int serveClientBlockedOnList(client *receiver, robj *key, robj *dstkey, redisDb 
             db->m_id,argv,2,PROPAGATE_AOF|PROPAGATE_REPL);
 
         /* BRPOP/BLPOP */
-        addReplyMultiBulkLen(receiver,2);
-        addReplyBulk(receiver,key);
-        addReplyBulk(receiver,value);
+        receiver->addReplyMultiBulkLen(2);
+        receiver->addReplyBulk(key);
+        receiver->addReplyBulk(value);
     } else {
         /* BRPOPLPUSH */
         robj *dstobj =
@@ -914,9 +914,9 @@ void blockingPopGenericCommand(client *c, int where) {
                     robj *value = listTypePop(o,where);
                     serverAssert(value != NULL);
 
-                    addReplyMultiBulkLen(c,2);
-                    addReplyBulk(c,c->m_argv[j]);
-                    addReplyBulk(c,value);
+                    c->addReplyMultiBulkLen(2);
+                    c->addReplyBulk(c->m_argv[j]);
+                    c->addReplyBulk(value);
                     decrRefCount(value);
                     notifyKeyspaceEvent(NOTIFY_LIST,(char *)event,
                                         c->m_argv[j],c->m_cur_selected_db->m_id);

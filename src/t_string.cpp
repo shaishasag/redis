@@ -164,7 +164,7 @@ int getGenericCommand(client *c) {
         c->addReply(shared.wrongtypeerr);
         return C_ERR;
     } else {
-        addReplyBulk(c,o);
+        c->addReplyBulk(o);
         return C_OK;
     }
 }
@@ -218,7 +218,7 @@ void setrangeCommand(client *c) {
         /* Return existing string length when setting nothing */
         olen = stringObjectLen(o);
         if (sdslen(value) == 0) {
-            addReplyLongLong(c,olen);
+            c->addReplyLongLong(olen);
             return;
         }
 
@@ -238,7 +238,7 @@ void setrangeCommand(client *c) {
             "setrange",c->m_argv[1],c->m_cur_selected_db->m_id);
         server.dirty++;
     }
-    addReplyLongLong(c,sdslen((sds)o->ptr));
+    c->addReplyLongLong(sdslen((sds)o->ptr));
 }
 
 void getrangeCommand(client *c) {
@@ -278,14 +278,14 @@ void getrangeCommand(client *c) {
     if (start > end || strlen == 0) {
         c->addReply(shared.emptybulk);
     } else {
-        addReplyBulkCBuffer(c,(char*)str+start,end-start+1);
+        c->addReplyBulkCBuffer((char*)str+start,end-start+1);
     }
 }
 
 void mgetCommand(client *c) {
     int j;
 
-    addReplyMultiBulkLen(c,c->m_argc-1);
+    c->addReplyMultiBulkLen(c->m_argc-1);
     for (j = 1; j < c->m_argc; j++) {
         robj *o = lookupKeyRead(c->m_cur_selected_db,c->m_argv[j]);
         if (o == NULL) {
@@ -294,7 +294,7 @@ void mgetCommand(client *c) {
             if (o->type != OBJ_STRING) {
                 c->addReply(shared.nullbulk);
             } else {
-                addReplyBulk(c,o);
+                c->addReplyBulk(o);
             }
         }
     }
@@ -421,7 +421,7 @@ void incrbyfloatCommand(client *c) {
     signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
     notifyKeyspaceEvent(NOTIFY_STRING,"incrbyfloat",c->m_argv[1],c->m_cur_selected_db->m_id);
     server.dirty++;
-    addReplyBulk(c,_new);
+    c->addReplyBulk(_new);
 
     /* Always replicate INCRBYFLOAT as a SET command with the final value
      * in order to make sure that differences in float precision or formatting
@@ -462,12 +462,12 @@ void appendCommand(client *c) {
     signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
     notifyKeyspaceEvent(NOTIFY_STRING,"append",c->m_argv[1],c->m_cur_selected_db->m_id);
     server.dirty++;
-    addReplyLongLong(c,totlen);
+    c->addReplyLongLong(totlen);
 }
 
 void strlenCommand(client *c) {
     robj *o;
     if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,o,OBJ_STRING)) return;
-    addReplyLongLong(c,stringObjectLen(o));
+    c->addReplyLongLong(stringObjectLen(o));
 }

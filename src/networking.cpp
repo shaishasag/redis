@@ -436,59 +436,60 @@ void* client::addDeferredMultiBulkLength() {
 }
 
 /* Populate the length object and try gluing it to the next chunk. */
-void setDeferredMultiBulkLength(client *c, void *node, long length) {
+void client::setDeferredMultiBulkLength(void *node, long length) {
     listNode *ln = (listNode*)node;
     sds len, next;
 
     /* Abort when *node is NULL: when the client should not accept writes
      * we return NULL in addDeferredMultiBulkLength() */
-    if (node == NULL) return;
+    if (node == NULL)
+        return;
 
     len = sdscatprintf(sdsnewlen("*",1),"%ld\r\n",length);
     ln->SetNodeValue(len);
-    c->m_reply_bytes += sdslen(len);
+    m_reply_bytes += sdslen(len);
     if (ln->listNextNode() != NULL) {
         next = (sds)ln->listNextNode()->listNodeValue();
 
         /* Only glue when the next node is non-NULL (an sds in this case) */
         if (next != NULL) {
             len = sdscatsds(len,next);
-            c->m_reply->listDelNode(ln->listNextNode());
+            m_reply->listDelNode(ln->listNextNode());
             ln->SetNodeValue(len);
-            /* No need to update c->reply_bytes: we are just moving the same
+            /* No need to update reply_bytes: we are just moving the same
              * amount of bytes from one node to another. */
         }
     }
-    asyncCloseClientOnOutputBufferLimitReached(c);
+    asyncCloseClientOnOutputBufferLimitReached(this);
 }
 
 /* Add a double as a bulk reply */
-void addReplyDouble(client *c, double d) {
+void client::addReplyDouble(double d) {
     char dbuf[128], sbuf[128];
     int dlen, slen;
     if (isinf(d)) {
         /* Libc in odd systems (Hi Solaris!) will format infinite in a
          * different way, so better to handle it in an explicit way. */
-        addReplyBulkCString(c, d > 0 ? "inf" : "-inf");
+        addReplyBulkCString(this, d > 0 ? "inf" : "-inf");
     } else {
         dlen = snprintf(dbuf,sizeof(dbuf),"%.17g",d);
         slen = snprintf(sbuf,sizeof(sbuf),"$%d\r\n%s\r\n",dlen,dbuf);
-        c->addReplyString(sbuf,slen);
+        addReplyString(sbuf,slen);
     }
 }
 
 /* Add a long double as a bulk reply, but uses a human readable formatting
  * of the double instead of exposing the crude behavior of doubles to the
  * dear user. */
-void addReplyHumanLongDouble(client *c, long double d) {
+void client::addReplyHumanLongDouble(long double d) {
     robj *o = createStringObjectFromLongDouble(d,1);
-    addReplyBulk(c,o);
+    addReplyBulk(o);
     decrRefCount(o);
 }
 
 /* Add a long long as integer reply or bulk len / multi bulk count.
  * Basically this is used to output <prefix><long long><crlf>. */
-void addReplyLongLongWithPrefix(client *c, long long ll, char prefix) {
+void client::addReplyLongLongWithPrefix(long long ll, char prefix) {
     char buf[128];
     int len;
 
@@ -496,10 +497,10 @@ void addReplyLongLongWithPrefix(client *c, long long ll, char prefix) {
      * so we have a few shared objects to use if the integer is small
      * like it is most of the times. */
     if (prefix == '*' && ll < OBJ_SHARED_BULKHDR_LEN && ll >= 0) {
-        c->addReply(shared.mbulkhdr[ll]);
+        addReply(shared.mbulkhdr[ll]);
         return;
     } else if (prefix == '$' && ll < OBJ_SHARED_BULKHDR_LEN && ll >= 0) {
-        c->addReply(shared.bulkhdr[ll]);
+        addReply(shared.bulkhdr[ll]);
         return;
     }
 
@@ -507,27 +508,27 @@ void addReplyLongLongWithPrefix(client *c, long long ll, char prefix) {
     len = ll2string(buf+1,sizeof(buf)-1,ll);
     buf[len+1] = '\r';
     buf[len+2] = '\n';
-    c->addReplyString(buf,len+3);
+    addReplyString(buf,len+3);
 }
 
-void addReplyLongLong(client *c, long long ll) {
+void client::addReplyLongLong(long long ll) {
     if (ll == 0)
-        c->addReply(shared.czero);
+        addReply(shared.czero);
     else if (ll == 1)
-        c->addReply(shared.cone);
+        addReply(shared.cone);
     else
-        addReplyLongLongWithPrefix(c,ll,':');
+        addReplyLongLongWithPrefix(ll,':');
 }
 
-void addReplyMultiBulkLen(client *c, long length) {
+void client::addReplyMultiBulkLen(long length) {
     if (length < OBJ_SHARED_BULKHDR_LEN)
-        c->addReply(shared.mbulkhdr[length]);
+        addReply(shared.mbulkhdr[length]);
     else
-        addReplyLongLongWithPrefix(c,length,'*');
+        addReplyLongLongWithPrefix(length,'*');
 }
 
 /* Create the length prefix of a bulk reply, example: $2234 */
-void addReplyBulkLen(client *c, robj *obj) {
+void client::addReplyBulkLen(robj *obj) {
     size_t len;
 
     if (sdsEncodedObject(obj)) {
@@ -547,28 +548,28 @@ void addReplyBulkLen(client *c, robj *obj) {
     }
 
     if (len < OBJ_SHARED_BULKHDR_LEN)
-        c->addReply(shared.bulkhdr[len]);
+        addReply(shared.bulkhdr[len]);
     else
-        addReplyLongLongWithPrefix(c,len,'$');
+        addReplyLongLongWithPrefix(len,'$');
 }
 
 /* Add a Redis Object as a bulk reply */
-void addReplyBulk(client *c, robj *obj) {
-    addReplyBulkLen(c,obj);
-    c->addReply(obj);
-    c->addReply(shared.crlf);
+void client::addReplyBulk(robj *obj) {
+    addReplyBulkLen(obj);
+    addReply(obj);
+    addReply(shared.crlf);
 }
 
 /* Add a C buffer as bulk reply */
-void addReplyBulkCBuffer(client *c, const void *p, size_t len) {
-    addReplyLongLongWithPrefix(c,len,'$');
-    c->addReplyString((const char *)p,len);
-    c->addReply(shared.crlf);
+void client::addReplyBulkCBuffer(const void *p, size_t len) {
+    addReplyLongLongWithPrefix(len,'$');
+    addReplyString((const char *)p,len);
+    addReply(shared.crlf);
 }
 
 /* Add sds to reply (takes ownership of sds and frees it) */
 void addReplyBulkSds(client *c, sds s)  {
-    addReplyLongLongWithPrefix(c,sdslen(s),'$');
+    c->addReplyLongLongWithPrefix(sdslen(s),'$');
     c->addReplySds(s);
     c->addReply(shared.crlf);
 }
@@ -578,7 +579,7 @@ void addReplyBulkCString(client *c, const char *s) {
     if (s == NULL) {
         c->addReply(shared.nullbulk);
     } else {
-        addReplyBulkCBuffer(c,s,strlen(s));
+        c->addReplyBulkCBuffer(s,strlen(s));
     }
 }
 
@@ -588,7 +589,7 @@ void addReplyBulkLongLong(client *c, long long ll) {
     int len;
 
     len = ll2string(buf,64,ll);
-    addReplyBulkCBuffer(c,buf,len);
+    c->addReplyBulkCBuffer(buf,len);
 }
 
 /* Copy 'src' client output buffers into 'dst' client output buffers.
@@ -1561,7 +1562,7 @@ void clientCommand(client *c) {
     if (!strcasecmp((const char*)c->m_argv[1]->ptr,"list") && c->m_argc == 2) {
         /* CLIENT LIST */
         sds o = getAllClientsInfoString();
-        addReplyBulkCBuffer(c,o,sdslen(o));
+        c->addReplyBulkCBuffer(o,sdslen(o));
         sdsfree(o);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"reply") && c->m_argc == 3) {
         /* CLIENT REPLY ON|OFF|SKIP */
@@ -1657,7 +1658,7 @@ void clientCommand(client *c) {
             else
                 c->addReply(shared.ok);
         } else {
-            addReplyLongLong(c,killed);
+            c->addReplyLongLong(killed);
         }
 
         /* If this client has to be closed, flag it as CLOSE_AFTER_REPLY
@@ -1694,7 +1695,7 @@ void clientCommand(client *c) {
         c->addReply(shared.ok);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"getname") && c->m_argc == 2) {
         if (c->m_client_name)
-            addReplyBulk(c,c->m_client_name);
+            c->addReplyBulk(c->m_client_name);
         else
             c->addReply(shared.nullbulk);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"pause") && c->m_argc == 3) {

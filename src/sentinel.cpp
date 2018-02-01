@@ -856,17 +856,17 @@ void sentinelKillTimedoutScripts() {
 void sentinelPendingScriptsCommand(client *c) {
     listNode *ln;
 
-    addReplyMultiBulkLen(c,sentinel.scripts_queue->listLength());
+    c->addReplyMultiBulkLen(sentinel.scripts_queue->listLength());
     listIter li(sentinel.scripts_queue);
     while ((ln = li.listNext()) != NULL) {
         sentinelScriptJob *sj = (sentinelScriptJob *)ln->listNodeValue();
         int j = 0;
 
-        addReplyMultiBulkLen(c,10);
+        c->addReplyMultiBulkLen(10);
 
         addReplyBulkCString(c,"argv");
         while (sj->argv[j]) j++;
-        addReplyMultiBulkLen(c,j);
+        c->addReplyMultiBulkLen(j);
         j = 0;
         while (sj->argv[j]) addReplyBulkCString(c,sj->argv[j++]);
 
@@ -2800,7 +2800,7 @@ void addReplySentinelRedisInstance(client *c, sentinelRedisInstance *ri) {
         fields++;
     }
 
-    setDeferredMultiBulkLength(c,mbl,fields*2);
+    c->setDeferredMultiBulkLength(mbl,fields*2);
 }
 
 /* Output a number of instances contained inside a dictionary as
@@ -2809,7 +2809,7 @@ void addReplyDictOfRedisInstances(client *c, dict *instances) {
     dictEntry *de;
 
     dictIterator di(instances);
-    addReplyMultiBulkLen(c,instances->dictSize());
+    c->addReplyMultiBulkLen(instances->dictSize());
     while((de = di.dictNext()) != NULL) {
         sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
 
@@ -2934,15 +2934,15 @@ void sentinelCommand(client *c) {
 
         /* Reply with a three-elements multi-bulk reply:
          * down state, leader, vote epoch. */
-        addReplyMultiBulkLen(c,3);
+        c->addReplyMultiBulkLen(3);
         c->addReply( isdown ? shared.cone : shared.czero);
         addReplyBulkCString(c, leader ? leader : "*");
-        addReplyLongLong(c, (long long)leader_epoch);
+        c->addReplyLongLong( (long long)leader_epoch);
         if (leader) sdsfree(leader);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"reset")) {
         /* SENTINEL RESET <pattern> */
         if (c->m_argc != 3) goto numargserr;
-        addReplyLongLong(c,sentinelResetMastersByPattern((char*)c->m_argv[2]->ptr,SENTINEL_GENERATE_EVENT));
+        c->addReplyLongLong(sentinelResetMastersByPattern((char*)c->m_argv[2]->ptr,SENTINEL_GENERATE_EVENT));
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"get-master-addr-by-name")) {
         /* SENTINEL GET-MASTER-ADDR-BY-NAME <master-name> */
         sentinelRedisInstance *ri;
@@ -2954,7 +2954,7 @@ void sentinelCommand(client *c) {
         } else {
             sentinelAddr *addr = sentinelGetCurrentMasterAddress(ri);
 
-            addReplyMultiBulkLen(c,2);
+            c->addReplyMultiBulkLen(2);
             addReplyBulkCString(c,addr->ip);
             addReplyBulkLongLong(c,addr->port);
         }
@@ -3104,18 +3104,18 @@ void sentinelCommand(client *c) {
          *   3.) other master name
          *   ...
          */
-        addReplyMultiBulkLen(c,masters_local->dictSize() * 2);
+        c->addReplyMultiBulkLen(masters_local->dictSize() * 2);
 
         dictEntry *de;
         dictIterator di(masters_local);
         while ((de = di.dictNext()) != NULL) {
             sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
-            addReplyBulkCBuffer(c,ri->name,strlen(ri->name));
-            addReplyMultiBulkLen(c,ri->slaves->dictSize() + 1); /* +1 for self */
-            addReplyMultiBulkLen(c,2);
-            addReplyLongLong(c, now - ri->info_refresh);
+            c->addReplyBulkCBuffer(ri->name,strlen(ri->name));
+            c->addReplyMultiBulkLen(ri->slaves->dictSize() + 1); /* +1 for self */
+            c->addReplyMultiBulkLen(2);
+            c->addReplyLongLong( now - ri->info_refresh);
             if (ri->info)
-                addReplyBulkCBuffer(c,ri->info,sdslen(ri->info));
+                c->addReplyBulkCBuffer(ri->info,sdslen(ri->info));
             else
                 c->addReply(shared.nullbulk);
 
@@ -3123,10 +3123,10 @@ void sentinelCommand(client *c) {
             dictIterator sdi(ri->slaves);
             while ((sde = sdi.dictNext()) != NULL) {
                 sentinelRedisInstance* sri = (sentinelRedisInstance*)sde->dictGetVal();
-                addReplyMultiBulkLen(c,2);
-                addReplyLongLong(c, now - sri->info_refresh);
+                c->addReplyMultiBulkLen(2);
+                c->addReplyLongLong( now - sri->info_refresh);
                 if (sri->info)
-                    addReplyBulkCBuffer(c,sri->info,sdslen(sri->info));
+                    c->addReplyBulkCBuffer(sri->info,sdslen(sri->info));
                 else
                     c->addReply(shared.nullbulk);
             }
@@ -3151,7 +3151,7 @@ void sentinelCommand(client *c) {
                 serverLog(LL_WARNING,"Failure simulation: this Sentinel "
                     "will crash after promoting the selected slave to master");
             } else if (!strcasecmp((const char*)c->m_argv[j]->ptr,"help")) {
-                addReplyMultiBulkLen(c,2);
+                c->addReplyMultiBulkLen(2);
                 addReplyBulkCString(c,"crash-after-election");
                 addReplyBulkCString(c,"crash-after-promotion");
             } else {
@@ -3248,9 +3248,9 @@ void sentinelInfoCommand(client *c) {
 void sentinelRoleCommand(client *c) {
     dictEntry *de;
 
-    addReplyMultiBulkLen(c,2);
-    addReplyBulkCBuffer(c,"sentinel",8);
-    addReplyMultiBulkLen(c,sentinel.masters->dictSize());
+    c->addReplyMultiBulkLen(2);
+    c->addReplyBulkCBuffer("sentinel",8);
+    c->addReplyMultiBulkLen(sentinel.masters->dictSize());
 
     dictIterator di(sentinel.masters);
     while((de = di.dictNext()) != NULL) {
@@ -3360,7 +3360,7 @@ void sentinelPublishCommand(client *c) {
         return;
     }
     sentinelProcessHelloMessage((char*)c->m_argv[2]->ptr,sdslen((sds)c->m_argv[2]->ptr));
-    addReplyLongLong(c,1);
+    c->addReplyLongLong(1);
 }
 
 /* ===================== SENTINEL availability checks ======================= */

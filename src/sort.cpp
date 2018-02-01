@@ -502,11 +502,11 @@ void sortCommand(client *c) {
         c->addReplyError("One or more scores can't be converted into double");
     } else if (storekey == NULL) {
         /* STORE option not specified, sent the sorting result to client */
-        addReplyMultiBulkLen(c,outputlen);
+        c->addReplyMultiBulkLen(outputlen);
         for (j = start; j <= end; j++) {
             listNode *ln;
 
-            if (!getop) addReplyBulk(c,vector[j].obj);
+            if (!getop) c->addReplyBulk(vector[j].obj);
             listIter li(operations);
             while((ln = li.listNext())) {
                 redisSortOperation *sop = (redisSortOperation *)ln->listNodeValue();
@@ -517,7 +517,7 @@ void sortCommand(client *c) {
                     if (!val) {
                         c->addReply(shared.nullbulk);
                     } else {
-                        addReplyBulk(c,val);
+                        c->addReplyBulk(val);
                         decrRefCount(val);
                     }
                 } else {
@@ -568,7 +568,7 @@ void sortCommand(client *c) {
             server.dirty++;
         }
         decrRefCount(sobj);
-        addReplyLongLong(c,outputlen);
+        c->addReplyLongLong(outputlen);
     }
 
     /* Cleanup */

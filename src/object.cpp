@@ -1025,11 +1025,11 @@ void objectCommand(client *c) {
         "idletime -- Return the idle time of the key, that is the approximated number of seconds elapsed since the last access to the key.");
         blen++; c->addReplyStatus(
         "freq -- Return the access frequency index of the key. The returned integer is proportional to the logarithm of the recent access frequency of the key.");
-        setDeferredMultiBulkLength(c,blenp,blen);
+        c->setDeferredMultiBulkLength(blenp,blen);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"refcount") && c->m_argc == 3) {
         if ((o = objectCommandLookupOrReply(c,c->m_argv[2],shared.nullbulk))
                 == NULL) return;
-        addReplyLongLong(c,o->refcount);
+        c->addReplyLongLong(o->refcount);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"encoding") && c->m_argc == 3) {
         if ((o = objectCommandLookupOrReply(c,c->m_argv[2],shared.nullbulk))
                 == NULL) return;
@@ -1041,7 +1041,7 @@ void objectCommand(client *c) {
             c->addReplyError("An LFU maxmemory policy is selected, idle time not tracked. Please note that when switching between policies at runtime LRU and LFU data will take some time to adjust.");
             return;
         }
-        addReplyLongLong(c,estimateObjectIdleTime(o)/1000);
+        c->addReplyLongLong(estimateObjectIdleTime(o)/1000);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"freq") && c->m_argc == 3) {
         if ((o = objectCommandLookupOrReply(c,c->m_argv[2],shared.nullbulk))
                 == NULL) return;
@@ -1053,7 +1053,7 @@ void objectCommand(client *c) {
          * in case of the key has not been accessed for a long time,
          * because we update the access time only
          * when the key is read or overwritten. */
-        addReplyLongLong(c,LFUDecrAndReturn(o));
+        c->addReplyLongLong(LFUDecrAndReturn(o));
     } else {
         c->addReplyErrorFormat( "Unknown subcommand or wrong number of arguments for '%s'. Try OBJECT help",
             (char *)c->m_argv[1]->ptr);
@@ -1091,66 +1091,66 @@ void memoryCommand(client *c) {
         size_t usage = objectComputeSize(o,samples);
         usage += sdsAllocSize((sds)c->m_argv[2]->ptr);
         usage += sizeof(dictEntry);
-        addReplyLongLong(c,usage);
+        c->addReplyLongLong(usage);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"stats") && c->m_argc == 2) {
         struct redisMemOverhead *mh = getMemoryOverheadData();
 
-        addReplyMultiBulkLen(c,(14+mh->num_dbs)*2);
+        c->addReplyMultiBulkLen((14+mh->num_dbs)*2);
 
         addReplyBulkCString(c,"peak.allocated");
-        addReplyLongLong(c,mh->peak_allocated);
+        c->addReplyLongLong(mh->peak_allocated);
 
         addReplyBulkCString(c,"total.allocated");
-        addReplyLongLong(c,mh->total_allocated);
+        c->addReplyLongLong(mh->total_allocated);
 
         addReplyBulkCString(c,"startup.allocated");
-        addReplyLongLong(c,mh->startup_allocated);
+        c->addReplyLongLong(mh->startup_allocated);
 
         addReplyBulkCString(c,"replication.backlog");
-        addReplyLongLong(c,mh->repl_backlog);
+        c->addReplyLongLong(mh->repl_backlog);
 
         addReplyBulkCString(c,"clients.slaves");
-        addReplyLongLong(c,mh->clients_slaves);
+        c->addReplyLongLong(mh->clients_slaves);
 
         addReplyBulkCString(c,"clients.normal");
-        addReplyLongLong(c,mh->clients_normal);
+        c->addReplyLongLong(mh->clients_normal);
 
         addReplyBulkCString(c,"aof.buffer");
-        addReplyLongLong(c,mh->aof_buffer);
+        c->addReplyLongLong(mh->aof_buffer);
 
         for (size_t j = 0; j < mh->num_dbs; j++) {
             char dbname[32];
             snprintf(dbname,sizeof(dbname),"db.%zd",mh->db[j].dbid);
             addReplyBulkCString(c,dbname);
-            addReplyMultiBulkLen(c,4);
+            c->addReplyMultiBulkLen(4);
 
             addReplyBulkCString(c,"overhead.hashtable.main");
-            addReplyLongLong(c,mh->db[j].overhead_ht_main);
+            c->addReplyLongLong(mh->db[j].overhead_ht_main);
 
             addReplyBulkCString(c,"overhead.hashtable.expires");
-            addReplyLongLong(c,mh->db[j].overhead_ht_expires);
+            c->addReplyLongLong(mh->db[j].overhead_ht_expires);
         }
 
         addReplyBulkCString(c,"overhead.total");
-        addReplyLongLong(c,mh->overhead_total);
+        c->addReplyLongLong(mh->overhead_total);
 
         addReplyBulkCString(c,"keys.count");
-        addReplyLongLong(c,mh->total_keys);
+        c->addReplyLongLong(mh->total_keys);
 
         addReplyBulkCString(c,"keys.bytes-per-key");
-        addReplyLongLong(c,mh->bytes_per_key);
+        c->addReplyLongLong(mh->bytes_per_key);
 
         addReplyBulkCString(c,"dataset.bytes");
-        addReplyLongLong(c,mh->dataset);
+        c->addReplyLongLong(mh->dataset);
 
         addReplyBulkCString(c,"dataset.percentage");
-        addReplyDouble(c,mh->dataset_perc);
+        c->addReplyDouble(mh->dataset_perc);
 
         addReplyBulkCString(c,"peak.percentage");
-        addReplyDouble(c,mh->peak_perc);
+        c->addReplyDouble(mh->peak_perc);
 
         addReplyBulkCString(c,"fragmentation");
-        addReplyDouble(c,mh->fragmentation);
+        c->addReplyDouble(mh->fragmentation);
 
         freeMemoryOverheadData(mh);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"malloc-stats") && c->m_argc == 2) {
@@ -1182,7 +1182,7 @@ void memoryCommand(client *c) {
         /* Nothing to do for other allocators. */
 #endif
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"help") && c->m_argc == 2) {
-        addReplyMultiBulkLen(c,5);
+        c->addReplyMultiBulkLen(5);
         addReplyBulkCString(c,
 "MEMORY DOCTOR                        - Outputs memory problems report");
         addReplyBulkCString(c,

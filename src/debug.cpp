@@ -308,7 +308,7 @@ void debugCommand(client *c) {
         "htstats <dbid> -- Return hash table statistics of the specified Redis database.");
         blen++; c->addReplyStatus(
         "change-repl-id -- Change the replication IDs of the instance. Dangerous, should be used only for testing the replication subsystem.");
-        setDeferredMultiBulkLength(c,blenp,blen);
+        c->setDeferredMultiBulkLength(blenp,blen);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"segfault")) {
         *((char*)-1) = 'x';
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"panic")) {

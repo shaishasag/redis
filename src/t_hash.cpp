@@ -563,7 +563,7 @@ void hsetCommand(client *c) {
     char *cmdname = (char *)c->m_argv[0]->ptr;
     if (cmdname[1] == 's' || cmdname[1] == 'S') {
         /* HSET */
-        addReplyLongLong(c, created);
+        c->addReplyLongLong( created);
     } else {
         /* HMSET */
         c->addReply( shared.ok);
@@ -602,7 +602,7 @@ void hincrbyCommand(client *c) {
     value += incr;
     _new = sdsfromlonglong(value);
     hashTypeSet(o, (sds)c->m_argv[2]->ptr, _new,HASH_SET_TAKE_VALUE);
-    addReplyLongLong(c,value);
+    c->addReplyLongLong(value);
     signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
     notifyKeyspaceEvent(NOTIFY_HASH,"hincrby",c->m_argv[1],c->m_cur_selected_db->m_id);
     server.dirty++;
@@ -639,7 +639,7 @@ void hincrbyfloatCommand(client *c) {
     int len = ld2string(buf,sizeof(buf),value,1);
     _new = sdsnewlen(buf,len);
     hashTypeSet(o, (sds)c->m_argv[2]->ptr,_new,HASH_SET_TAKE_VALUE);
-    addReplyBulkCBuffer(c,buf,len);
+    c->addReplyBulkCBuffer(buf,len);
     signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
     notifyKeyspaceEvent(NOTIFY_HASH,"hincrbyfloat",c->m_argv[1],c->m_cur_selected_db->m_id);
     server.dirty++;
@@ -674,7 +674,7 @@ static void addHashFieldToReply(client *c, robj *o, sds field) {
             c->addReply( shared.nullbulk);
         } else {
             if (vstr) {
-                addReplyBulkCBuffer(c, vstr, vlen);
+                c->addReplyBulkCBuffer( vstr, vlen);
             } else {
                 addReplyBulkLongLong(c, vll);
             }
@@ -685,7 +685,7 @@ static void addHashFieldToReply(client *c, robj *o, sds field) {
         if (value == NULL)
             c->addReply( shared.nullbulk);
         else
-            addReplyBulkCBuffer(c, value, sdslen(value));
+            c->addReplyBulkCBuffer( value, sdslen(value));
     } else {
         serverPanic("Unknown hash encoding");
     }
@@ -712,7 +712,7 @@ void hmgetCommand(client *c) {
         return;
     }
 
-    addReplyMultiBulkLen(c, c->m_argc-2);
+    c->addReplyMultiBulkLen( c->m_argc-2);
     for (i = 2; i < c->m_argc; i++) {
         addHashFieldToReply(c, o, (sds)c->m_argv[i]->ptr);
     }
@@ -743,7 +743,7 @@ void hdelCommand(client *c) {
                                 c->m_cur_selected_db->m_id);
         server.dirty += deleted;
     }
-    addReplyLongLong(c,deleted);
+    c->addReplyLongLong(deleted);
 }
 
 void hlenCommand(client *c) {
@@ -752,7 +752,7 @@ void hlenCommand(client *c) {
     if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,o,OBJ_HASH)) return;
 
-    addReplyLongLong(c,hashTypeLength(o));
+    c->addReplyLongLong(hashTypeLength(o));
 }
 
 void hstrlenCommand(client *c) {
@@ -760,7 +760,7 @@ void hstrlenCommand(client *c) {
 
     if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,o,OBJ_HASH)) return;
-    addReplyLongLong(c,hashTypeGetValueLength(o,(sds)c->m_argv[2]->ptr));
+    c->addReplyLongLong(hashTypeGetValueLength(o,(sds)c->m_argv[2]->ptr));
 }
 
 static void addHashIteratorCursorToReply(client *c, hashTypeIterator *hi, int what)
@@ -772,12 +772,12 @@ static void addHashIteratorCursorToReply(client *c, hashTypeIterator *hi, int wh
 
         hi->hashTypeCurrentFromZiplist(what, &vstr, &vlen, &vll);
         if (vstr)
-            addReplyBulkCBuffer(c, vstr, vlen);
+            c->addReplyBulkCBuffer( vstr, vlen);
         else
             addReplyBulkLongLong(c, vll);
     } else if (hi->encoding() == OBJ_ENCODING_HT) {
         sds value = hi->hashTypeCurrentFromHashTable(what);
-        addReplyBulkCBuffer(c, value, sdslen(value));
+        c->addReplyBulkCBuffer( value, sdslen(value));
     } else {
         serverPanic("Unknown hash encoding");
     }
@@ -796,7 +796,7 @@ void genericHgetallCommand(client *c, int flags) {
     if (flags & OBJ_HASH_VALUE) multiplier++;
 
     length = hashTypeLength(o) * multiplier;
-    addReplyMultiBulkLen(c, length);
+    c->addReplyMultiBulkLen( length);
 
     hashTypeIterator hi(o);
     while (hi.hashTypeNext() != C_ERR) {

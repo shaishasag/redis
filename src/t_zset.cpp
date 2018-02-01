@@ -1625,11 +1625,11 @@ void zaddGenericCommand(client *c, int flags) {
 reply_to_client:
     if (incr) { /* ZINCRBY or INCR option. */
         if (processed)
-            addReplyDouble(c,score);
+            c->addReplyDouble(score);
         else
             c->addReply(shared.nullbulk);
     } else { /* ZADD. */
-        addReplyLongLong(c,ch ? added+updated : added);
+        c->addReplyLongLong(ch ? added+updated : added);
     }
 
 cleanup:
@@ -1673,7 +1673,7 @@ void zremCommand(client *c) {
         signalModifiedKey(c->m_cur_selected_db,key);
         server.dirty += deleted;
     }
-    addReplyLongLong(c,deleted);
+    c->addReplyLongLong(deleted);
 }
 
 /* Implements ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZREMRANGEBYLEX commands. */
@@ -1775,7 +1775,7 @@ void zremrangeGenericCommand(client *c, int rangetype) {
             notifyKeyspaceEvent(NOTIFY_GENERIC,"del",key,c->m_cur_selected_db->m_id);
     }
     server.dirty += deleted;
-    addReplyLongLong(c,deleted);
+    c->addReplyLongLong(deleted);
 
 cleanup:
     if (rangetype == ZRANGE_LEX)
@@ -2380,7 +2380,7 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
     if (dstzset->zsl->length()) {
         zsetConvertToZiplistIfNeeded(dstobj,maxelelen);
         dbAdd(c->m_cur_selected_db,dstkey,dstobj);
-        addReplyLongLong(c,zsetLength(dstobj));
+        c->addReplyLongLong(zsetLength(dstobj));
         signalModifiedKey(c->m_cur_selected_db,dstkey);
         notifyKeyspaceEvent(NOTIFY_ZSET,
             (op == SET_OP_UNION) ? "zunionstore" : "zinterstore",
@@ -2444,7 +2444,7 @@ void zrangeGenericCommand(client *c, int reverse) {
     rangelen = (end-start)+1;
 
     /* Return the result in form of a multi-bulk reply */
-    addReplyMultiBulkLen(c, withscores ? (rangelen*2) : rangelen);
+    c->addReplyMultiBulkLen( withscores ? (rangelen*2) : rangelen);
 
     if (zobj->encoding == OBJ_ENCODING_ZIPLIST) {
         unsigned char *zl = (unsigned char *)zobj->ptr;
@@ -2467,10 +2467,10 @@ void zrangeGenericCommand(client *c, int reverse) {
             if (vstr == NULL)
                 addReplyBulkLongLong(c,vlong);
             else
-                addReplyBulkCBuffer(c,vstr,vlen);
+                c->addReplyBulkCBuffer(vstr,vlen);
 
             if (withscores)
-                addReplyDouble(c,zzlGetScore(sptr));
+                c->addReplyDouble(zzlGetScore(sptr));
 
             if (reverse)
                 zzlPrev(zl,&eptr,&sptr);
@@ -2498,9 +2498,9 @@ void zrangeGenericCommand(client *c, int reverse) {
         while(rangelen--) {
             serverAssertWithInfo(c,zobj,ln != NULL);
             ele = ln->ele;
-            addReplyBulkCBuffer(c,ele,sdslen(ele));
+            c->addReplyBulkCBuffer(ele,sdslen(ele));
             if (withscores)
-                addReplyDouble(c,ln->score);
+                c->addReplyDouble(ln->score);
             ln = reverse ? ln->backward : ln->level[0].forward;
         }
     } else {
@@ -2628,11 +2628,11 @@ void genericZrangebyscoreCommand(client *c, int reverse) {
             if (vstr == NULL) {
                 addReplyBulkLongLong(c,vlong);
             } else {
-                addReplyBulkCBuffer(c,vstr,vlen);
+                c->addReplyBulkCBuffer(vstr,vlen);
             }
 
             if (withscores) {
-                addReplyDouble(c,score);
+                c->addReplyDouble(score);
             }
 
             /* Move to next node */
@@ -2684,10 +2684,10 @@ void genericZrangebyscoreCommand(client *c, int reverse) {
             }
 
             rangelen++;
-            addReplyBulkCBuffer(c,ln->ele,sdslen(ln->ele));
+            c->addReplyBulkCBuffer(ln->ele,sdslen(ln->ele));
 
             if (withscores) {
-                addReplyDouble(c,ln->score);
+                c->addReplyDouble(ln->score);
             }
 
             /* Move to next node */
@@ -2705,7 +2705,7 @@ void genericZrangebyscoreCommand(client *c, int reverse) {
         rangelen *= 2;
     }
 
-    setDeferredMultiBulkLength(c, replylen, rangelen);
+    c->setDeferredMultiBulkLength( replylen, rangelen);
 }
 
 void zrangebyscoreCommand(client *c) {
@@ -2790,7 +2790,7 @@ void zcountCommand(client *c) {
         serverPanic("Unknown sorted set encoding");
     }
 
-    addReplyLongLong(c, count);
+    c->addReplyLongLong( count);
 }
 
 void zlexcountCommand(client *c) {
@@ -2869,7 +2869,7 @@ void zlexcountCommand(client *c) {
     }
 
     zslFreeLexRange(&range);
-    addReplyLongLong(c, count);
+    c->addReplyLongLong( count);
 }
 
 /* This command implements ZRANGEBYLEX, ZREVRANGEBYLEX. */
@@ -2979,7 +2979,7 @@ void genericZrangebylexCommand(client *c, int reverse) {
             if (vstr == NULL) {
                 addReplyBulkLongLong(c,vlong);
             } else {
-                addReplyBulkCBuffer(c,vstr,vlen);
+                c->addReplyBulkCBuffer(vstr,vlen);
             }
 
             /* Move to next node */
@@ -3032,7 +3032,7 @@ void genericZrangebylexCommand(client *c, int reverse) {
             }
 
             rangelen++;
-            addReplyBulkCBuffer(c,ln->ele,sdslen(ln->ele));
+            c->addReplyBulkCBuffer(ln->ele,sdslen(ln->ele));
 
             /* Move to next node */
             if (reverse) {
@@ -3046,7 +3046,7 @@ void genericZrangebylexCommand(client *c, int reverse) {
     }
 
     zslFreeLexRange(&range);
-    setDeferredMultiBulkLength(c, replylen, rangelen);
+    c->setDeferredMultiBulkLength( replylen, rangelen);
 }
 
 void zrangebylexCommand(client *c) {
@@ -3064,7 +3064,7 @@ void zcardCommand(client *c) {
     if ((zobj = lookupKeyReadOrReply(c,key,shared.czero)) == NULL ||
         checkType(c,zobj,OBJ_ZSET)) return;
 
-    addReplyLongLong(c,zsetLength(zobj));
+    c->addReplyLongLong(zsetLength(zobj));
 }
 
 void zscoreCommand(client *c) {
@@ -3078,7 +3078,7 @@ void zscoreCommand(client *c) {
     if (zsetScore(zobj,(sds)c->m_argv[2]->ptr,&score) == C_ERR) {
         c->addReply(shared.nullbulk);
     } else {
-        addReplyDouble(c,score);
+        c->addReplyDouble(score);
     }
 }
 
@@ -3094,7 +3094,7 @@ void zrankGenericCommand(client *c, int reverse) {
     serverAssertWithInfo(c,ele,sdsEncodedObject(ele));
     rank = zsetRank(zobj,(sds)ele->ptr,reverse);
     if (rank >= 0) {
-        addReplyLongLong(c,rank);
+        c->addReplyLongLong(rank);
     } else {
         c->addReply(shared.nullbulk);
     }

@@ -987,7 +987,7 @@ client *moduleGetReplyClient(RedisModuleCtx *ctx) {
 int RM_ReplyWithLongLong(RedisModuleCtx *ctx, long long ll) {
     client *c = moduleGetReplyClient(ctx);
     if (c == NULL) return REDISMODULE_OK;
-    addReplyLongLong(c,ll);
+    c->addReplyLongLong(ll);
     return REDISMODULE_OK;
 }
 
@@ -1052,7 +1052,7 @@ int RM_ReplyWithArray(RedisModuleCtx *ctx, long len) {
             c->addDeferredMultiBulkLength();
         ctx->postponed_arrays_count++;
     } else {
-        addReplyMultiBulkLen(c,len);
+        c->addReplyMultiBulkLen(len);
     }
     return REDISMODULE_OK;
 }
@@ -1095,7 +1095,7 @@ void RM_ReplySetArrayLength(RedisModuleCtx *ctx, long len) {
             return;
     }
     ctx->postponed_arrays_count--;
-    setDeferredMultiBulkLength(c,
+    c->setDeferredMultiBulkLength(
             ctx->postponed_arrays[ctx->postponed_arrays_count],
             len);
     if (ctx->postponed_arrays_count == 0) {
@@ -1110,7 +1110,7 @@ void RM_ReplySetArrayLength(RedisModuleCtx *ctx, long len) {
 int RM_ReplyWithStringBuffer(RedisModuleCtx *ctx, const char *buf, size_t len) {
     client *c = moduleGetReplyClient(ctx);
     if (c == NULL) return REDISMODULE_OK;
-    addReplyBulkCBuffer(c,(char*)buf,len);
+    c->addReplyBulkCBuffer((char*)buf,len);
     return REDISMODULE_OK;
 }
 
@@ -1120,7 +1120,7 @@ int RM_ReplyWithStringBuffer(RedisModuleCtx *ctx, const char *buf, size_t len) {
 int RM_ReplyWithString(RedisModuleCtx *ctx, RedisModuleString *str) {
     client *c = moduleGetReplyClient(ctx);
     if (c == NULL) return REDISMODULE_OK;
-    addReplyBulk(c,str);
+    c->addReplyBulk(str);
     return REDISMODULE_OK;
 }
 
@@ -1158,7 +1158,7 @@ int RM_ReplyWithCallReply(RedisModuleCtx *ctx, RedisModuleCallReply *reply) {
 int RM_ReplyWithDouble(RedisModuleCtx *ctx, double d) {
     client *c = moduleGetReplyClient(ctx);
     if (c == NULL) return REDISMODULE_OK;
-    addReplyDouble(c,d);
+    c->addReplyDouble(d);
     return REDISMODULE_OK;
 }
 
@@ -3889,15 +3889,15 @@ void moduleCommand(client *c) {
         dictIterator di(modules);
         dictEntry *de;
 
-        addReplyMultiBulkLen(c,modules->dictSize());
+        c->addReplyMultiBulkLen(modules->dictSize());
         while ((de = di.dictNext()) != NULL) {
             sds name = (sds)de->dictGetKey();
             struct RedisModule* module = (RedisModule*)de->dictGetVal();
-            addReplyMultiBulkLen(c,4);
+            c->addReplyMultiBulkLen(4);
             addReplyBulkCString(c,"name");
-            addReplyBulkCBuffer(c,name,sdslen(name));
+            c->addReplyBulkCBuffer(name,sdslen(name));
             addReplyBulkCString(c,"ver");
-            addReplyLongLong(c,module->m_ver);
+            c->addReplyLongLong(module->m_ver);
         }
     } else {
         c->addReply(shared.syntaxerr);

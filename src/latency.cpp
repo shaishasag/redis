@@ -478,12 +478,12 @@ void latencyCommandReplyWithSamples(client *c, latencyTimeSeries *ts) {
         int i = (ts->idx + j) % LATENCY_TS_LEN;
 
         if (ts->samples[i].time == 0) continue;
-        addReplyMultiBulkLen(c,2);
-        addReplyLongLong(c,ts->samples[i].time);
-        addReplyLongLong(c,ts->samples[i].latency);
+        c->addReplyMultiBulkLen(2);
+        c->addReplyLongLong(ts->samples[i].time);
+        c->addReplyLongLong(ts->samples[i].latency);
         samples++;
     }
-    setDeferredMultiBulkLength(c,replylen,samples);
+    c->setDeferredMultiBulkLength(replylen,samples);
 }
 
 /* latencyCommand() helper to produce the reply for the LATEST subcommand,
@@ -491,18 +491,18 @@ void latencyCommandReplyWithSamples(client *c, latencyTimeSeries *ts) {
 void latencyCommandReplyWithLatestEvents(client *c) {
     dictEntry *de;
 
-    addReplyMultiBulkLen(c,server.latency_events->dictSize());
+    c->addReplyMultiBulkLen(server.latency_events->dictSize());
     dictIterator di(server.latency_events);
     while((de = di.dictNext()) != NULL) {
         char *event = (char *)de->dictGetKey();
         latencyTimeSeries* ts = (latencyTimeSeries*)de->dictGetVal();
         int last = (ts->idx + LATENCY_TS_LEN - 1) % LATENCY_TS_LEN;
 
-        addReplyMultiBulkLen(c,4);
+        c->addReplyMultiBulkLen(4);
         addReplyBulkCString(c,event);
-        addReplyLongLong(c,ts->samples[last].time);
-        addReplyLongLong(c,ts->samples[last].latency);
-        addReplyLongLong(c,ts->max);
+        c->addReplyLongLong(ts->samples[last].time);
+        c->addReplyLongLong(ts->samples[last].latency);
+        c->addReplyLongLong(ts->max);
     }
 }
 
@@ -565,7 +565,7 @@ void latencyCommand(client *c) {
         /* LATENCY HISTORY <event> */
         ts = (latencyTimeSeries *)server.latency_events->dictFetchValue(c->m_argv[2]->ptr);
         if (ts == NULL) {
-            addReplyMultiBulkLen(c,0);
+            c->addReplyMultiBulkLen(0);
         } else {
             latencyCommandReplyWithSamples(c,ts);
         }
@@ -587,18 +587,18 @@ void latencyCommand(client *c) {
         /* LATENCY DOCTOR */
         sds report = createLatencyReport();
 
-        addReplyBulkCBuffer(c,report,sdslen(report));
+        c->addReplyBulkCBuffer(report,sdslen(report));
         sdsfree(report);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"reset") && c->m_argc >= 2) {
         /* LATENCY RESET */
         if (c->m_argc == 2) {
-            addReplyLongLong(c, latencyResetEvent(NULL));
+            c->addReplyLongLong( latencyResetEvent(NULL));
         } else {
             int j, resets = 0;
 
             for (j = 2; j < c->m_argc; j++)
                 resets += latencyResetEvent((char *)c->m_argv[j]->ptr);
-            addReplyLongLong(c,resets);
+            c->addReplyLongLong(resets);
         }
     } else {
         c->addReply(shared.syntaxerr);

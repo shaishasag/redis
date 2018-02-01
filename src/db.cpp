@@ -452,7 +452,7 @@ void delGenericCommand(client *c, int lazy) {
             numdel++;
         }
     }
-    addReplyLongLong(c,numdel);
+    c->addReplyLongLong(numdel);
 }
 
 void delCommand(client *c) {
@@ -473,7 +473,7 @@ void existsCommand(client *c) {
         expireIfNeeded(c->m_cur_selected_db,c->m_argv[j]);
         if (dbExists(c->m_cur_selected_db,c->m_argv[j])) count++;
     }
-    addReplyLongLong(c,count);
+    c->addReplyLongLong(count);
 }
 
 void selectCommand(client *c) {
@@ -502,7 +502,7 @@ void randomkeyCommand(client *c) {
         return;
     }
 
-    addReplyBulk(c,key);
+    c->addReplyBulk(key);
     decrRefCount(key);
 }
 
@@ -522,14 +522,14 @@ void keysCommand(client *c) {
         if (allkeys || stringmatchlen(pattern,plen,key,sdslen(key),0)) {
             keyobj = createStringObject(key,sdslen(key));
             if (expireIfNeeded(c->m_cur_selected_db,keyobj) == 0) {
-                addReplyBulk(c,keyobj);
+                c->addReplyBulk(keyobj);
                 numkeys++;
             }
             decrRefCount(keyobj);
         }
     }
 
-    setDeferredMultiBulkLength(c,replylen,numkeys);
+    c->setDeferredMultiBulkLength(replylen,numkeys);
 }
 
 /* This callback is used by scanGenericCommand in order to collect elements
@@ -754,13 +754,13 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
     }
 
     /* Step 4: Reply to the client. */
-    addReplyMultiBulkLen(c, 2);
+    c->addReplyMultiBulkLen( 2);
     addReplyBulkLongLong(c,cursor);
 
-    addReplyMultiBulkLen(c, keys->listLength());
+    c->addReplyMultiBulkLen( keys->listLength());
     while ((node = keys->listFirst()) != NULL) {
         robj *kobj = (robj *)node->listNodeValue();
-        addReplyBulk(c, kobj);
+        c->addReplyBulk( kobj);
         decrRefCount(kobj);
         keys->listDelNode( node);
     }
@@ -778,11 +778,11 @@ void scanCommand(client *c) {
 }
 
 void dbsizeCommand(client *c) {
-    addReplyLongLong(c,c->m_cur_selected_db->m_dict->dictSize());
+    c->addReplyLongLong(c->m_cur_selected_db->m_dict->dictSize());
 }
 
 void lastsaveCommand(client *c) {
-    addReplyLongLong(c,server.lastsave);
+    c->addReplyLongLong(server.lastsave);
 }
 
 void typeCommand(client *c) {

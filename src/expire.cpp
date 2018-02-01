@@ -456,7 +456,7 @@ void ttlGenericCommand(client *c, int output_ms) {
 
     /* If the key does not exist at all, return -2 */
     if (lookupKeyReadWithFlags(c->m_cur_selected_db,c->m_argv[1],LOOKUP_NOTOUCH) == NULL) {
-        addReplyLongLong(c,-2);
+        c->addReplyLongLong(-2);
         return;
     }
     /* The key exists. Return -1 if it has no expire, or the actual
@@ -467,9 +467,9 @@ void ttlGenericCommand(client *c, int output_ms) {
         if (ttl < 0) ttl = 0;
     }
     if (ttl == -1) {
-        addReplyLongLong(c,-1);
+        c->addReplyLongLong(-1);
     } else {
-        addReplyLongLong(c,output_ms ? ttl : ((ttl+500)/1000));
+        c->addReplyLongLong(output_ms ? ttl : ((ttl+500)/1000));
     }
 }
 
@@ -502,6 +502,6 @@ void touchCommand(client *c) {
     int touched = 0;
     for (int j = 1; j < c->m_argc; j++)
         if (lookupKeyRead(c->m_cur_selected_db,c->m_argv[j]) != NULL) touched++;
-    addReplyLongLong(c,touched);
+    c->addReplyLongLong(touched);
 }
 

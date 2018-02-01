@@ -762,7 +762,7 @@ void bitopCommand(client *c) {
         notifyKeyspaceEvent(NOTIFY_GENERIC,"del",targetkey,c->m_cur_selected_db->m_id);
     }
     server.dirty++;
-    addReplyLongLong(c,maxlen); /* Return the output string length in bytes. */
+    c->addReplyLongLong(maxlen); /* Return the output string length in bytes. */
 }
 
 /* BITCOUNT key [start end] */
@@ -810,7 +810,7 @@ void bitcountCommand(client *c) {
     } else {
         long bytes = end-start+1;
 
-        addReplyLongLong(c,redisPopcount(p+start,bytes));
+        c->addReplyLongLong(redisPopcount(p+start,bytes));
     }
 }
 
@@ -835,7 +835,7 @@ void bitposCommand(client *c) {
      * array of 0 bits. If the user is looking for the fist clear bit return 0,
      * If the user is looking for the first set bit, return -1. */
     if ((o = lookupKeyRead(c->m_cur_selected_db,c->m_argv[1])) == NULL) {
-        addReplyLongLong(c, bit ? -1 : 0);
+        c->addReplyLongLong( bit ? -1 : 0);
         return;
     }
     if (checkType(c,o,OBJ_STRING)) return;
@@ -871,7 +871,7 @@ void bitposCommand(client *c) {
     /* For empty ranges (start > end) we return -1 as an empty range does
      * not contain a 0 nor a 1. */
     if (start > end) {
-        addReplyLongLong(c, -1);
+        c->addReplyLongLong( -1);
     } else {
         long bytes = end-start+1;
         long pos = redisBitpos(p+start,bytes,bit);
@@ -884,11 +884,11 @@ void bitposCommand(client *c) {
          * we return -1 to the caller, to mean, in the specified range there
          * is not a single "0" bit. */
         if (end_given && bit == 0 && pos == bytes*8) {
-            addReplyLongLong(c,-1);
+            c->addReplyLongLong(-1);
             return;
         }
         if (pos != -1) pos += start*8; /* Adjust for the bytes we skipped. */
-        addReplyLongLong(c,pos);
+        c->addReplyLongLong(pos);
     }
 }
 
@@ -1002,7 +1002,7 @@ void bitfieldCommand(client *c) {
             higest_write_offset)) == NULL) return;
     }
 
-    addReplyMultiBulkLen(c,numops);
+    c->addReplyMultiBulkLen(numops);
 
     /* Actually process the operations. */
     for (j = 0; j < numops; j++) {
@@ -1043,7 +1043,7 @@ void bitfieldCommand(client *c) {
                 /* On overflow of type is "FAIL", don't write and return
                  * NULL to signal the condition. */
                 if (!(overflow && thisop->owtype == BFOVERFLOW_FAIL)) {
-                    addReplyLongLong(c,retval);
+                    c->addReplyLongLong(retval);
                     setSignedBitfield((unsigned char *)o->ptr,thisop->offset,
                                       thisop->bits,newval);
                 } else {
@@ -1072,7 +1072,7 @@ void bitfieldCommand(client *c) {
                 /* On overflow of type is "FAIL", don't write and return
                  * NULL to signal the condition. */
                 if (!(overflow && thisop->owtype == BFOVERFLOW_FAIL)) {
-                    addReplyLongLong(c,retval);
+                    c->addReplyLongLong(retval);
                     setUnsignedBitfield((unsigned char *)o->ptr,thisop->offset,
                                         thisop->bits,newval);
                 } else {
@@ -1107,11 +1107,11 @@ void bitfieldCommand(client *c) {
             if (thisop->sign) {
                 int64_t val = getSignedBitfield(buf,thisop->offset-(byte*8),
                                             thisop->bits);
-                addReplyLongLong(c,val);
+                c->addReplyLongLong(val);
             } else {
                 uint64_t val = getUnsignedBitfield(buf,thisop->offset-(byte*8),
                                             thisop->bits);
-                addReplyLongLong(c,val);
+                c->addReplyLongLong(val);
             }
         }
     }

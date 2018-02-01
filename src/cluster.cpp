@@ -4027,38 +4027,38 @@ void clusterReplyMultiBulkSlots(client *c) {
                 /* If slot exists in output map, add to it's list.
                  * else, create a new output map for this slot */
                 if (start == j-1) {
-                    addReplyLongLong(c, start); /* only one slot; low==high */
-                    addReplyLongLong(c, start);
+                    c->addReplyLongLong( start); /* only one slot; low==high */
+                    c->addReplyLongLong( start);
                 } else {
-                    addReplyLongLong(c, start); /* low */
-                    addReplyLongLong(c, j-1);   /* high */
+                    c->addReplyLongLong( start); /* low */
+                    c->addReplyLongLong( j-1);   /* high */
                 }
                 start = -1;
 
                 /* First node reply position is always the master */
-                addReplyMultiBulkLen(c, 3);
+                c->addReplyMultiBulkLen( 3);
                 addReplyBulkCString(c, node->m_ip);
-                addReplyLongLong(c, node->m_port);
-                addReplyBulkCBuffer(c, node->m_name, CLUSTER_NAMELEN);
+                c->addReplyLongLong( node->m_port);
+                c->addReplyBulkCBuffer( node->m_name, CLUSTER_NAMELEN);
 
                 /* Remaining nodes in reply are replicas for slot range */
                 for (i = 0; i < node->m_numslaves; i++) {
                     /* This loop is copy/pasted from clusterGenNodeDescription()
                      * with modifications for per-slot node aggregation */
                     if (node->m_slaves[i]->nodeFailed()) continue;
-                    addReplyMultiBulkLen(c, 3);
+                    c->addReplyMultiBulkLen( 3);
                     addReplyBulkCString(c, node->m_slaves[i]->m_ip);
-                    addReplyLongLong(c, node->m_slaves[i]->m_port);
-                    addReplyBulkCBuffer(c, node->m_slaves[i]->m_name, CLUSTER_NAMELEN);
+                    c->addReplyLongLong( node->m_slaves[i]->m_port);
+                    c->addReplyBulkCBuffer( node->m_slaves[i]->m_name, CLUSTER_NAMELEN);
                     nested_elements++;
                 }
-                setDeferredMultiBulkLength(c, nested_replylen, nested_elements);
+                c->setDeferredMultiBulkLength( nested_replylen, nested_elements);
                 num_masters++;
             }
         }
     }
 
-    setDeferredMultiBulkLength(c, slot_replylen, num_masters);
+    c->setDeferredMultiBulkLength( slot_replylen, num_masters);
 }
 
 void clusterCommand(client *c) {
@@ -4101,11 +4101,11 @@ void clusterCommand(client *c) {
         sds ci = clusterGenNodesDescription(0);
 
         o = createObject(OBJ_STRING,ci);
-        addReplyBulk(c,o);
+        c->addReplyBulk(o);
         decrRefCount(o);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"myid") && c->m_argc == 2) {
         /* CLUSTER MYID */
-        addReplyBulkCBuffer(c,myself->m_name, CLUSTER_NAMELEN);
+        c->addReplyBulkCBuffer(myself->m_name, CLUSTER_NAMELEN);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"slots") && c->m_argc == 2) {
         /* CLUSTER SLOTS */
         clusterReplyMultiBulkSlots(c);
@@ -4360,7 +4360,7 @@ void clusterCommand(client *c) {
         /* CLUSTER KEYSLOT <key> */
         sds key = (sds)c->m_argv[2]->ptr;
 
-        addReplyLongLong(c,keyHashSlot(key,sdslen(key)));
+        c->addReplyLongLong(keyHashSlot(key,sdslen(key)));
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"countkeysinslot") && c->m_argc == 3) {
         /* CLUSTER COUNTKEYSINSLOT <slot> */
         long long slot;
@@ -4371,7 +4371,7 @@ void clusterCommand(client *c) {
             c->addReplyError("Invalid slot");
             return;
         }
-        addReplyLongLong(c,countKeysInSlot(slot));
+        c->addReplyLongLong(countKeysInSlot(slot));
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"getkeysinslot") && c->m_argc == 4) {
         /* CLUSTER GETKEYSINSLOT <slot> <count> */
         long long maxkeys, slot;
@@ -4395,9 +4395,9 @@ void clusterCommand(client *c) {
 
         keys = (robj **)zmalloc(sizeof(robj*)*maxkeys);
         numkeys = getKeysInSlot(slot, keys, maxkeys);
-        addReplyMultiBulkLen(c,numkeys);
+        c->addReplyMultiBulkLen(numkeys);
         for (j = 0; j < numkeys; j++) {
-            addReplyBulk(c,keys[j]);
+            c->addReplyBulk(keys[j]);
             decrRefCount(keys[j]);
         }
         zfree(keys);
@@ -4473,7 +4473,7 @@ void clusterCommand(client *c) {
             return;
         }
 
-        addReplyMultiBulkLen(c,n->m_numslaves);
+        c->addReplyMultiBulkLen(n->m_numslaves);
         for (j = 0; j < n->m_numslaves; j++) {
             sds ni = clusterGenNodeDescription(n->m_slaves[j]);
             addReplyBulkCString(c,ni);
@@ -4489,7 +4489,7 @@ void clusterCommand(client *c) {
             c->addReplyErrorFormat("Unknown node %s", (char*)c->m_argv[2]->ptr);
             return;
         } else {
-            addReplyLongLong(c,clusterNodeFailureReportsCount(n));
+            c->addReplyLongLong(clusterNodeFailureReportsCount(n));
         }
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"failover") &&
                (c->m_argc == 2 || c->m_argc == 3))
@@ -4689,7 +4689,7 @@ void dumpCommand(client *c) {
 
     /* Transfer to the client */
     dumpobj = createObject(OBJ_STRING, payload.m_ptr);
-    addReplyBulk(c,dumpobj);
+    c->addReplyBulk(dumpobj);
     decrRefCount(dumpobj);
     return;
 }

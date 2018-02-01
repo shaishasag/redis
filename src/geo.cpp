@@ -191,7 +191,7 @@ double extractDistanceOrReply(client *c, robj **argv,
 void addReplyDoubleDistance(client *c, double d) {
     char dbuf[128];
     int dlen = snprintf(dbuf, sizeof(dbuf), "%.4f", d);
-    addReplyBulkCBuffer(c, dbuf, dlen);
+    c->addReplyBulkCBuffer( dbuf, dlen);
 }
 
 /* Helper function for geoGetPointsInRange(): given a sorted set score
@@ -616,7 +616,7 @@ void georadiusGeneric(client *c, int flags) {
          * either all strings of just zset members  *or* a nested multi-bulk
          * reply containing the zset member string _and_ all the additional
          * options the user enabled for this request. */
-        addReplyMultiBulkLen(c, returned_items);
+        c->addReplyMultiBulkLen( returned_items);
 
         /* Finally send results back to the caller */
         int i;
@@ -628,7 +628,7 @@ void georadiusGeneric(client *c, int flags) {
              * as a nested multi-bulk.  Add 1 to account for result value
              * itself. */
             if (option_length)
-                addReplyMultiBulkLen(c, option_length + 1);
+                c->addReplyMultiBulkLen( option_length + 1);
 
             addReplyBulkSds(c,gp.pop_member());
 
@@ -636,12 +636,12 @@ void georadiusGeneric(client *c, int flags) {
                 addReplyDoubleDistance(c, gp.m_dist);
 
             if (withhash)
-                addReplyLongLong(c, gp.m_score);
+                c->addReplyLongLong( gp.m_score);
 
             if (withcoords) {
-                addReplyMultiBulkLen(c, 2);
-                addReplyHumanLongDouble(c, gp.m_longitude);
-                addReplyHumanLongDouble(c, gp.m_latitude);
+                c->addReplyMultiBulkLen( 2);
+                c->addReplyHumanLongDouble( gp.m_longitude);
+                c->addReplyHumanLongDouble( gp.m_latitude);
             }
         }
     } else {
@@ -679,7 +679,7 @@ void georadiusGeneric(client *c, int flags) {
             notifyKeyspaceEvent(NOTIFY_GENERIC,"del",storekey,c->m_cur_selected_db->m_id);
             server.dirty++;
         }
-        addReplyLongLong(c, returned_items);
+        c->addReplyLongLong( returned_items);
     }
 }
 
@@ -717,7 +717,7 @@ void geohashCommand(client *c) {
 
     /* Geohash elements one after the other, using a null bulk reply for
      * missing elements. */
-    addReplyMultiBulkLen(c,c->m_argc-2);
+    c->addReplyMultiBulkLen(c->m_argc-2);
     for (j = 2; j < c->m_argc; j++) {
         double score;
         if (!zobj || zsetScore(zobj, (sds)c->m_argv[j]->ptr, &score) == C_ERR) {
@@ -752,7 +752,7 @@ void geohashCommand(client *c) {
                 buf[i] = geoalphabet[idx];
             }
             buf[11] = '\0';
-            addReplyBulkCBuffer(c,buf,11);
+            c->addReplyBulkCBuffer(buf,11);
         }
     }
 }
@@ -770,7 +770,7 @@ void geoposCommand(client *c) {
 
     /* Report elements one after the other, using a null bulk reply for
      * missing elements. */
-    addReplyMultiBulkLen(c,c->m_argc-2);
+    c->addReplyMultiBulkLen(c->m_argc-2);
     for (j = 2; j < c->m_argc; j++) {
         double score;
         if (!zobj || zsetScore(zobj, (sds)c->m_argv[j]->ptr, &score) == C_ERR) {
@@ -782,9 +782,9 @@ void geoposCommand(client *c) {
                 c->addReply(shared.nullmultibulk);
                 continue;
             }
-            addReplyMultiBulkLen(c,2);
-            addReplyHumanLongDouble(c,xy[0]);
-            addReplyHumanLongDouble(c,xy[1]);
+            c->addReplyMultiBulkLen(2);
+            c->addReplyHumanLongDouble(xy[0]);
+            c->addReplyHumanLongDouble(xy[1]);
         }
     }
 }

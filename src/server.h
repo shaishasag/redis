@@ -698,6 +698,15 @@ struct client {
     void addReplyStatus(const char *status);
     void addReplyStatusFormat(const char *fmt, ...);
     void *addDeferredMultiBulkLength();
+    void setDeferredMultiBulkLength(void *node, long length);
+    void addReplyDouble(double d);
+    void addReplyHumanLongDouble(long double d);
+    void addReplyLongLongWithPrefix(long long ll, char prefix);
+    void addReplyLongLong(long long ll);
+    void addReplyMultiBulkLen(long length);
+    void addReplyBulkLen(robj *obj);
+    void addReplyBulk(robj *obj);
+    void addReplyBulkCBuffer(const void *p, size_t len);
 
     uint64_t m_id;            /* Client incremental unique ID. */
     int m_fd;                 /* Client socket. */
@@ -1439,14 +1448,11 @@ void freeClient(client *c);
 void freeClientAsync(client *c);
 void resetClient(client *c);
 void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask);
-void setDeferredMultiBulkLength(client *c, void *node, long length);
 void processInputBuffer(client *c);
 void acceptHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 void acceptUnixHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask);
-void addReplyString(client *c, const char *s, size_t len);
-void addReplyBulk(client *c, robj *obj);
 void addReplyBulkCString(client *c, const char *s);
 void addReplyBulkCBuffer(client *c, const void *p, size_t len);
 void addReplyBulkLongLong(client *c, long long ll);

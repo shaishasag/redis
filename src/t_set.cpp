@@ -300,7 +300,7 @@ void saddCommand(client *c) {
         notifyKeyspaceEvent(NOTIFY_SET,"sadd",c->m_argv[1],c->m_cur_selected_db->m_id);
     }
     server.dirty += added;
-    addReplyLongLong(c,added);
+    c->addReplyLongLong(added);
 }
 
 void sremCommand(client *c) {
@@ -328,7 +328,7 @@ void sremCommand(client *c) {
                                 c->m_cur_selected_db->m_id);
         server.dirty += deleted;
     }
-    addReplyLongLong(c,deleted);
+    c->addReplyLongLong(deleted);
 }
 
 void smoveCommand(client *c) {
@@ -404,7 +404,7 @@ void scardCommand(client *c) {
     if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,o,OBJ_SET)) return;
 
-    addReplyLongLong(c,setTypeSize(o));
+    c->addReplyLongLong(setTypeSize(o));
 }
 
 /* Handle the "SPOP key <count>" variant. The normal version of the
@@ -471,7 +471,7 @@ void spopWithCountCommand(client *c) {
     robj *propargv[3];
     propargv[0] = createStringObject("SREM",4);
     propargv[1] = c->m_argv[1];
-    addReplyMultiBulkLen(c,count);
+    c->addReplyMultiBulkLen(count);
 
     /* Common iteration vars. */
     sds sdsele;
@@ -496,7 +496,7 @@ void spopWithCountCommand(client *c) {
                 objele = createStringObjectFromLongLong(llele);
                 set->ptr = intset::intsetRemove((intset *)set->ptr,llele,NULL);
             } else {
-                addReplyBulkCBuffer(c,sdsele,sdslen(sdsele));
+                c->addReplyBulkCBuffer(sdsele,sdslen(sdsele));
                 objele = createStringObject(sdsele,sdslen(sdsele));
                 setTypeRemove(set,sdsele);
             }
@@ -544,7 +544,7 @@ void spopWithCountCommand(client *c) {
                     addReplyBulkLongLong(c, llele);
                     objele = createStringObjectFromLongLong(llele);
                 } else {
-                    addReplyBulkCBuffer(c, sdsele, sdslen(sdsele));
+                    c->addReplyBulkCBuffer( sdsele, sdslen(sdsele));
                     objele = createStringObject(sdsele, sdslen(sdsele));
                 }
 
@@ -607,7 +607,7 @@ void spopCommand(client *c) {
     decrRefCount(aux);
 
     /* Add the element to the reply */
-    addReplyBulk(c,ele);
+    c->addReplyBulk(ele);
     decrRefCount(ele);
 
     /* Delete the set if it's empty */
@@ -665,13 +665,13 @@ void srandmemberWithCountCommand(client *c) {
      * This case is trivial and can be served without auxiliary data
      * structures. */
     if (!uniq) {
-        addReplyMultiBulkLen(c,count);
+        c->addReplyMultiBulkLen(count);
         while(count--) {
             encoding = setTypeRandomElement(set,&ele,&llele);
             if (encoding == OBJ_ENCODING_INTSET) {
                 addReplyBulkLongLong(c,llele);
             } else {
-                addReplyBulkCBuffer(c,ele,sdslen(ele));
+                c->addReplyBulkCBuffer(ele,sdslen(ele));
             }
         }
         return;
@@ -753,11 +753,11 @@ void srandmemberWithCountCommand(client *c) {
     {
         dictEntry *de;
 
-        addReplyMultiBulkLen(c,count);
+        c->addReplyMultiBulkLen(count);
         {
             dictIterator di((dict*)d);
             while((de = di.dictNext()) != NULL)
-                addReplyBulk(c,(robj *)de->dictGetKey());
+                c->addReplyBulk((robj *)de->dictGetKey());
         }
         dictRelease(d);
     }
@@ -784,7 +784,7 @@ void srandmemberCommand(client *c) {
     if (encoding == OBJ_ENCODING_INTSET) {
         addReplyBulkLongLong(c,llele);
     } else {
-        addReplyBulkCBuffer(c,ele,sdslen(ele));
+        c->addReplyBulkCBuffer(ele,sdslen(ele));
     }
 }
 
@@ -891,7 +891,7 @@ void sinterGenericCommand(client *c, robj **setkeys,
             if (j == setnum) {
                 if (!dstkey) {
                     if (encoding == OBJ_ENCODING_HT)
-                        addReplyBulkCBuffer(c, elesds, sdslen(elesds));
+                        c->addReplyBulkCBuffer( elesds, sdslen(elesds));
                     else
                         addReplyBulkLongLong(c, intobj);
                     cardinality++;
@@ -914,7 +914,7 @@ void sinterGenericCommand(client *c, robj **setkeys,
         int deleted = dbDelete(c->m_cur_selected_db,dstkey);
         if (setTypeSize(dstset) > 0) {
             dbAdd(c->m_cur_selected_db,dstkey,dstset);
-            addReplyLongLong(c,setTypeSize(dstset));
+            c->addReplyLongLong(setTypeSize(dstset));
             notifyKeyspaceEvent(NOTIFY_SET,"sinterstore",
                 dstkey,c->m_cur_selected_db->m_id);
         } else {
@@ -927,7 +927,7 @@ void sinterGenericCommand(client *c, robj **setkeys,
         signalModifiedKey(c->m_cur_selected_db,dstkey);
         server.dirty++;
     } else {
-        setDeferredMultiBulkLength(c,replylen,cardinality);
+        c->setDeferredMultiBulkLength(replylen,cardinality);
     }
     zfree(sets);
 }
@@ -1071,11 +1071,11 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
 
     /* Output the content of the resulting set, if not in STORE mode */
     if (!dstkey) {
-        addReplyMultiBulkLen(c, cardinality);
+        c->addReplyMultiBulkLen( cardinality);
         {
             setTypeIterator si(dstset);
             while ((ele = si.setTypeNextObject()) != NULL) {
-                addReplyBulkCBuffer(c, ele, sdslen(ele));
+                c->addReplyBulkCBuffer( ele, sdslen(ele));
                 sdsfree(ele);
             }
         }   // the braces make sure si is destructed before decrRefCount might dispose of
@@ -1087,7 +1087,7 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
         int deleted = dbDelete(c->m_cur_selected_db,dstkey);
         if (setTypeSize(dstset) > 0) {
             dbAdd(c->m_cur_selected_db,dstkey,dstset);
-            addReplyLongLong(c,setTypeSize(dstset));
+            c->addReplyLongLong(setTypeSize(dstset));
             notifyKeyspaceEvent(NOTIFY_SET,
                 op == SET_OP_UNION ? "sunionstore" : "sdiffstore",
                 dstkey,c->m_cur_selected_db->m_id);

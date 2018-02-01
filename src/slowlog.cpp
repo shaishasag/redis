@@ -144,7 +144,7 @@ void slowlogCommand(client *c) {
         slowlogReset();
         c->addReply(shared.ok);
     } else if (c->m_argc == 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"len")) {
-        addReplyLongLong(c,server.slowlog->listLength());
+        c->addReplyLongLong(server.slowlog->listLength());
     } else if ((c->m_argc == 2 || c->m_argc == 3) &&
                !strcasecmp((const char*)c->m_argv[1]->ptr,"get"))
     {
@@ -163,18 +163,18 @@ void slowlogCommand(client *c) {
             int j;
 
             se = (slowlogEntry *)ln->listNodeValue();
-            addReplyMultiBulkLen(c,6);
-            addReplyLongLong(c,se->id);
-            addReplyLongLong(c,se->time);
-            addReplyLongLong(c,se->duration);
-            addReplyMultiBulkLen(c,se->argc);
+            c->addReplyMultiBulkLen(6);
+            c->addReplyLongLong(se->id);
+            c->addReplyLongLong(se->time);
+            c->addReplyLongLong(se->duration);
+            c->addReplyMultiBulkLen(se->argc);
             for (j = 0; j < se->argc; j++)
-                addReplyBulk(c,se->argv[j]);
-            addReplyBulkCBuffer(c,se->peerid,sdslen(se->peerid));
-            addReplyBulkCBuffer(c,se->cname,sdslen(se->cname));
+                c->addReplyBulk(se->argv[j]);
+            c->addReplyBulkCBuffer(se->peerid,sdslen(se->peerid));
+            c->addReplyBulkCBuffer(se->cname,sdslen(se->cname));
             sent++;
         }
-        setDeferredMultiBulkLength(c,totentries,sent);
+        c->setDeferredMultiBulkLength(totentries,sent);
     } else {
         c->addReplyError(
             "Unknown SLOWLOG subcommand or wrong # of args. Try GET, RESET, LEN.");

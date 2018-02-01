@@ -262,12 +262,12 @@ void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) {
          * or are already in sync with the master. */
 
         /* Add the multi bulk length. */
-        addReplyMultiBulkLen(slave,argc);
+        slave->addReplyMultiBulkLen(argc);
 
         /* Finally any additional argument that was not stored inside the
          * static buffer if any (from j to argc). */
         for (j = 0; j < argc; j++)
-            addReplyBulk(slave,argv[j]);
+            slave->addReplyBulk(argv[j]);
     }
 }
 
@@ -2031,9 +2031,9 @@ void roleCommand(client *c) {
         void *mbcount;
         int slaves = 0;
 
-        addReplyMultiBulkLen(c,3);
-        addReplyBulkCBuffer(c,"master",6);
-        addReplyLongLong(c,server.master_repl_offset);
+        c->addReplyMultiBulkLen(3);
+        c->addReplyBulkCBuffer("master",6);
+        c->addReplyLongLong(server.master_repl_offset);
         mbcount = c->addDeferredMultiBulkLength();
         listIter li(server.slaves);
         while((ln = li.listNext())) {
@@ -2046,20 +2046,20 @@ void roleCommand(client *c) {
                 slaveip = ip;
             }
             if (slave->m_replication_state != SLAVE_STATE_ONLINE) continue;
-            addReplyMultiBulkLen(c,3);
+            c->addReplyMultiBulkLen(3);
             addReplyBulkCString(c,slaveip);
             addReplyBulkLongLong(c,slave->m_slave_listening_port);
             addReplyBulkLongLong(c,slave->m_replication_ack_off);
             slaves++;
         }
-        setDeferredMultiBulkLength(c,mbcount,slaves);
+        c->setDeferredMultiBulkLength(mbcount,slaves);
     } else {
         char *slavestate = NULL;
 
-        addReplyMultiBulkLen(c,5);
-        addReplyBulkCBuffer(c,"slave",5);
+        c->addReplyMultiBulkLen(5);
+        c->addReplyBulkCBuffer("slave",5);
         addReplyBulkCString(c,server.masterhost);
-        addReplyLongLong(c,server.masterport);
+        c->addReplyLongLong(server.masterport);
         if (slaveIsInHandshakeState()) {
             slavestate = "handshake";
         } else {
@@ -2073,7 +2073,7 @@ void roleCommand(client *c) {
             }
         }
         addReplyBulkCString(c,slavestate);
-        addReplyLongLong(c,server.master ? server.master->m_applied_replication_offset : -1);
+        c->addReplyLongLong(server.master ? server.master->m_applied_replication_offset : -1);
     }
 }
 
@@ -2085,7 +2085,7 @@ void replicationSendAck() {
 
     if (c != NULL) {
         c->m_flags |= CLIENT_MASTER_FORCE_REPLY;
-        addReplyMultiBulkLen(c,3);
+        c->addReplyMultiBulkLen(3);
         addReplyBulkCString(c,"REPLCONF");
         addReplyBulkCString(c,"ACK");
         addReplyBulkLongLong(c,c->m_applied_replication_offset);
@@ -2397,7 +2397,7 @@ void waitCommand(client *c) {
     /* First try without blocking at all. */
     ackreplicas = replicationCountAcksByOffset(c->m_last_write_global_replication_offset);
     if (ackreplicas >= numreplicas || c->m_flags & CLIENT_MULTI) {
-        addReplyLongLong(c,ackreplicas);
+        c->addReplyLongLong(ackreplicas);
         return;
     }
 
@@ -2444,7 +2444,7 @@ void processClientsWaitingReplicas() {
                            last_numreplicas > c->m_blocking_state.numreplicas)
         {
             unblockClient(c);
-            addReplyLongLong(c,last_numreplicas);
+            c->addReplyLongLong(last_numreplicas);
         } else {
             int numreplicas = replicationCountAcksByOffset(c->m_blocking_state.reploffset);
 
@@ -2452,7 +2452,7 @@ void processClientsWaitingReplicas() {
                 last_offset = c->m_blocking_state.reploffset;
                 last_numreplicas = numreplicas;
                 unblockClient(c);
-                addReplyLongLong(c,numreplicas);
+                c->addReplyLongLong(numreplicas);
             }
         }
     }
