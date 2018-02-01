@@ -210,29 +210,29 @@ void listTypeConvert(robj *subject, int enc) {
 
 void pushGenericCommand(client *c, int where) {
     int j, pushed = 0;
-    robj *lobj = lookupKeyWrite(c->db,c->argv[1]);
+    robj *lobj = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[1]);
 
     if (lobj && lobj->type != OBJ_LIST) {
         addReply(c,shared.wrongtypeerr);
         return;
     }
 
-    for (j = 2; j < c->argc; j++) {
+    for (j = 2; j < c->m_argc; j++) {
         if (!lobj) {
             lobj = createQuicklistObject();
             quicklistSetOptions((quicklist *)lobj->ptr, server.list_max_ziplist_size,
                                 server.list_compress_depth);
-            dbAdd(c->db,c->argv[1],lobj);
+            dbAdd(c->m_cur_selected_db,c->m_argv[1],lobj);
         }
-        listTypePush(lobj,c->argv[j],where);
+        listTypePush(lobj,c->m_argv[j],where);
         pushed++;
     }
     addReplyLongLong(c, (lobj ? listTypeLength(lobj) : 0));
     if (pushed) {
         const char *event = (where == LIST_HEAD) ? "lpush" : "rpush";
 
-        signalModifiedKey(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_LIST,event,c->argv[1],c->db->m_id);
+        signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+        notifyKeyspaceEvent(NOTIFY_LIST,event,c->m_argv[1],c->m_cur_selected_db->m_id);
     }
     server.dirty += pushed;
 }
@@ -249,11 +249,11 @@ void pushxGenericCommand(client *c, int where) {
     int j, pushed = 0;
     robj *subject;
 
-    if ((subject = lookupKeyWriteOrReply(c,c->argv[1],shared.czero)) == NULL ||
+    if ((subject = lookupKeyWriteOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,subject,OBJ_LIST)) return;
 
-    for (j = 2; j < c->argc; j++) {
-        listTypePush(subject,c->argv[j],where);
+    for (j = 2; j < c->m_argc; j++) {
+        listTypePush(subject,c->m_argv[j],where);
         pushed++;
     }
 
@@ -261,8 +261,8 @@ void pushxGenericCommand(client *c, int where) {
 
     if (pushed) {
         const char *event = (where == LIST_HEAD) ? "lpush" : "rpush";
-        signalModifiedKey(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_LIST,event,c->argv[1],c->db->m_id);
+        signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+        notifyKeyspaceEvent(NOTIFY_LIST,event,c->m_argv[1],c->m_cur_selected_db->m_id);
     }
     server.dirty += pushed;
 }
@@ -281,32 +281,32 @@ void linsertCommand(client *c) {
     listTypeEntry entry;
     int inserted = 0;
 
-    if (strcasecmp((const char*)c->argv[2]->ptr,"after") == 0) {
+    if (strcasecmp((const char*)c->m_argv[2]->ptr,"after") == 0) {
         where = LIST_TAIL;
-    } else if (strcasecmp((const char*)c->argv[2]->ptr,"before") == 0) {
+    } else if (strcasecmp((const char*)c->m_argv[2]->ptr,"before") == 0) {
         where = LIST_HEAD;
     } else {
         addReply(c,shared.syntaxerr);
         return;
     }
 
-    if ((subject = lookupKeyWriteOrReply(c,c->argv[1],shared.czero)) == NULL ||
+    if ((subject = lookupKeyWriteOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,subject,OBJ_LIST)) return;
 
     /* Seek pivot from head to tail */
     listTypeIterator iter(subject,0,LIST_TAIL);
     while (iter.listTypeNext(&entry)) {
-        if (listTypeEqual(&entry,c->argv[3])) {
-            listTypeInsert(&entry,c->argv[4],where);
+        if (listTypeEqual(&entry,c->m_argv[3])) {
+            listTypeInsert(&entry,c->m_argv[4],where);
             inserted = 1;
             break;
         }
     }
 
     if (inserted) {
-        signalModifiedKey(c->db,c->argv[1]);
+        signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
         notifyKeyspaceEvent(NOTIFY_LIST,"linsert",
-                            c->argv[1],c->db->m_id);
+                            c->m_argv[1],c->m_cur_selected_db->m_id);
         server.dirty++;
     } else {
         /* Notify client of a failed insert */
@@ -318,18 +318,18 @@ void linsertCommand(client *c) {
 }
 
 void llenCommand(client *c) {
-    robj *o = lookupKeyReadOrReply(c,c->argv[1],shared.czero);
+    robj *o = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero);
     if (o == NULL || checkType(c,o,OBJ_LIST)) return;
     addReplyLongLong(c,listTypeLength(o));
 }
 
 void lindexCommand(client *c) {
-    robj *o = lookupKeyReadOrReply(c,c->argv[1],shared.nullbulk);
+    robj *o = lookupKeyReadOrReply(c,c->m_argv[1],shared.nullbulk);
     if (o == NULL || checkType(c,o,OBJ_LIST)) return;
     long index;
     robj *value = NULL;
 
-    if ((getLongFromObjectOrReply(c, c->argv[2], &index, NULL) != C_OK))
+    if ((getLongFromObjectOrReply(c, c->m_argv[2], &index, NULL) != C_OK))
         return;
 
     if (o->encoding == OBJ_ENCODING_QUICKLIST) {
@@ -351,12 +351,12 @@ void lindexCommand(client *c) {
 }
 
 void lsetCommand(client *c) {
-    robj *o = lookupKeyWriteOrReply(c,c->argv[1],shared.nokeyerr);
+    robj *o = lookupKeyWriteOrReply(c,c->m_argv[1],shared.nokeyerr);
     if (o == NULL || checkType(c,o,OBJ_LIST)) return;
     long index;
-    robj *value = c->argv[3];
+    robj *value = c->m_argv[3];
 
-    if ((getLongFromObjectOrReply(c, c->argv[2], &index, NULL) != C_OK))
+    if ((getLongFromObjectOrReply(c, c->m_argv[2], &index, NULL) != C_OK))
         return;
 
     if (o->encoding == OBJ_ENCODING_QUICKLIST) {
@@ -367,8 +367,8 @@ void lsetCommand(client *c) {
             addReply(c,shared.outofrangeerr);
         } else {
             addReply(c,shared.ok);
-            signalModifiedKey(c->db,c->argv[1]);
-            notifyKeyspaceEvent(NOTIFY_LIST,"lset",c->argv[1],c->db->m_id);
+            signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+            notifyKeyspaceEvent(NOTIFY_LIST,"lset",c->m_argv[1],c->m_cur_selected_db->m_id);
             server.dirty++;
         }
     } else {
@@ -377,7 +377,7 @@ void lsetCommand(client *c) {
 }
 
 void popGenericCommand(client *c, int where) {
-    robj *o = lookupKeyWriteOrReply(c,c->argv[1],shared.nullbulk);
+    robj *o = lookupKeyWriteOrReply(c,c->m_argv[1],shared.nullbulk);
     if (o == NULL || checkType(c,o,OBJ_LIST)) return;
 
     robj *value = listTypePop(o,where);
@@ -388,13 +388,13 @@ void popGenericCommand(client *c, int where) {
 
         addReplyBulk(c,value);
         decrRefCount(value);
-        notifyKeyspaceEvent(NOTIFY_LIST,event,c->argv[1],c->db->m_id);
+        notifyKeyspaceEvent(NOTIFY_LIST,event,c->m_argv[1],c->m_cur_selected_db->m_id);
         if (listTypeLength(o) == 0) {
             notifyKeyspaceEvent(NOTIFY_GENERIC,"del",
-                                c->argv[1],c->db->m_id);
-            dbDelete(c->db,c->argv[1]);
+                                c->m_argv[1],c->m_cur_selected_db->m_id);
+            dbDelete(c->m_cur_selected_db,c->m_argv[1]);
         }
-        signalModifiedKey(c->db,c->argv[1]);
+        signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
         server.dirty++;
     }
 }
@@ -411,10 +411,10 @@ void lrangeCommand(client *c) {
     robj *o;
     long start, end, llen, rangelen;
 
-    if ((getLongFromObjectOrReply(c, c->argv[2], &start, NULL) != C_OK) ||
-        (getLongFromObjectOrReply(c, c->argv[3], &end, NULL) != C_OK)) return;
+    if ((getLongFromObjectOrReply(c, c->m_argv[2], &start, NULL) != C_OK) ||
+        (getLongFromObjectOrReply(c, c->m_argv[3], &end, NULL) != C_OK)) return;
 
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.emptymultibulk)) == NULL
+    if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.emptymultibulk)) == NULL
          || checkType(c,o,OBJ_LIST)) return;
     llen = listTypeLength(o);
 
@@ -459,10 +459,10 @@ void ltrimCommand(client *c) {
     robj *o;
     long start, end, llen, ltrim, rtrim;
 
-    if ((getLongFromObjectOrReply(c, c->argv[2], &start, NULL) != C_OK) ||
-        (getLongFromObjectOrReply(c, c->argv[3], &end, NULL) != C_OK)) return;
+    if ((getLongFromObjectOrReply(c, c->m_argv[2], &start, NULL) != C_OK) ||
+        (getLongFromObjectOrReply(c, c->m_argv[3], &end, NULL) != C_OK)) return;
 
-    if ((o = lookupKeyWriteOrReply(c,c->argv[1],shared.ok)) == NULL ||
+    if ((o = lookupKeyWriteOrReply(c,c->m_argv[1],shared.ok)) == NULL ||
         checkType(c,o,OBJ_LIST)) return;
     llen = listTypeLength(o);
 
@@ -491,26 +491,26 @@ void ltrimCommand(client *c) {
         serverPanic("Unknown list encoding");
     }
 
-    notifyKeyspaceEvent(NOTIFY_LIST,"ltrim",c->argv[1],c->db->m_id);
+    notifyKeyspaceEvent(NOTIFY_LIST,"ltrim",c->m_argv[1],c->m_cur_selected_db->m_id);
     if (listTypeLength(o) == 0) {
-        dbDelete(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->m_id);
+        dbDelete(c->m_cur_selected_db,c->m_argv[1]);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->m_argv[1],c->m_cur_selected_db->m_id);
     }
-    signalModifiedKey(c->db,c->argv[1]);
+    signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
     server.dirty++;
     addReply(c,shared.ok);
 }
 
 void lremCommand(client *c) {
     robj *subject, *obj;
-    obj = c->argv[3];
+    obj = c->m_argv[3];
     long toremove;
     long removed = 0;
 
-    if ((getLongFromObjectOrReply(c, c->argv[2], &toremove, NULL) != C_OK))
+    if ((getLongFromObjectOrReply(c, c->m_argv[2], &toremove, NULL) != C_OK))
         return;
 
-    subject = lookupKeyWriteOrReply(c,c->argv[1],shared.czero);
+    subject = lookupKeyWriteOrReply(c,c->m_argv[1],shared.czero);
     if (subject == NULL || checkType(c,subject,OBJ_LIST)) return;
 
     long index = 0; // default when toremove >= 0
@@ -537,13 +537,13 @@ void lremCommand(client *c) {
     }
 
     if (removed) {
-        signalModifiedKey(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"lrem",c->argv[1],c->db->m_id);
+        signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"lrem",c->m_argv[1],c->m_cur_selected_db->m_id);
     }
 
     if (listTypeLength(subject) == 0) {
-        dbDelete(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->m_id);
+        dbDelete(c->m_cur_selected_db,c->m_argv[1]);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->m_argv[1],c->m_cur_selected_db->m_id);
     }
 
     addReplyLongLong(c,removed);
@@ -571,18 +571,18 @@ void rpoplpushHandlePush(client *c, robj *dstkey, robj *dstobj, robj *value) {
         dstobj = createQuicklistObject();
         quicklistSetOptions((quicklist *)dstobj->ptr, server.list_max_ziplist_size,
                             server.list_compress_depth);
-        dbAdd(c->db,dstkey,dstobj);
+        dbAdd(c->m_cur_selected_db,dstkey,dstobj);
     }
-    signalModifiedKey(c->db,dstkey);
+    signalModifiedKey(c->m_cur_selected_db,dstkey);
     listTypePush(dstobj,value,LIST_HEAD);
-    notifyKeyspaceEvent(NOTIFY_LIST,"lpush",dstkey,c->db->m_id);
+    notifyKeyspaceEvent(NOTIFY_LIST,"lpush",dstkey,c->m_cur_selected_db->m_id);
     /* Always send the pushed value to the client. */
     addReplyBulk(c,value);
 }
 
 void rpoplpushCommand(client *c) {
     robj *sobj, *value;
-    if ((sobj = lookupKeyWriteOrReply(c,c->argv[1],shared.nullbulk)) == NULL ||
+    if ((sobj = lookupKeyWriteOrReply(c,c->m_argv[1],shared.nullbulk)) == NULL ||
         checkType(c,sobj,OBJ_LIST)) return;
 
     if (listTypeLength(sobj) == 0) {
@@ -590,8 +590,8 @@ void rpoplpushCommand(client *c) {
          * versions of Redis delete keys of empty lists. */
         addReply(c,shared.nullbulk);
     } else {
-        robj *dobj = lookupKeyWrite(c->db,c->argv[2]);
-        robj *touchedkey = c->argv[1];
+        robj *dobj = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[2]);
+        robj *touchedkey = c->m_argv[1];
 
         if (dobj && checkType(c,dobj,OBJ_LIST)) return;
         value = listTypePop(sobj,LIST_TAIL);
@@ -599,19 +599,19 @@ void rpoplpushCommand(client *c) {
          * may change the client command argument vector (it does not
          * currently). */
         incrRefCount(touchedkey);
-        rpoplpushHandlePush(c,c->argv[2],dobj,value);
+        rpoplpushHandlePush(c,c->m_argv[2],dobj,value);
 
         /* listTypePop returns an object with its refcount incremented */
         decrRefCount(value);
 
         /* Delete the source list when it is empty */
-        notifyKeyspaceEvent(NOTIFY_LIST,"rpop",touchedkey,c->db->m_id);
+        notifyKeyspaceEvent(NOTIFY_LIST,"rpop",touchedkey,c->m_cur_selected_db->m_id);
         if (listTypeLength(sobj) == 0) {
-            dbDelete(c->db,touchedkey);
+            dbDelete(c->m_cur_selected_db,touchedkey);
             notifyKeyspaceEvent(NOTIFY_GENERIC,"del",
-                                touchedkey,c->db->m_id);
+                                touchedkey,c->m_cur_selected_db->m_id);
         }
-        signalModifiedKey(c->db,touchedkey);
+        signalModifiedKey(c->m_cur_selected_db,touchedkey);
         decrRefCount(touchedkey);
         server.dirty++;
     }
@@ -645,24 +645,24 @@ void blockForKeys(client *c, robj **keys, int numkeys, mstime_t timeout, robj *t
     list *l;
     int j;
 
-    c->bpop.timeout = timeout;
-    c->bpop.target = target;
+    c->m_blocking_state.timeout = timeout;
+    c->m_blocking_state.target = target;
 
     if (target != NULL) incrRefCount(target);
 
     for (j = 0; j < numkeys; j++) {
         /* If the key already exists in the dict ignore it. */
-        if (c->bpop.keys->dictAdd(keys[j],NULL) != DICT_OK) continue;
+        if (c->m_blocking_state.keys->dictAdd(keys[j],NULL) != DICT_OK) continue;
         incrRefCount(keys[j]);
 
         /* And in the other "side", to map keys -> clients */
-        de = c->db->m_blocking_keys->dictFind(keys[j]);
+        de = c->m_cur_selected_db->m_blocking_keys->dictFind(keys[j]);
         if (de == NULL) {
             int retval;
 
             /* For every key we take a list of clients blocked for it */
             l = listCreate();
-            retval = c->db->m_blocking_keys->dictAdd(keys[j],l);
+            retval = c->m_cur_selected_db->m_blocking_keys->dictAdd(keys[j],l);
             incrRefCount(keys[j]);
             serverAssertWithInfo(c,keys[j],retval == DICT_OK);
         } else {
@@ -678,28 +678,28 @@ void blockForKeys(client *c, robj **keys, int numkeys, mstime_t timeout, robj *t
 void unblockClientWaitingData(client *c) {
     dictEntry *de;
 
-    serverAssertWithInfo(c,NULL,c->bpop.keys->dictSize() != 0);
+    serverAssertWithInfo(c,NULL,c->m_blocking_state.keys->dictSize() != 0);
     {
-        dictIterator di(c->bpop.keys);
+        dictIterator di(c->m_blocking_state.keys);
         /* The client may wait for multiple keys, so unblock it for every key. */
         while((de = di.dictNext()) != NULL) {
             robj *key = (robj *)de->dictGetKey();
 
             /* Remove this client from the list of clients waiting for this key. */
-            list *l = (list *)(c->db->m_blocking_keys)->dictFetchValue(key);
+            list *l = (list *)(c->m_cur_selected_db->m_blocking_keys)->dictFetchValue(key);
             serverAssertWithInfo(c,key,l != NULL);
             l->listDelNode(l->listSearchKey(c));
             /* If the list is empty we need to remove it to avoid wasting memory */
             if (l->listLength() == 0)
-                c->db->m_blocking_keys->dictDelete(key);
+                c->m_cur_selected_db->m_blocking_keys->dictDelete(key);
         }
     }
     
     /* Cleanup the client structure */
-    c->bpop.keys->dictEmpty(NULL);
-    if (c->bpop.target) {
-        decrRefCount(c->bpop.target);
-        c->bpop.target = NULL;
+    c->m_blocking_state.keys->dictEmpty(NULL);
+    if (c->m_blocking_state.target) {
+        decrRefCount(c->m_blocking_state.target);
+        c->m_blocking_state.target = NULL;
     }
 }
 
@@ -772,7 +772,7 @@ int serveClientBlockedOnList(client *receiver, robj *key, robj *dstkey, redisDb 
     } else {
         /* BRPOPLPUSH */
         robj *dstobj =
-            lookupKeyWrite(receiver->db,dstkey);
+            lookupKeyWrite(receiver->m_cur_selected_db,dstkey);
         if (!(dstobj &&
              checkType(receiver,dstobj,OBJ_LIST)))
         {
@@ -846,9 +846,9 @@ void handleClientsBlockedOnLists() {
                     while(numclients--) {
                         listNode *clientnode = clients->listFirst();
                         client *receiver = (client *)clientnode->listNodeValue();
-                        robj *dstkey = receiver->bpop.target;
-                        int where = (receiver->lastcmd &&
-                                     receiver->lastcmd->proc == blpopCommand) ?
+                        robj *dstkey = receiver->m_blocking_state.target;
+                        int where = (receiver->m_last_cmd &&
+                                     receiver->m_last_cmd->proc == blpopCommand) ?
                                     LIST_HEAD : LIST_TAIL;
                         robj *value = listTypePop(o,where);
 
@@ -898,11 +898,11 @@ void blockingPopGenericCommand(client *c, int where) {
     mstime_t timeout;
     int j;
 
-    if (getTimeoutFromObjectOrReply(c,c->argv[c->argc-1],&timeout,UNIT_SECONDS)
+    if (getTimeoutFromObjectOrReply(c,c->m_argv[c->m_argc-1],&timeout,UNIT_SECONDS)
         != C_OK) return;
 
-    for (j = 1; j < c->argc-1; j++) {
-        o = lookupKeyWrite(c->db,c->argv[j]);
+    for (j = 1; j < c->m_argc-1; j++) {
+        o = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[j]);
         if (o != NULL) {
             if (o->type != OBJ_LIST) {
                 addReply(c,shared.wrongtypeerr);
@@ -915,23 +915,23 @@ void blockingPopGenericCommand(client *c, int where) {
                     serverAssert(value != NULL);
 
                     addReplyMultiBulkLen(c,2);
-                    addReplyBulk(c,c->argv[j]);
+                    addReplyBulk(c,c->m_argv[j]);
                     addReplyBulk(c,value);
                     decrRefCount(value);
                     notifyKeyspaceEvent(NOTIFY_LIST,(char *)event,
-                                        c->argv[j],c->db->m_id);
+                                        c->m_argv[j],c->m_cur_selected_db->m_id);
                     if (listTypeLength(o) == 0) {
-                        dbDelete(c->db,c->argv[j]);
+                        dbDelete(c->m_cur_selected_db,c->m_argv[j]);
                         notifyKeyspaceEvent(NOTIFY_GENERIC,"del",
-                                            c->argv[j],c->db->m_id);
+                                            c->m_argv[j],c->m_cur_selected_db->m_id);
                     }
-                    signalModifiedKey(c->db,c->argv[j]);
+                    signalModifiedKey(c->m_cur_selected_db,c->m_argv[j]);
                     server.dirty++;
 
                     /* Replicate it as an [LR]POP instead of B[LR]POP. */
                     rewriteClientCommandVector(c,2,
                         (where == LIST_HEAD) ? shared.lpop : shared.rpop,
-                        c->argv[j]);
+                        c->m_argv[j]);
                     return;
                 }
             }
@@ -946,7 +946,7 @@ void blockingPopGenericCommand(client *c, int where) {
     }
 
     /* If the list is empty or the key does not exists we must block */
-    blockForKeys(c, c->argv + 1, c->argc - 2, timeout, NULL);
+    blockForKeys(c, c->m_argv + 1, c->m_argc - 2, timeout, NULL);
 }
 
 void blpopCommand(client *c) {
@@ -960,10 +960,10 @@ void brpopCommand(client *c) {
 void brpoplpushCommand(client *c) {
     mstime_t timeout;
 
-    if (getTimeoutFromObjectOrReply(c,c->argv[3],&timeout,UNIT_SECONDS)
+    if (getTimeoutFromObjectOrReply(c,c->m_argv[3],&timeout,UNIT_SECONDS)
         != C_OK) return;
 
-    robj *key = lookupKeyWrite(c->db, c->argv[1]);
+    robj *key = lookupKeyWrite(c->m_cur_selected_db, c->m_argv[1]);
 
     if (key == NULL) {
         if (c->m_flags & CLIENT_MULTI) {
@@ -972,7 +972,7 @@ void brpoplpushCommand(client *c) {
             addReply(c, shared.nullbulk);
         } else {
             /* The list is empty and the client blocks. */
-            blockForKeys(c, c->argv + 1, 1, timeout, c->argv[2]);
+            blockForKeys(c, c->m_argv + 1, 1, timeout, c->m_argv[2]);
         }
     } else {
         if (key->type != OBJ_LIST) {

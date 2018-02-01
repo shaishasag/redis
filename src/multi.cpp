@@ -33,23 +33,23 @@
 
 /* Client state initialization for MULTI/EXEC */
 void initClientMultiState(client *c) {
-    c->mstate.m_commands = NULL;
-    c->mstate.m_count = 0;
+    c->m_multi_exec_state.m_commands = NULL;
+    c->m_multi_exec_state.m_count = 0;
 }
 
 /* Release all the resources associated with MULTI/EXEC state */
 void freeClientMultiState(client *c) {
     int j;
 
-    for (j = 0; j < c->mstate.m_count; j++) {
+    for (j = 0; j < c->m_multi_exec_state.m_count; j++) {
         int i;
-        multiCmd *mc = c->mstate.m_commands+j;
+        multiCmd *mc = c->m_multi_exec_state.m_commands+j;
 
         for (i = 0; i < mc->argc; i++)
             decrRefCount(mc->argv[i]);
         zfree(mc->argv);
     }
-    zfree(c->mstate.m_commands);
+    zfree(c->m_multi_exec_state.m_commands);
 }
 
 /* Add a new command into the MULTI commands queue */
@@ -57,16 +57,16 @@ void queueMultiCommand(client *c) {
     multiCmd *mc;
     int j;
 
-    c->mstate.m_commands = (multiCmd *)zrealloc(c->mstate.m_commands,
-            sizeof(multiCmd)*(c->mstate.m_count+1));
-    mc = c->mstate.m_commands+c->mstate.m_count;
-    mc->cmd = c->cmd;
-    mc->argc = c->argc;
-    mc->argv = (robj **)zmalloc(sizeof(robj*)*c->argc);
-    memcpy(mc->argv,c->argv,sizeof(robj*)*c->argc);
-    for (j = 0; j < c->argc; j++)
+    c->m_multi_exec_state.m_commands = (multiCmd *)zrealloc(c->m_multi_exec_state.m_commands,
+            sizeof(multiCmd)*(c->m_multi_exec_state.m_count+1));
+    mc = c->m_multi_exec_state.m_commands+c->m_multi_exec_state.m_count;
+    mc->cmd = c->m_cmd;
+    mc->argc = c->m_argc;
+    mc->argv = (robj **)zmalloc(sizeof(robj*)*c->m_argc);
+    memcpy(mc->argv,c->m_argv,sizeof(robj*)*c->m_argc);
+    for (j = 0; j < c->m_argc; j++)
         incrRefCount(mc->argv[j]);
-    c->mstate.m_count++;
+    c->m_multi_exec_state.m_count++;
 }
 
 void discardTransaction(client *c) {
@@ -106,7 +106,7 @@ void discardCommand(client *c) {
 void execCommandPropagateMulti(client *c) {
     robj *multistring = createStringObject("MULTI",5);
 
-    propagate(server.multiCommand,c->db->m_id,&multistring,1,
+    propagate(server.multiCommand,c->m_cur_selected_db->m_id,&multistring,1,
               PROPAGATE_AOF|PROPAGATE_REPL);
     decrRefCount(multistring);
 }
@@ -139,21 +139,21 @@ void execCommand(client *c) {
 
     /* Exec all the queued commands */
     unwatchAllKeys(c); /* Unwatch ASAP otherwise we'll waste CPU cycles */
-    orig_argv = c->argv;
-    orig_argc = c->argc;
-    orig_cmd = c->cmd;
-    addReplyMultiBulkLen(c,c->mstate.m_count);
-    for (j = 0; j < c->mstate.m_count; j++) {
-        c->argc = c->mstate.m_commands[j].argc;
-        c->argv = c->mstate.m_commands[j].argv;
-        c->cmd = c->mstate.m_commands[j].cmd;
+    orig_argv = c->m_argv;
+    orig_argc = c->m_argc;
+    orig_cmd = c->m_cmd;
+    addReplyMultiBulkLen(c,c->m_multi_exec_state.m_count);
+    for (j = 0; j < c->m_multi_exec_state.m_count; j++) {
+        c->m_argc = c->m_multi_exec_state.m_commands[j].argc;
+        c->m_argv = c->m_multi_exec_state.m_commands[j].argv;
+        c->m_cmd = c->m_multi_exec_state.m_commands[j].cmd;
 
         /* Propagate a MULTI request once we encounter the first command which
          * is not readonly nor an administrative one.
          * This way we'll deliver the MULTI/..../EXEC block as a whole and
          * both the AOF and the replication link will have the same consistency
          * and atomicity guarantees. */
-        if (!must_propagate && !(c->cmd->m_flags & (CMD_READONLY|CMD_ADMIN))) {
+        if (!must_propagate && !(c->m_cmd->m_flags & (CMD_READONLY|CMD_ADMIN))) {
             execCommandPropagateMulti(c);
             must_propagate = 1;
         }
@@ -161,13 +161,13 @@ void execCommand(client *c) {
         call(c,CMD_CALL_FULL);
 
         /* Commands may alter argc/argv, restore mstate. */
-        c->mstate.m_commands[j].argc = c->argc;
-        c->mstate.m_commands[j].argv = c->argv;
-        c->mstate.m_commands[j].cmd = c->cmd;
+        c->m_multi_exec_state.m_commands[j].argc = c->m_argc;
+        c->m_multi_exec_state.m_commands[j].argv = c->m_argv;
+        c->m_multi_exec_state.m_commands[j].cmd = c->m_cmd;
     }
-    c->argv = orig_argv;
-    c->argc = orig_argc;
-    c->cmd = orig_cmd;
+    c->m_argv = orig_argv;
+    c->m_argc = orig_argc;
+    c->m_cmd = orig_cmd;
     discardTransaction(c);
 
     /* Make sure the EXEC command will be propagated as well if MULTI
@@ -193,7 +193,7 @@ handle_monitor:
      * Instead EXEC is flagged as CMD_SKIP_MONITOR in the command
      * table, and we do it here with correct ordering. */
     if (server.monitors->listLength() && !server.loading)
-        replicationFeedMonitors(c,server.monitors,c->db->m_id,c->argv,c->argc);
+        replicationFeedMonitors(c,server.monitors,c->m_cur_selected_db->m_id,c->m_argv,c->m_argc);
 }
 
 /* ===================== WATCH (CAS alike for MULTI/EXEC) ===================
@@ -220,26 +220,26 @@ void watchForKey(client *c, robj *key) {
     watchedKey *wk;
 
     /* Check if we are already watching for this key */
-    listIter li(c->watched_keys);
+    listIter li(c->m_watched_keys);
     while((ln = li.listNext())) {
         wk = (watchedKey *)ln->listNodeValue();
-        if (wk->db == c->db && equalStringObjects(key,wk->key))
+        if (wk->db == c->m_cur_selected_db && equalStringObjects(key,wk->key))
             return; /* Key already watched */
     }
     /* This key is not already watched in this DB. Let's add it */
-    clients = (list *)c->db->m_watched_keys->dictFetchValue(key);
+    clients = (list *)c->m_cur_selected_db->m_watched_keys->dictFetchValue(key);
     if (!clients) {
         clients = listCreate();
-        c->db->m_watched_keys->dictAdd(key,clients);
+        c->m_cur_selected_db->m_watched_keys->dictAdd(key,clients);
         incrRefCount(key);
     }
     clients->listAddNodeTail(c);
     /* Add the new key to the list of keys watched by this client */
     wk = (watchedKey *)zmalloc(sizeof(*wk));
     wk->key = key;
-    wk->db = c->db;
+    wk->db = c->m_cur_selected_db;
     incrRefCount(key);
-    c->watched_keys->listAddNodeTail(wk);
+    c->m_watched_keys->listAddNodeTail(wk);
 }
 
 /* Unwatch all the keys watched by this client. To clean the EXEC dirty
@@ -247,8 +247,8 @@ void watchForKey(client *c, robj *key) {
 void unwatchAllKeys(client *c) {
     listNode *ln;
 
-    if (c->watched_keys->listLength() == 0) return;
-    listIter li(c->watched_keys);
+    if (c->m_watched_keys->listLength() == 0) return;
+    listIter li(c->m_watched_keys);
     while((ln = li.listNext())) {
         /* Lookup the watched key -> clients list and remove the client
          * from the list */
@@ -260,7 +260,7 @@ void unwatchAllKeys(client *c) {
         if (clients->listLength() == 0)
             wk->db->m_watched_keys->dictDelete( wk->key);
         /* Remove this watched key from the client->watched list */
-        c->watched_keys->listDelNode(ln);
+        c->m_watched_keys->listDelNode(ln);
         decrRefCount(wk->key);
         zfree(wk);
     }
@@ -297,7 +297,7 @@ void touchWatchedKeysOnFlush(int dbid) {
     listIter li1(server.clients);
     while((ln = li1.listNext())) {
         client *c = (client *)ln->listNodeValue();
-        listIter li2(c->watched_keys);
+        listIter li2(c->m_watched_keys);
         while((ln = li2.listNext())) {
             watchedKey *wk = (watchedKey *)ln->listNodeValue();
 
@@ -319,8 +319,8 @@ void watchCommand(client *c) {
         addReplyError(c,"WATCH inside MULTI is not allowed");
         return;
     }
-    for (j = 1; j < c->argc; j++)
-        watchForKey(c,c->argv[j]);
+    for (j = 1; j < c->m_argc; j++)
+        watchForKey(c,c->m_argv[j]);
     addReply(c,shared.ok);
 }
 

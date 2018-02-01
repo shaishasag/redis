@@ -467,10 +467,10 @@ sds hashTypeIterator::hashTypeCurrentObjectNewSds(int what)
 }
 
 robj *hashTypeLookupWriteOrCreate(client *c, robj *key) {
-    robj *o = lookupKeyWrite(c->db,key);
+    robj *o = lookupKeyWrite(c->m_cur_selected_db,key);
     if (o == NULL) {
         o = createHashObject();
-        dbAdd(c->db,key,o);
+        dbAdd(c->m_cur_selected_db,key,o);
     } else {
         if (o->type != OBJ_HASH) {
             addReply(c,shared.wrongtypeerr);
@@ -530,16 +530,16 @@ void hashTypeConvert(robj *o, int enc) {
 
 void hsetnxCommand(client *c) {
     robj *o;
-    if ((o = hashTypeLookupWriteOrCreate(c,c->argv[1])) == NULL) return;
-    hashTypeTryConversion(o,c->argv,2,3);
+    if ((o = hashTypeLookupWriteOrCreate(c,c->m_argv[1])) == NULL) return;
+    hashTypeTryConversion(o,c->m_argv,2,3);
 
-    if (hashTypeExists(o, (sds)c->argv[2]->ptr)) {
+    if (hashTypeExists(o, (sds)c->m_argv[2]->ptr)) {
         addReply(c, shared.czero);
     } else {
-        hashTypeSet(o, (sds)c->argv[2]->ptr, (sds)c->argv[3]->ptr,HASH_SET_COPY);
+        hashTypeSet(o, (sds)c->m_argv[2]->ptr, (sds)c->m_argv[3]->ptr,HASH_SET_COPY);
         addReply(c, shared.cone);
-        signalModifiedKey(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_HASH,"hset",c->argv[1],c->db->m_id);
+        signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+        notifyKeyspaceEvent(NOTIFY_HASH,"hset",c->m_argv[1],c->m_cur_selected_db->m_id);
         server.dirty++;
     }
 }
@@ -548,19 +548,19 @@ void hsetCommand(client *c) {
     int i, created = 0;
     robj *o;
 
-    if ((c->argc % 2) == 1) {
+    if ((c->m_argc % 2) == 1) {
         addReplyError(c,"wrong number of arguments for HMSET");
         return;
     }
 
-    if ((o = hashTypeLookupWriteOrCreate(c,c->argv[1])) == NULL) return;
-    hashTypeTryConversion(o,c->argv,2,c->argc-1);
+    if ((o = hashTypeLookupWriteOrCreate(c,c->m_argv[1])) == NULL) return;
+    hashTypeTryConversion(o,c->m_argv,2,c->m_argc-1);
 
-    for (i = 2; i < c->argc; i += 2)
-        created += !hashTypeSet(o, (sds)c->argv[i]->ptr, (sds)c->argv[i+1]->ptr,HASH_SET_COPY);
+    for (i = 2; i < c->m_argc; i += 2)
+        created += !hashTypeSet(o, (sds)c->m_argv[i]->ptr, (sds)c->m_argv[i+1]->ptr,HASH_SET_COPY);
 
     /* HMSET (deprecated) and HSET return value is different. */
-    char *cmdname = (char *)c->argv[0]->ptr;
+    char *cmdname = (char *)c->m_argv[0]->ptr;
     if (cmdname[1] == 's' || cmdname[1] == 'S') {
         /* HSET */
         addReplyLongLong(c, created);
@@ -568,8 +568,8 @@ void hsetCommand(client *c) {
         /* HMSET */
         addReply(c, shared.ok);
     }
-    signalModifiedKey(c->db,c->argv[1]);
-    notifyKeyspaceEvent(NOTIFY_HASH,"hset",c->argv[1],c->db->m_id);
+    signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+    notifyKeyspaceEvent(NOTIFY_HASH,"hset",c->m_argv[1],c->m_cur_selected_db->m_id);
     server.dirty++;
 }
 
@@ -580,9 +580,9 @@ void hincrbyCommand(client *c) {
     unsigned char *vstr;
     unsigned int vlen;
 
-    if (getLongLongFromObjectOrReply(c,c->argv[3],&incr,NULL) != C_OK) return;
-    if ((o = hashTypeLookupWriteOrCreate(c,c->argv[1])) == NULL) return;
-    if (hashTypeGetValue(o, (sds)c->argv[2]->ptr,&vstr,&vlen,&value) == C_OK) {
+    if (getLongLongFromObjectOrReply(c,c->m_argv[3],&incr,NULL) != C_OK) return;
+    if ((o = hashTypeLookupWriteOrCreate(c,c->m_argv[1])) == NULL) return;
+    if (hashTypeGetValue(o, (sds)c->m_argv[2]->ptr,&vstr,&vlen,&value) == C_OK) {
         if (vstr) {
             if (string2ll((char*)vstr,vlen,&value) == 0) {
                 addReplyError(c,"hash value is not an integer");
@@ -601,10 +601,10 @@ void hincrbyCommand(client *c) {
     }
     value += incr;
     _new = sdsfromlonglong(value);
-    hashTypeSet(o, (sds)c->argv[2]->ptr, _new,HASH_SET_TAKE_VALUE);
+    hashTypeSet(o, (sds)c->m_argv[2]->ptr, _new,HASH_SET_TAKE_VALUE);
     addReplyLongLong(c,value);
-    signalModifiedKey(c->db,c->argv[1]);
-    notifyKeyspaceEvent(NOTIFY_HASH,"hincrby",c->argv[1],c->db->m_id);
+    signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+    notifyKeyspaceEvent(NOTIFY_HASH,"hincrby",c->m_argv[1],c->m_cur_selected_db->m_id);
     server.dirty++;
 }
 
@@ -616,11 +616,11 @@ void hincrbyfloatCommand(client *c) {
     unsigned char *vstr;
     unsigned int vlen;
 
-    if (getLongDoubleFromObjectOrReply(c,c->argv[3],&incr,NULL) != C_OK)
+    if (getLongDoubleFromObjectOrReply(c,c->m_argv[3],&incr,NULL) != C_OK)
         return;
-    if ((o = hashTypeLookupWriteOrCreate(c,c->argv[1])) == NULL)
+    if ((o = hashTypeLookupWriteOrCreate(c,c->m_argv[1])) == NULL)
         return;
-    if (hashTypeGetValue(o, (sds)c->argv[2]->ptr,&vstr,&vlen,&ll) == C_OK) {
+    if (hashTypeGetValue(o, (sds)c->m_argv[2]->ptr,&vstr,&vlen,&ll) == C_OK) {
         if (vstr) {
             if (string2ld((char*)vstr,vlen,&value) == 0) {
                 addReplyError(c,"hash value is not a float");
@@ -638,10 +638,10 @@ void hincrbyfloatCommand(client *c) {
     char buf[256];
     int len = ld2string(buf,sizeof(buf),value,1);
     _new = sdsnewlen(buf,len);
-    hashTypeSet(o, (sds)c->argv[2]->ptr,_new,HASH_SET_TAKE_VALUE);
+    hashTypeSet(o, (sds)c->m_argv[2]->ptr,_new,HASH_SET_TAKE_VALUE);
     addReplyBulkCBuffer(c,buf,len);
-    signalModifiedKey(c->db,c->argv[1]);
-    notifyKeyspaceEvent(NOTIFY_HASH,"hincrbyfloat",c->argv[1],c->db->m_id);
+    signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+    notifyKeyspaceEvent(NOTIFY_HASH,"hincrbyfloat",c->m_argv[1],c->m_cur_selected_db->m_id);
     server.dirty++;
 
     /* Always replicate HINCRBYFLOAT as an HSET command with the final value
@@ -694,10 +694,10 @@ static void addHashFieldToReply(client *c, robj *o, sds field) {
 void hgetCommand(client *c) {
     robj *o;
 
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.nullbulk)) == NULL ||
+    if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.nullbulk)) == NULL ||
         checkType(c,o,OBJ_HASH)) return;
 
-    addHashFieldToReply(c, o, (sds)c->argv[2]->ptr);
+    addHashFieldToReply(c, o, (sds)c->m_argv[2]->ptr);
 }
 
 void hmgetCommand(client *c) {
@@ -706,15 +706,15 @@ void hmgetCommand(client *c) {
 
     /* Don't abort when the key cannot be found. Non-existing keys are empty
      * hashes, where HMGET should respond with a series of null bulks. */
-    o = lookupKeyRead(c->db, c->argv[1]);
+    o = lookupKeyRead(c->m_cur_selected_db, c->m_argv[1]);
     if (o != NULL && o->type != OBJ_HASH) {
         addReply(c, shared.wrongtypeerr);
         return;
     }
 
-    addReplyMultiBulkLen(c, c->argc-2);
-    for (i = 2; i < c->argc; i++) {
-        addHashFieldToReply(c, o, (sds)c->argv[i]->ptr);
+    addReplyMultiBulkLen(c, c->m_argc-2);
+    for (i = 2; i < c->m_argc; i++) {
+        addHashFieldToReply(c, o, (sds)c->m_argv[i]->ptr);
     }
 }
 
@@ -722,25 +722,25 @@ void hdelCommand(client *c) {
     robj *o;
     int j, deleted = 0, keyremoved = 0;
 
-    if ((o = lookupKeyWriteOrReply(c,c->argv[1],shared.czero)) == NULL ||
+    if ((o = lookupKeyWriteOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,o,OBJ_HASH)) return;
 
-    for (j = 2; j < c->argc; j++) {
-        if (hashTypeDelete(o, (sds)c->argv[j]->ptr)) {
+    for (j = 2; j < c->m_argc; j++) {
+        if (hashTypeDelete(o, (sds)c->m_argv[j]->ptr)) {
             deleted++;
             if (hashTypeLength(o) == 0) {
-                dbDelete(c->db,c->argv[1]);
+                dbDelete(c->m_cur_selected_db,c->m_argv[1]);
                 keyremoved = 1;
                 break;
             }
         }
     }
     if (deleted) {
-        signalModifiedKey(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_HASH,"hdel",c->argv[1],c->db->m_id);
+        signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+        notifyKeyspaceEvent(NOTIFY_HASH,"hdel",c->m_argv[1],c->m_cur_selected_db->m_id);
         if (keyremoved)
-            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],
-                                c->db->m_id);
+            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->m_argv[1],
+                                c->m_cur_selected_db->m_id);
         server.dirty += deleted;
     }
     addReplyLongLong(c,deleted);
@@ -749,7 +749,7 @@ void hdelCommand(client *c) {
 void hlenCommand(client *c) {
     robj *o;
 
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
+    if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,o,OBJ_HASH)) return;
 
     addReplyLongLong(c,hashTypeLength(o));
@@ -758,9 +758,9 @@ void hlenCommand(client *c) {
 void hstrlenCommand(client *c) {
     robj *o;
 
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
+    if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,o,OBJ_HASH)) return;
-    addReplyLongLong(c,hashTypeGetValueLength(o,(sds)c->argv[2]->ptr));
+    addReplyLongLong(c,hashTypeGetValueLength(o,(sds)c->m_argv[2]->ptr));
 }
 
 static void addHashIteratorCursorToReply(client *c, hashTypeIterator *hi, int what)
@@ -789,7 +789,7 @@ void genericHgetallCommand(client *c, int flags) {
     int multiplier = 0;
     int length, count = 0;
 
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.emptymultibulk)) == NULL
+    if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.emptymultibulk)) == NULL
         || checkType(c,o,OBJ_HASH)) return;
 
     if (flags & OBJ_HASH_KEY) multiplier++;
@@ -827,18 +827,18 @@ void hgetallCommand(client *c) {
 
 void hexistsCommand(client *c) {
     robj *o;
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
+    if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,o,OBJ_HASH)) return;
 
-    addReply(c, hashTypeExists(o,(sds)c->argv[2]->ptr) ? shared.cone : shared.czero);
+    addReply(c, hashTypeExists(o,(sds)c->m_argv[2]->ptr) ? shared.cone : shared.czero);
 }
 
 void hscanCommand(client *c) {
     robj *o;
     unsigned long cursor;
 
-    if (parseScanCursorOrReply(c,c->argv[2],&cursor) == C_ERR) return;
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.emptyscan)) == NULL ||
+    if (parseScanCursorOrReply(c,c->m_argv[2],&cursor) == C_ERR) return;
+    if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.emptyscan)) == NULL ||
         checkType(c,o,OBJ_HASH)) return;
     scanGenericCommand(c,o,cursor);
 }

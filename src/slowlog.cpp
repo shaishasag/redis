@@ -89,7 +89,7 @@ slowlogEntry *slowlogCreateEntry(client *c, robj **argv, int argc, long long dur
     se->duration = duration;
     se->id = server.slowlog_entry_id++;
     se->peerid = sdsnew(getClientPeerId(c));
-    se->cname = c->name ? sdsnew((const char *)c->name->ptr) : sdsempty();
+    se->cname = c->m_client_name ? sdsnew((const char *)c->m_client_name->ptr) : sdsempty();
     return se;
 }
 
@@ -140,21 +140,21 @@ void slowlogReset() {
 /* The SLOWLOG command. Implements all the subcommands needed to handle the
  * Redis slow log. */
 void slowlogCommand(client *c) {
-    if (c->argc == 2 && !strcasecmp((const char*)c->argv[1]->ptr,"reset")) {
+    if (c->m_argc == 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"reset")) {
         slowlogReset();
         addReply(c,shared.ok);
-    } else if (c->argc == 2 && !strcasecmp((const char*)c->argv[1]->ptr,"len")) {
+    } else if (c->m_argc == 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"len")) {
         addReplyLongLong(c,server.slowlog->listLength());
-    } else if ((c->argc == 2 || c->argc == 3) &&
-               !strcasecmp((const char*)c->argv[1]->ptr,"get"))
+    } else if ((c->m_argc == 2 || c->m_argc == 3) &&
+               !strcasecmp((const char*)c->m_argv[1]->ptr,"get"))
     {
         long count = 10, sent = 0;
         void *totentries;
         listNode *ln;
         slowlogEntry *se;
 
-        if (c->argc == 3 &&
-            getLongFromObjectOrReply(c,c->argv[2],&count,NULL) != C_OK)
+        if (c->m_argc == 3 &&
+            getLongFromObjectOrReply(c,c->m_argv[2],&count,NULL) != C_OK)
             return;
 
         listIter li(server.slowlog);

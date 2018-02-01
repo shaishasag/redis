@@ -477,14 +477,14 @@ int getBitfieldTypeFromArgument(client *c, robj *o, int *sign, int *bits) {
  * an error is sent to the client. */
 robj *lookupStringForBitCommand(client *c, size_t maxbit) {
     size_t byte = maxbit >> 3;
-    robj *o = lookupKeyWrite(c->db,c->argv[1]);
+    robj *o = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[1]);
 
     if (o == NULL) {
         o = createObject(OBJ_STRING,sdsnewlen(NULL, byte+1));
-        dbAdd(c->db,c->argv[1],o);
+        dbAdd(c->m_cur_selected_db,c->m_argv[1],o);
     } else {
         if (checkType(c,o,OBJ_STRING)) return NULL;
-        o = dbUnshareStringValue(c->db,c->argv[1],o);
+        o = dbUnshareStringValue(c->m_cur_selected_db,c->m_argv[1],o);
         o->ptr = sdsgrowzero((sds)o->ptr,byte+1);
     }
     return o;
@@ -530,10 +530,10 @@ void setbitCommand(client *c) {
     int byteval, bitval;
     long on;
 
-    if (getBitOffsetFromArgument(c,c->argv[2],&bitoffset,0,0) != C_OK)
+    if (getBitOffsetFromArgument(c,c->m_argv[2],&bitoffset,0,0) != C_OK)
         return;
 
-    if (getLongFromObjectOrReply(c,c->argv[3],&on,err) != C_OK)
+    if (getLongFromObjectOrReply(c,c->m_argv[3],&on,err) != C_OK)
         return;
 
     /* Bits can only be set or cleared... */
@@ -554,8 +554,8 @@ void setbitCommand(client *c) {
     byteval &= ~(1 << bit);
     byteval |= ((on & 0x1) << bit);
     ((uint8_t*)o->ptr)[byte] = byteval;
-    signalModifiedKey(c->db,c->argv[1]);
-    notifyKeyspaceEvent(NOTIFY_STRING,"setbit",c->argv[1],c->db->m_id);
+    signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+    notifyKeyspaceEvent(NOTIFY_STRING,"setbit",c->m_argv[1],c->m_cur_selected_db->m_id);
     server.dirty++;
     addReply(c, bitval ? shared.cone : shared.czero);
 }
@@ -568,10 +568,10 @@ void getbitCommand(client *c) {
     size_t byte, bit;
     size_t bitval = 0;
 
-    if (getBitOffsetFromArgument(c,c->argv[2],&bitoffset,0,0) != C_OK)
+    if (getBitOffsetFromArgument(c,c->m_argv[2],&bitoffset,0,0) != C_OK)
         return;
 
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
+    if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,o,OBJ_STRING)) return;
 
     byte = bitoffset >> 3;
@@ -589,8 +589,8 @@ void getbitCommand(client *c) {
 
 /* BITOP op_name target_key src_key1 src_key2 src_key3 ... src_keyN */
 void bitopCommand(client *c) {
-    char *opname = (char*)c->argv[1]->ptr;
-    robj *o, *targetkey = c->argv[2];
+    char *opname = (char*)c->m_argv[1]->ptr;
+    robj *o, *targetkey = c->m_argv[2];
     unsigned long op, j, numkeys;
     robj **objects;      /* Array of source objects. */
     unsigned char **src; /* Array of source strings pointers. */
@@ -614,18 +614,18 @@ void bitopCommand(client *c) {
     }
 
     /* Sanity check: NOT accepts only a single key argument. */
-    if (op == BITOP_NOT && c->argc != 4) {
+    if (op == BITOP_NOT && c->m_argc != 4) {
         addReplyError(c,"BITOP NOT must be called with a single source key.");
         return;
     }
 
     /* Lookup keys, and store pointers to the string objects into an array. */
-    numkeys = c->argc - 3;
+    numkeys = c->m_argc - 3;
     src = (unsigned char **)zmalloc(sizeof(unsigned char*) * numkeys);
     len = (unsigned long*)zmalloc(sizeof(long) * numkeys);
     objects = (robj **)zmalloc(sizeof(robj*) * numkeys);
     for (j = 0; j < numkeys; j++) {
-        o = lookupKeyRead(c->db,c->argv[j+3]);
+        o = lookupKeyRead(c->m_cur_selected_db,c->m_argv[j+3]);
         /* Handle non-existing keys as empty strings. */
         if (o == NULL) {
             objects[j] = NULL;
@@ -754,12 +754,12 @@ void bitopCommand(client *c) {
     /* Store the computed value into the target key */
     if (maxlen) {
         o = createObject(OBJ_STRING,res);
-        setKey(c->db,targetkey,o);
-        notifyKeyspaceEvent(NOTIFY_STRING,"set",targetkey,c->db->m_id);
+        setKey(c->m_cur_selected_db,targetkey,o);
+        notifyKeyspaceEvent(NOTIFY_STRING,"set",targetkey,c->m_cur_selected_db->m_id);
         decrRefCount(o);
-    } else if (dbDelete(c->db,targetkey)) {
-        signalModifiedKey(c->db,targetkey);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",targetkey,c->db->m_id);
+    } else if (dbDelete(c->m_cur_selected_db,targetkey)) {
+        signalModifiedKey(c->m_cur_selected_db,targetkey);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",targetkey,c->m_cur_selected_db->m_id);
     }
     server.dirty++;
     addReplyLongLong(c,maxlen); /* Return the output string length in bytes. */
@@ -773,15 +773,15 @@ void bitcountCommand(client *c) {
     char llbuf[LONG_STR_SIZE];
 
     /* Lookup, check for type, and return 0 for non existing keys. */
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
+    if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,o,OBJ_STRING)) return;
     p = getObjectReadOnlyString(o,&strlen,llbuf);
 
     /* Parse start/end range if any. */
-    if (c->argc == 4) {
-        if (getLongFromObjectOrReply(c,c->argv[2],&start,NULL) != C_OK)
+    if (c->m_argc == 4) {
+        if (getLongFromObjectOrReply(c,c->m_argv[2],&start,NULL) != C_OK)
             return;
-        if (getLongFromObjectOrReply(c,c->argv[3],&end,NULL) != C_OK)
+        if (getLongFromObjectOrReply(c,c->m_argv[3],&end,NULL) != C_OK)
             return;
         /* Convert negative indexes */
         if (start < 0 && end < 0 && start > end) {
@@ -793,7 +793,7 @@ void bitcountCommand(client *c) {
         if (start < 0) start = 0;
         if (end < 0) end = 0;
         if (end >= strlen) end = strlen-1;
-    } else if (c->argc == 2) {
+    } else if (c->m_argc == 2) {
         /* The whole string. */
         start = 0;
         end = strlen-1;
@@ -824,7 +824,7 @@ void bitposCommand(client *c) {
 
     /* Parse the bit argument to understand what we are looking for, set
      * or clear bits. */
-    if (getLongFromObjectOrReply(c,c->argv[2],&bit,NULL) != C_OK)
+    if (getLongFromObjectOrReply(c,c->m_argv[2],&bit,NULL) != C_OK)
         return;
     if (bit != 0 && bit != 1) {
         addReplyError(c, "The bit argument must be 1 or 0.");
@@ -834,7 +834,7 @@ void bitposCommand(client *c) {
     /* If the key does not exist, from our point of view it is an infinite
      * array of 0 bits. If the user is looking for the fist clear bit return 0,
      * If the user is looking for the first set bit, return -1. */
-    if ((o = lookupKeyRead(c->db,c->argv[1])) == NULL) {
+    if ((o = lookupKeyRead(c->m_cur_selected_db,c->m_argv[1])) == NULL) {
         addReplyLongLong(c, bit ? -1 : 0);
         return;
     }
@@ -842,11 +842,11 @@ void bitposCommand(client *c) {
     p = getObjectReadOnlyString(o,&strlen,llbuf);
 
     /* Parse start/end range if any. */
-    if (c->argc == 4 || c->argc == 5) {
-        if (getLongFromObjectOrReply(c,c->argv[3],&start,NULL) != C_OK)
+    if (c->m_argc == 4 || c->m_argc == 5) {
+        if (getLongFromObjectOrReply(c,c->m_argv[3],&start,NULL) != C_OK)
             return;
-        if (c->argc == 5) {
-            if (getLongFromObjectOrReply(c,c->argv[4],&end,NULL) != C_OK)
+        if (c->m_argc == 5) {
+            if (getLongFromObjectOrReply(c,c->m_argv[4],&end,NULL) != C_OK)
                 return;
             end_given = 1;
         } else {
@@ -858,7 +858,7 @@ void bitposCommand(client *c) {
         if (start < 0) start = 0;
         if (end < 0) end = 0;
         if (end >= strlen) end = strlen-1;
-    } else if (c->argc == 3) {
+    } else if (c->m_argc == 3) {
         /* The whole string. */
         start = 0;
         end = strlen-1;
@@ -920,9 +920,9 @@ void bitfieldCommand(client *c) {
     int readonly = 1;
     size_t higest_write_offset = 0;
 
-    for (j = 2; j < c->argc; j++) {
-        int remargs = c->argc-j-1; /* Remaining args other than current. */
-        char *subcmd =  (char *)c->argv[j]->ptr; /* Current command name. */
+    for (j = 2; j < c->m_argc; j++) {
+        int remargs = c->m_argc-j-1; /* Remaining args other than current. */
+        char *subcmd =  (char *)c->m_argv[j]->ptr; /* Current command name. */
         int opcode; /* Current operation code. */
         long long i64 = 0;  /* Signed SET value. */
         int sign = 0; /* Signed or unsigned type? */
@@ -935,7 +935,7 @@ void bitfieldCommand(client *c) {
         else if (!strcasecmp(subcmd,"incrby") && remargs >= 3)
             opcode = BITFIELDOP_INCRBY;
         else if (!strcasecmp(subcmd,"overflow") && remargs >= 1) {
-            char *owtypename = (char *)c->argv[j+1]->ptr;
+            char *owtypename = (char *)c->m_argv[j+1]->ptr;
             j++;
             if (!strcasecmp(owtypename,"wrap"))
                 owtype = BFOVERFLOW_WRAP;
@@ -956,12 +956,12 @@ void bitfieldCommand(client *c) {
         }
 
         /* Get the type and offset arguments, common to all the ops. */
-        if (getBitfieldTypeFromArgument(c,c->argv[j+1],&sign,&bits) != C_OK) {
+        if (getBitfieldTypeFromArgument(c,c->m_argv[j+1],&sign,&bits) != C_OK) {
             zfree(ops);
             return;
         }
 
-        if (getBitOffsetFromArgument(c,c->argv[j+2],&bitoffset,1,bits) != C_OK){
+        if (getBitOffsetFromArgument(c,c->m_argv[j+2],&bitoffset,1,bits) != C_OK){
             zfree(ops);
             return;
         }
@@ -971,7 +971,7 @@ void bitfieldCommand(client *c) {
             if (higest_write_offset < bitoffset + bits - 1)
                 higest_write_offset = bitoffset + bits - 1;
             /* INCRBY and SET require another argument. */
-            if (getLongLongFromObjectOrReply(c,c->argv[j+3],&i64,NULL) != C_OK){
+            if (getLongLongFromObjectOrReply(c,c->m_argv[j+3],&i64,NULL) != C_OK){
                 zfree(ops);
                 return;
             }
@@ -993,7 +993,7 @@ void bitfieldCommand(client *c) {
     if (readonly) {
         /* Lookup for read is ok if key doesn't exit, but errors
          * if it's not a string. */
-        o = lookupKeyRead(c->db,c->argv[1]);
+        o = lookupKeyRead(c->m_cur_selected_db,c->m_argv[1]);
         if (o != NULL && checkType(c,o,OBJ_STRING)) return;
     } else {
         /* Lookup by making room up to the farest bit reached by
@@ -1117,8 +1117,8 @@ void bitfieldCommand(client *c) {
     }
 
     if (changes) {
-        signalModifiedKey(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_STRING,"setbit",c->argv[1],c->db->m_id);
+        signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+        notifyKeyspaceEvent(NOTIFY_STRING,"setbit",c->m_argv[1],c->m_cur_selected_db->m_id);
         server.dirty += changes;
     }
     zfree(ops);

@@ -448,7 +448,7 @@ void moduleHandlePropagationAfterCommandCallback(RedisModuleCtx *ctx) {
     if (ctx->flags & REDISMODULE_CTX_MULTI_EMITTED) {
         robj *propargv[1];
         propargv[0] = createStringObject("EXEC",4);
-        alsoPropagate(server.execCommand,c->db->m_id,propargv,1,
+        alsoPropagate(server.execCommand,c->m_cur_selected_db->m_id,propargv,1,
             PROPAGATE_AOF|PROPAGATE_REPL);
         decrRefCount(propargv[0]);
     }
@@ -457,12 +457,12 @@ void moduleHandlePropagationAfterCommandCallback(RedisModuleCtx *ctx) {
 /* This Redis command binds the normal Redis command invocation with commands
  * exported by modules. */
 void RedisModuleCommandDispatcher(client *c) {
-    RedisModuleCommandProxy *cp = (RedisModuleCommandProxy*)(unsigned long)c->cmd->getkeys_proc;
+    RedisModuleCommandProxy *cp = (RedisModuleCommandProxy*)(unsigned long)c->m_cmd->getkeys_proc;
     RedisModuleCtx ctx = REDISMODULE_CTX_INIT;
 
     ctx.module = cp->module;
     ctx._client = c;
-    cp->func(&ctx,(void**)c->argv,c->argc);
+    cp->func(&ctx,(void**)c->m_argv,c->m_argc);
     moduleHandlePropagationAfterCommandCallback(&ctx);
     moduleFreeContext(&ctx);
 }
@@ -957,7 +957,7 @@ int RM_StringAppendBuffer(RedisModuleCtx *ctx, RedisModuleString *str, const cha
 int RM_WrongArity(RedisModuleCtx *ctx) {
     addReplyErrorFormat(ctx->_client,
         "wrong number of arguments for '%s' command",
-        (char*)ctx->_client->argv[0]->ptr);
+        (char*)ctx->_client->m_argv[0]->ptr);
     return REDISMODULE_OK;
 }
 
@@ -1219,7 +1219,7 @@ int RM_Replicate(RedisModuleCtx *ctx, const char *cmdname, const char *fmt, ...)
 
     /* Replicate! */
     moduleReplicateMultiIfNeeded(ctx);
-    alsoPropagate(cmd,ctx->_client->db->m_id,argv,argc,
+    alsoPropagate(cmd,ctx->_client->m_cur_selected_db->m_id,argv,argc,
         PROPAGATE_AOF|PROPAGATE_REPL);
 
     /* Release the argv. */
@@ -1241,8 +1241,8 @@ int RM_Replicate(RedisModuleCtx *ctx, const char *cmdname, const char *fmt, ...)
  *
  * The function always returns REDISMODULE_OK. */
 int RM_ReplicateVerbatim(RedisModuleCtx *ctx) {
-    alsoPropagate(ctx->_client->cmd,ctx->_client->db->m_id,
-        ctx->_client->argv,ctx->_client->argc,
+    alsoPropagate(ctx->_client->m_cmd,ctx->_client->m_cur_selected_db->m_id,
+        ctx->_client->m_argv,ctx->_client->m_argc,
         PROPAGATE_AOF|PROPAGATE_REPL);
     server.dirty++;
     return REDISMODULE_OK;
@@ -1265,12 +1265,12 @@ int RM_ReplicateVerbatim(RedisModuleCtx *ctx) {
  * to fetch the ID in the context the function was currently called. */
 unsigned long long RM_GetClientId(RedisModuleCtx *ctx) {
     if (ctx->_client == NULL) return 0;
-    return ctx->_client->id;
+    return ctx->_client->m_id;
 }
 
 /* Return the currently selected DB. */
 int RM_GetSelectedDb(RedisModuleCtx *ctx) {
-    return ctx->_client->db->m_id;
+    return ctx->_client->m_cur_selected_db->m_id;
 }
 
 
@@ -1352,7 +1352,7 @@ int RM_GetContextFlags(RedisModuleCtx *ctx) {
  * returns back to the original one, it should call RedisModule_GetSelectedDb()
  * before in order to restore the old DB number before returning. */
 int RM_SelectDb(RedisModuleCtx *ctx, int newid) {
-    int retval = selectDb(ctx->_client,newid);
+    int retval = ctx->_client->selectDb(newid);
     return (retval == C_OK) ? REDISMODULE_OK : REDISMODULE_ERR;
 }
 
@@ -1375,9 +1375,9 @@ void *RM_OpenKey(RedisModuleCtx *ctx, robj *keyname, int mode) {
     robj *value;
 
     if (mode & REDISMODULE_WRITE) {
-        value = lookupKeyWrite(ctx->_client->db,keyname);
+        value = lookupKeyWrite(ctx->_client->m_cur_selected_db,keyname);
     } else {
-        value = lookupKeyRead(ctx->_client->db,keyname);
+        value = lookupKeyRead(ctx->_client->m_cur_selected_db,keyname);
         if (value == NULL) {
             return NULL;
         }
@@ -1386,7 +1386,7 @@ void *RM_OpenKey(RedisModuleCtx *ctx, robj *keyname, int mode) {
     /* Setup the key handle. */
     kp = (RedisModuleKey *)zmalloc(sizeof(*kp));
     kp->ctx = ctx;
-    kp->db = ctx->_client->db;
+    kp->db = ctx->_client->m_cur_selected_db;
     kp->key = keyname;
     incrRefCount(keyname);
     kp->value = value;
@@ -2601,10 +2601,10 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
 
     /* Setup our fake client for command execution. */
     c->m_flags |= CLIENT_MODULE;
-    c->db = ctx->_client->db;
-    c->argv = argv;
-    c->argc = argc;
-    c->cmd = c->lastcmd = cmd;
+    c->m_cur_selected_db = ctx->_client->m_cur_selected_db;
+    c->m_argv = argv;
+    c->m_argc = argc;
+    c->m_cmd = c->m_last_cmd = cmd;
     /* We handle the above format error only when the client is setup so that
      * we can free it normally. */
     if (argv == NULL) goto cleanup;
@@ -2622,7 +2622,7 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
         /* Duplicate relevant flags in the module client. */
         c->m_flags &= ~(CLIENT_READONLY|CLIENT_ASKING);
         c->m_flags |= ctx->_client->m_flags & (CLIENT_READONLY|CLIENT_ASKING);
-        if (getNodeByQuery(c,c->cmd,c->argv,c->argc,NULL,NULL) !=
+        if (getNodeByQuery(c,c->m_cmd,c->m_argv,c->m_argc,NULL,NULL) !=
                            server.cluster->m_myself)
         {
             errno = EPERM;
@@ -2646,13 +2646,13 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
     /* Convert the result of the Redis command into a suitable Lua type.
      * The first thing we need is to create a single string from the client
      * output buffers. */
-    proto = sdsnewlen(c->buf,c->bufpos);
-    c->bufpos = 0;
-    while(c->reply->listLength()) {
-        sds o = (sds)c->reply->listFirst()->listNodeValue();
+    proto = sdsnewlen(c->m_response_buff,c->m_response_buff_pos);
+    c->m_response_buff_pos = 0;
+    while(c->m_reply->listLength()) {
+        sds o = (sds)c->m_reply->listFirst()->listNodeValue();
 
         proto = sdscatsds(proto,o);
-        c->reply->listDelNode(c->reply->listFirst());
+        c->m_reply->listDelNode(c->m_reply->listFirst());
     }
     reply = moduleCreateCallReplyFromProto(ctx,proto);
     autoMemoryAdd(ctx,REDISMODULE_AM_REPLY,reply);
@@ -3388,7 +3388,7 @@ void moduleBlockedClientPipeReadable(aeEventLoop *el, int fd, void *privdata, in
  * The structure RedisModuleBlockedClient will be always deallocated when
  * running the list of clients blocked by a module that need to be unblocked. */
 void unblockClientFromModule(client *c) {
-    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->bpop.module_blocked_handle;
+    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->m_blocking_state.module_blocked_handle;
     bc->_client = NULL;
     /* Reset the client for a new query since, for blocking commands implemented
      * into modules, we do not it immediately after the command returns (and
@@ -3418,8 +3418,8 @@ RedisModuleBlockedClient *RM_BlockClient(RedisModuleCtx *ctx, RedisModuleCmdFunc
     int islua = c->m_flags & CLIENT_LUA;
     int ismulti = c->m_flags & CLIENT_MULTI;
 
-    c->bpop.module_blocked_handle = (RedisModuleBlockedClient*)zmalloc(sizeof(RedisModuleBlockedClient));
-    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->bpop.module_blocked_handle;
+    c->m_blocking_state.module_blocked_handle = (RedisModuleBlockedClient*)zmalloc(sizeof(RedisModuleBlockedClient));
+    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->m_blocking_state.module_blocked_handle;
 
     /* We need to handle the invalid operation of calling modules blocking
      * commands from Lua or MULTI. We actually create an already aborted
@@ -3433,11 +3433,11 @@ RedisModuleBlockedClient *RM_BlockClient(RedisModuleCtx *ctx, RedisModuleCmdFunc
     bc->privdata = NULL;
     bc->reply_client = createClient(-1);
     bc->reply_client->m_flags |= CLIENT_MODULE;
-    bc->dbid = c->db->m_id;
-    c->bpop.timeout = timeout_ms ? (mstime()+timeout_ms) : 0;
+    bc->dbid = c->m_cur_selected_db->m_id;
+    c->m_blocking_state.timeout = timeout_ms ? (mstime()+timeout_ms) : 0;
 
     if (islua || ismulti) {
-        c->bpop.module_blocked_handle = NULL;
+        c->m_blocking_state.module_blocked_handle = NULL;
         addReplyError(c, islua ?
             "Blocking module command called from Lua script" :
             "Blocking module command called from transaction");
@@ -3511,7 +3511,7 @@ void moduleHandleBlockedClients() {
             ctx.blocked_privdata = bc->privdata;
             ctx.module = bc->module;
             ctx._client = bc->_client;
-            bc->reply_callback(&ctx,(void**)c->argv,c->argc);
+            bc->reply_callback(&ctx,(void**)c->m_argv,c->m_argc);
             moduleHandlePropagationAfterCommandCallback(&ctx);
             moduleFreeContext(&ctx);
         }
@@ -3525,12 +3525,12 @@ void moduleHandleBlockedClients() {
          * We need to glue such replies to the client output buffer and
          * free the temporary client we just used for the replies. */
         if (c) {
-            if (bc->reply_client->bufpos)
-                addReplyString(c,bc->reply_client->buf,
-                                 bc->reply_client->bufpos);
-            if (bc->reply_client->reply->listLength())
-                c->reply->listJoin(bc->reply_client->reply);
-            c->reply_bytes += bc->reply_client->reply_bytes;
+            if (bc->reply_client->m_response_buff_pos)
+                addReplyString(c,bc->reply_client->m_response_buff,
+                                 bc->reply_client->m_response_buff_pos);
+            if (bc->reply_client->m_reply->listLength())
+                c->m_reply->listJoin(bc->reply_client->m_reply);
+            c->m_reply_bytes += bc->reply_client->m_reply_bytes;
         }
         freeClient(bc->reply_client);
 
@@ -3563,12 +3563,12 @@ void moduleHandleBlockedClients() {
  * does not need to do any cleanup. Eventually the module will call the
  * API to unblock the client and the memory will be released. */
 void moduleBlockedClientTimedOut(client *c) {
-    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->bpop.module_blocked_handle;
+    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->m_blocking_state.module_blocked_handle;
     RedisModuleCtx ctx = REDISMODULE_CTX_INIT;
     ctx.flags |= REDISMODULE_CTX_BLOCKED_TIMEOUT;
     ctx.module = bc->module;
     ctx._client = bc->_client;
-    bc->timeout_callback(&ctx,(void**)c->argv,c->argc);
+    bc->timeout_callback(&ctx,(void**)c->m_argv,c->m_argc);
     moduleFreeContext(&ctx);
 }
 
@@ -3626,7 +3626,8 @@ RedisModuleCtx *RM_GetThreadSafeContext(RedisModuleBlockedClient *bc) {
      * in order to keep things like the currently selected database and similar
      * things. */
     ctx->_client = createClient(-1);
-    if (bc) selectDb(ctx->_client,bc->dbid);
+    if (bc)
+        ctx->_client->selectDb(bc->dbid);
     return ctx;
 }
 
@@ -3850,24 +3851,24 @@ int moduleUnload(sds name) {
  *
  * MODULE LOAD <path> [args...] */
 void moduleCommand(client *c) {
-    char *subcmd = (char *)c->argv[1]->ptr;
+    char *subcmd = (char *)c->m_argv[1]->ptr;
 
-    if (!strcasecmp(subcmd,"load") && c->argc >= 3) {
+    if (!strcasecmp(subcmd,"load") && c->m_argc >= 3) {
         robj **argv = NULL;
         int argc = 0;
 
-        if (c->argc > 3) {
-            argc = c->argc - 3;
-            argv = &c->argv[3];
+        if (c->m_argc > 3) {
+            argc = c->m_argc - 3;
+            argv = &c->m_argv[3];
         }
 
-        if (moduleLoad((const char *)c->argv[2]->ptr,(void **)argv,argc) == C_OK)
+        if (moduleLoad((const char *)c->m_argv[2]->ptr,(void **)argv,argc) == C_OK)
             addReply(c,shared.ok);
         else
             addReplyError(c,
                 "Error loading the extension. Please check the server logs.");
-    } else if (!strcasecmp(subcmd,"unload") && c->argc == 3) {
-        if (moduleUnload((sds)c->argv[2]->ptr) == C_OK)
+    } else if (!strcasecmp(subcmd,"unload") && c->m_argc == 3) {
+        if (moduleUnload((sds)c->m_argv[2]->ptr) == C_OK)
             addReply(c,shared.ok);
         else {
             char *errmsg;
@@ -3884,7 +3885,7 @@ void moduleCommand(client *c) {
             }
             addReplyErrorFormat(c,"Error unloading module: %s",errmsg);
         }
-    } else if (!strcasecmp(subcmd,"list") && c->argc == 2) {
+    } else if (!strcasecmp(subcmd,"list") && c->m_argc == 2) {
         dictIterator di(modules);
         dictEntry *de;
 

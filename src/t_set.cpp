@@ -281,10 +281,10 @@ void setTypeConvert(robj *setobj, int enc) {
 void saddCommand(client *c) {
     int j, added = 0;
 
-    robj *_set = lookupKeyWrite(c->db,c->argv[1]);
+    robj *_set = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[1]);
     if (_set == NULL) {
-        _set = setTypeCreate((sds)c->argv[2]->ptr);
-        dbAdd(c->db,c->argv[1],_set);
+        _set = setTypeCreate((sds)c->m_argv[2]->ptr);
+        dbAdd(c->m_cur_selected_db,c->m_argv[1],_set);
     } else {
         if (_set->type != OBJ_SET) {
             addReply(c,shared.wrongtypeerr);
@@ -292,12 +292,12 @@ void saddCommand(client *c) {
         }
     }
 
-    for (j = 2; j < c->argc; j++) {
-        if (setTypeAdd(_set,(sds)c->argv[j]->ptr)) added++;
+    for (j = 2; j < c->m_argc; j++) {
+        if (setTypeAdd(_set,(sds)c->m_argv[j]->ptr)) added++;
     }
     if (added) {
-        signalModifiedKey(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_SET,"sadd",c->argv[1],c->db->m_id);
+        signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+        notifyKeyspaceEvent(NOTIFY_SET,"sadd",c->m_argv[1],c->m_cur_selected_db->m_id);
     }
     server.dirty += added;
     addReplyLongLong(c,added);
@@ -307,25 +307,25 @@ void sremCommand(client *c) {
     robj *set;
     int j, deleted = 0, keyremoved = 0;
 
-    if ((set = lookupKeyWriteOrReply(c,c->argv[1],shared.czero)) == NULL ||
+    if ((set = lookupKeyWriteOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,set,OBJ_SET)) return;
 
-    for (j = 2; j < c->argc; j++) {
-        if (setTypeRemove(set,(sds)c->argv[j]->ptr)) {
+    for (j = 2; j < c->m_argc; j++) {
+        if (setTypeRemove(set,(sds)c->m_argv[j]->ptr)) {
             deleted++;
             if (setTypeSize(set) == 0) {
-                dbDelete(c->db,c->argv[1]);
+                dbDelete(c->m_cur_selected_db,c->m_argv[1]);
                 keyremoved = 1;
                 break;
             }
         }
     }
     if (deleted) {
-        signalModifiedKey(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_SET,"srem",c->argv[1],c->db->m_id);
+        signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+        notifyKeyspaceEvent(NOTIFY_SET,"srem",c->m_argv[1],c->m_cur_selected_db->m_id);
         if (keyremoved)
-            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],
-                                c->db->m_id);
+            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->m_argv[1],
+                                c->m_cur_selected_db->m_id);
         server.dirty += deleted;
     }
     addReplyLongLong(c,deleted);
@@ -333,9 +333,9 @@ void sremCommand(client *c) {
 
 void smoveCommand(client *c) {
     robj *srcset, *dstset, *ele;
-    srcset = lookupKeyWrite(c->db,c->argv[1]);
-    dstset = lookupKeyWrite(c->db,c->argv[2]);
-    ele = c->argv[3];
+    srcset = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[1]);
+    dstset = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[2]);
+    ele = c->m_argv[3];
 
     /* If the source key does not exist return 0 */
     if (srcset == NULL) {
@@ -360,28 +360,28 @@ void smoveCommand(client *c) {
         addReply(c,shared.czero);
         return;
     }
-    notifyKeyspaceEvent(NOTIFY_SET,"srem",c->argv[1],c->db->m_id);
+    notifyKeyspaceEvent(NOTIFY_SET,"srem",c->m_argv[1],c->m_cur_selected_db->m_id);
 
     /* Remove the src set from the database when empty */
     if (setTypeSize(srcset) == 0) {
-        dbDelete(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->m_id);
+        dbDelete(c->m_cur_selected_db,c->m_argv[1]);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->m_argv[1],c->m_cur_selected_db->m_id);
     }
 
     /* Create the destination set when it doesn't exist */
     if (!dstset) {
         dstset = setTypeCreate((sds)ele->ptr);
-        dbAdd(c->db,c->argv[2],dstset);
+        dbAdd(c->m_cur_selected_db,c->m_argv[2],dstset);
     }
 
-    signalModifiedKey(c->db,c->argv[1]);
-    signalModifiedKey(c->db,c->argv[2]);
+    signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+    signalModifiedKey(c->m_cur_selected_db,c->m_argv[2]);
     server.dirty++;
 
     /* An extra key has changed when ele was successfully added to dstset */
     if (setTypeAdd(dstset,(sds)ele->ptr)) {
         server.dirty++;
-        notifyKeyspaceEvent(NOTIFY_SET,"sadd",c->argv[2],c->db->m_id);
+        notifyKeyspaceEvent(NOTIFY_SET,"sadd",c->m_argv[2],c->m_cur_selected_db->m_id);
     }
     addReply(c,shared.cone);
 }
@@ -389,10 +389,10 @@ void smoveCommand(client *c) {
 void sismemberCommand(client *c) {
     robj *set;
 
-    if ((set = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
+    if ((set = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,set,OBJ_SET)) return;
 
-    if (setTypeIsMember(set,(sds)c->argv[2]->ptr))
+    if (setTypeIsMember(set,(sds)c->m_argv[2]->ptr))
         addReply(c,shared.cone);
     else
         addReply(c,shared.czero);
@@ -401,7 +401,7 @@ void sismemberCommand(client *c) {
 void scardCommand(client *c) {
     robj *o;
 
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
+    if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.czero)) == NULL ||
         checkType(c,o,OBJ_SET)) return;
 
     addReplyLongLong(c,setTypeSize(o));
@@ -421,7 +421,7 @@ void spopWithCountCommand(client *c) {
     robj *set;
 
     /* Get the count argument */
-    if (getLongFromObjectOrReply(c,c->argv[2],&l,NULL) != C_OK) return;
+    if (getLongFromObjectOrReply(c,c->m_argv[2],&l,NULL) != C_OK) return;
     if (l >= 0) {
         count = (unsigned long) l;
     } else {
@@ -431,7 +431,7 @@ void spopWithCountCommand(client *c) {
 
     /* Make sure a key with the name inputted exists, and that it's type is
      * indeed a set. Otherwise, return nil */
-    if ((set = lookupKeyReadOrReply(c,c->argv[1],shared.emptymultibulk))
+    if ((set = lookupKeyReadOrReply(c,c->m_argv[1],shared.emptymultibulk))
         == NULL || checkType(c,set,OBJ_SET)) return;
 
     /* If count is zero, serve an empty multibulk ASAP to avoid special
@@ -444,7 +444,7 @@ void spopWithCountCommand(client *c) {
     size = setTypeSize(set);
 
     /* Generate an SPOP keyspace notification */
-    notifyKeyspaceEvent(NOTIFY_SET,"spop",c->argv[1],c->db->m_id);
+    notifyKeyspaceEvent(NOTIFY_SET,"spop",c->m_argv[1],c->m_cur_selected_db->m_id);
     server.dirty += count;
 
     /* CASE 1:
@@ -452,15 +452,15 @@ void spopWithCountCommand(client *c) {
      * the number of elements inside the set: simply return the whole set. */
     if (count >= size) {
         /* We just return the entire set */
-        sunionDiffGenericCommand(c,c->argv+1,1,NULL,SET_OP_UNION);
+        sunionDiffGenericCommand(c,c->m_argv+1,1,NULL,SET_OP_UNION);
 
         /* Delete the set as it is now empty */
-        dbDelete(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->m_id);
+        dbDelete(c->m_cur_selected_db,c->m_argv[1]);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->m_argv[1],c->m_cur_selected_db->m_id);
 
         /* Propagate this command as an DEL operation */
-        rewriteClientCommandVector(c,2,shared.del,c->argv[1]);
-        signalModifiedKey(c->db,c->argv[1]);
+        rewriteClientCommandVector(c,2,shared.del,c->m_argv[1]);
+        signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
         server.dirty++;
         return;
     }
@@ -470,7 +470,7 @@ void spopWithCountCommand(client *c) {
      * which is common to both the code paths. */
     robj *propargv[3];
     propargv[0] = createStringObject("SREM",4);
-    propargv[1] = c->argv[1];
+    propargv[1] = c->m_argv[1];
     addReplyMultiBulkLen(c,count);
 
     /* Common iteration vars. */
@@ -503,7 +503,7 @@ void spopWithCountCommand(client *c) {
 
             /* Replicate/AOF this command as an SREM operation */
             propargv[2] = objele;
-            alsoPropagate(server.sremCommand,c->db->m_id,propargv,3,
+            alsoPropagate(server.sremCommand,c->m_cur_selected_db->m_id,propargv,3,
                 PROPAGATE_AOF|PROPAGATE_REPL);
             decrRefCount(objele);
         }
@@ -534,7 +534,7 @@ void spopWithCountCommand(client *c) {
 
         /* Assign the new set as the key value. */
         incrRefCount(set); /* Protect the old set value. */
-        dbOverwrite(c->db, c->argv[1], newset);
+        dbOverwrite(c->m_cur_selected_db, c->m_argv[1], newset);
 
         /* Tranfer the old set to the client and release it. */
         {
@@ -550,7 +550,7 @@ void spopWithCountCommand(client *c) {
 
                 /* Replicate/AOF this command as an SREM operation */
                 propargv[2] = objele;
-                alsoPropagate(server.sremCommand, c->db->m_id, propargv, 3,
+                alsoPropagate(server.sremCommand, c->m_cur_selected_db->m_id, propargv, 3,
                               PROPAGATE_AOF | PROPAGATE_REPL);
                 decrRefCount(objele);
             }
@@ -564,7 +564,7 @@ void spopWithCountCommand(client *c) {
      * the alsoPropagate() API. */
     decrRefCount(propargv[0]);
     preventCommandPropagation(c);
-    signalModifiedKey(c->db,c->argv[1]);
+    signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
     server.dirty++;
 }
 
@@ -574,17 +574,17 @@ void spopCommand(client *c) {
     int64_t llele;
     int encoding;
 
-    if (c->argc == 3) {
+    if (c->m_argc == 3) {
         spopWithCountCommand(c);
         return;
-    } else if (c->argc > 3) {
+    } else if (c->m_argc > 3) {
         addReply(c,shared.syntaxerr);
         return;
     }
 
     /* Make sure a key with the name inputted exists, and that it's type is
      * indeed a set */
-    if ((set = lookupKeyWriteOrReply(c,c->argv[1],shared.nullbulk)) == NULL ||
+    if ((set = lookupKeyWriteOrReply(c,c->m_argv[1],shared.nullbulk)) == NULL ||
         checkType(c,set,OBJ_SET)) return;
 
     /* Get a random element from the set */
@@ -599,11 +599,11 @@ void spopCommand(client *c) {
         setTypeRemove(set,(sds)ele->ptr);
     }
 
-    notifyKeyspaceEvent(NOTIFY_SET,"spop",c->argv[1],c->db->m_id);
+    notifyKeyspaceEvent(NOTIFY_SET,"spop",c->m_argv[1],c->m_cur_selected_db->m_id);
 
     /* Replicate/AOF this command as an SREM operation */
     aux = createStringObject("SREM",4);
-    rewriteClientCommandVector(c,3,aux,c->argv[1],ele);
+    rewriteClientCommandVector(c,3,aux,c->m_argv[1],ele);
     decrRefCount(aux);
 
     /* Add the element to the reply */
@@ -612,12 +612,12 @@ void spopCommand(client *c) {
 
     /* Delete the set if it's empty */
     if (setTypeSize(set) == 0) {
-        dbDelete(c->db,c->argv[1]);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->m_id);
+        dbDelete(c->m_cur_selected_db,c->m_argv[1]);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->m_argv[1],c->m_cur_selected_db->m_id);
     }
 
     /* Set has been modified */
-    signalModifiedKey(c->db,c->argv[1]);
+    signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
     server.dirty++;
 }
 
@@ -640,7 +640,7 @@ void srandmemberWithCountCommand(client *c) {
 
     dict *d;
 
-    if (getLongFromObjectOrReply(c,c->argv[2],&l,NULL) != C_OK) return;
+    if (getLongFromObjectOrReply(c,c->m_argv[2],&l,NULL) != C_OK) return;
     if (l >= 0) {
         count = (unsigned long) l;
     } else {
@@ -650,7 +650,7 @@ void srandmemberWithCountCommand(client *c) {
         uniq = 0;
     }
 
-    if ((set = lookupKeyReadOrReply(c,c->argv[1],shared.emptymultibulk))
+    if ((set = lookupKeyReadOrReply(c,c->m_argv[1],shared.emptymultibulk))
         == NULL || checkType(c,set,OBJ_SET)) return;
     size = setTypeSize(set);
 
@@ -681,7 +681,7 @@ void srandmemberWithCountCommand(client *c) {
      * The number of requested elements is greater than the number of
      * elements inside the set: simply return the whole set. */
     if (count >= size) {
-        sunionDiffGenericCommand(c,c->argv+1,1,NULL,SET_OP_UNION);
+        sunionDiffGenericCommand(c,c->m_argv+1,1,NULL,SET_OP_UNION);
         return;
     }
 
@@ -769,15 +769,15 @@ void srandmemberCommand(client *c) {
     int64_t llele;
     int encoding;
 
-    if (c->argc == 3) {
+    if (c->m_argc == 3) {
         srandmemberWithCountCommand(c);
         return;
-    } else if (c->argc > 3) {
+    } else if (c->m_argc > 3) {
         addReply(c,shared.syntaxerr);
         return;
     }
 
-    if ((set = lookupKeyReadOrReply(c,c->argv[1],shared.nullbulk)) == NULL ||
+    if ((set = lookupKeyReadOrReply(c,c->m_argv[1],shared.nullbulk)) == NULL ||
         checkType(c,set,OBJ_SET)) return;
 
     encoding = setTypeRandomElement(set,&ele,&llele);
@@ -818,13 +818,13 @@ void sinterGenericCommand(client *c, robj **setkeys,
 
     for (j = 0; j < setnum; j++) {
         robj *setobj = dstkey ?
-                       lookupKeyWrite(c->db, setkeys[j]) :
-                       lookupKeyRead(c->db, setkeys[j]);
+                       lookupKeyWrite(c->m_cur_selected_db, setkeys[j]) :
+                       lookupKeyRead(c->m_cur_selected_db, setkeys[j]);
         if (!setobj) {
             zfree(sets);
             if (dstkey) {
-                if (dbDelete(c->db, dstkey)) {
-                    signalModifiedKey(c->db, dstkey);
+                if (dbDelete(c->m_cur_selected_db, dstkey)) {
+                    signalModifiedKey(c->m_cur_selected_db, dstkey);
                     server.dirty++;
                 }
                 addReply(c, shared.czero);
@@ -911,20 +911,20 @@ void sinterGenericCommand(client *c, robj **setkeys,
     if (dstkey) {
         /* Store the resulting set into the target, if the intersection
          * is not an empty set. */
-        int deleted = dbDelete(c->db,dstkey);
+        int deleted = dbDelete(c->m_cur_selected_db,dstkey);
         if (setTypeSize(dstset) > 0) {
-            dbAdd(c->db,dstkey,dstset);
+            dbAdd(c->m_cur_selected_db,dstkey,dstset);
             addReplyLongLong(c,setTypeSize(dstset));
             notifyKeyspaceEvent(NOTIFY_SET,"sinterstore",
-                dstkey,c->db->m_id);
+                dstkey,c->m_cur_selected_db->m_id);
         } else {
             decrRefCount(dstset);
             addReply(c,shared.czero);
             if (deleted)
                 notifyKeyspaceEvent(NOTIFY_GENERIC,"del",
-                    dstkey,c->db->m_id);
+                    dstkey,c->m_cur_selected_db->m_id);
         }
-        signalModifiedKey(c->db,dstkey);
+        signalModifiedKey(c->m_cur_selected_db,dstkey);
         server.dirty++;
     } else {
         setDeferredMultiBulkLength(c,replylen,cardinality);
@@ -933,11 +933,11 @@ void sinterGenericCommand(client *c, robj **setkeys,
 }
 
 void sinterCommand(client *c) {
-    sinterGenericCommand(c,c->argv+1,c->argc-1,NULL);
+    sinterGenericCommand(c,c->m_argv+1,c->m_argc-1,NULL);
 }
 
 void sinterstoreCommand(client *c) {
-    sinterGenericCommand(c,c->argv+2,c->argc-2,c->argv[1]);
+    sinterGenericCommand(c,c->m_argv+2,c->m_argc-2,c->m_argv[1]);
 }
 
 #define SET_OP_UNION 0
@@ -954,8 +954,8 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
 
     for (j = 0; j < setnum; j++) {
         robj *setobj = dstkey ?
-            lookupKeyWrite(c->db,setkeys[j]) :
-            lookupKeyRead(c->db,setkeys[j]);
+            lookupKeyWrite(c->m_cur_selected_db,setkeys[j]) :
+            lookupKeyRead(c->m_cur_selected_db,setkeys[j]);
         if (!setobj) {
             sets[j] = NULL;
             continue;
@@ -1084,48 +1084,48 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
     } else {
         /* If we have a target key where to store the resulting set
          * create this key with the result set inside */
-        int deleted = dbDelete(c->db,dstkey);
+        int deleted = dbDelete(c->m_cur_selected_db,dstkey);
         if (setTypeSize(dstset) > 0) {
-            dbAdd(c->db,dstkey,dstset);
+            dbAdd(c->m_cur_selected_db,dstkey,dstset);
             addReplyLongLong(c,setTypeSize(dstset));
             notifyKeyspaceEvent(NOTIFY_SET,
                 op == SET_OP_UNION ? "sunionstore" : "sdiffstore",
-                dstkey,c->db->m_id);
+                dstkey,c->m_cur_selected_db->m_id);
         } else {
             decrRefCount(dstset);
             addReply(c,shared.czero);
             if (deleted)
                 notifyKeyspaceEvent(NOTIFY_GENERIC,"del",
-                    dstkey,c->db->m_id);
+                    dstkey,c->m_cur_selected_db->m_id);
         }
-        signalModifiedKey(c->db,dstkey);
+        signalModifiedKey(c->m_cur_selected_db,dstkey);
         server.dirty++;
     }
     zfree(sets);
 }
 
 void sunionCommand(client *c) {
-    sunionDiffGenericCommand(c,c->argv+1,c->argc-1,NULL,SET_OP_UNION);
+    sunionDiffGenericCommand(c,c->m_argv+1,c->m_argc-1,NULL,SET_OP_UNION);
 }
 
 void sunionstoreCommand(client *c) {
-    sunionDiffGenericCommand(c,c->argv+2,c->argc-2,c->argv[1],SET_OP_UNION);
+    sunionDiffGenericCommand(c,c->m_argv+2,c->m_argc-2,c->m_argv[1],SET_OP_UNION);
 }
 
 void sdiffCommand(client *c) {
-    sunionDiffGenericCommand(c,c->argv+1,c->argc-1,NULL,SET_OP_DIFF);
+    sunionDiffGenericCommand(c,c->m_argv+1,c->m_argc-1,NULL,SET_OP_DIFF);
 }
 
 void sdiffstoreCommand(client *c) {
-    sunionDiffGenericCommand(c,c->argv+2,c->argc-2,c->argv[1],SET_OP_DIFF);
+    sunionDiffGenericCommand(c,c->m_argv+2,c->m_argc-2,c->m_argv[1],SET_OP_DIFF);
 }
 
 void sscanCommand(client *c) {
     robj *set;
     unsigned long cursor;
 
-    if (parseScanCursorOrReply(c,c->argv[2],&cursor) == C_ERR) return;
-    if ((set = lookupKeyReadOrReply(c,c->argv[1],shared.emptyscan)) == NULL ||
+    if (parseScanCursorOrReply(c,c->m_argv[2],&cursor) == C_ERR) return;
+    if ((set = lookupKeyReadOrReply(c,c->m_argv[1],shared.emptyscan)) == NULL ||
         checkType(c,set,OBJ_SET)) return;
     scanGenericCommand(c,set,cursor);
 }

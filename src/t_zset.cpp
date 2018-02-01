@@ -1521,7 +1521,7 @@ long zsetRank(robj *zobj, sds ele, int reverse) {
 /* This generic command implements both ZADD and ZINCRBY. */
 void zaddGenericCommand(client *c, int flags) {
     static char *nanerr = "resulting score is not a number (NaN)";
-    robj *key = c->argv[1];
+    robj *key = c->m_argv[1];
     robj *zobj;
     sds ele;
     double score = 0, *scores = NULL;
@@ -1538,8 +1538,8 @@ void zaddGenericCommand(client *c, int flags) {
     /* Parse options. At the end 'scoreidx' is set to the argument position
      * of the score of the first score-element pair. */
     scoreidx = 2;
-    while(scoreidx < c->argc) {
-        char *opt = (char *)c->argv[scoreidx]->ptr;
+    while(scoreidx < c->m_argc) {
+        char *opt = (char *)c->m_argv[scoreidx]->ptr;
         if (!strcasecmp(opt,"nx")) flags |= ZADD_NX;
         else if (!strcasecmp(opt,"xx")) flags |= ZADD_XX;
         else if (!strcasecmp(opt,"ch")) flags |= ZADD_CH;
@@ -1556,7 +1556,7 @@ void zaddGenericCommand(client *c, int flags) {
 
     /* After the options, we expect to have an even number of args, since
      * we expect any number of score-element pairs. */
-    elements = c->argc-scoreidx;
+    elements = c->m_argc-scoreidx;
     if (elements % 2 || !elements) {
         addReply(c,shared.syntaxerr);
         return;
@@ -1581,22 +1581,22 @@ void zaddGenericCommand(client *c, int flags) {
      * either execute fully or nothing at all. */
     scores = (double *)zmalloc(sizeof(double)*elements);
     for (j = 0; j < elements; j++) {
-        if (getDoubleFromObjectOrReply(c,c->argv[scoreidx+j*2],&scores[j],NULL)
+        if (getDoubleFromObjectOrReply(c,c->m_argv[scoreidx+j*2],&scores[j],NULL)
             != C_OK) goto cleanup;
     }
 
     /* Lookup the key and create the sorted set if does not exist. */
-    zobj = lookupKeyWrite(c->db,key);
+    zobj = lookupKeyWrite(c->m_cur_selected_db,key);
     if (zobj == NULL) {
         if (xx) goto reply_to_client; /* No key + XX option: nothing to do. */
         if (server.zset_max_ziplist_entries == 0 ||
-            server.zset_max_ziplist_value < sdslen((sds)c->argv[scoreidx+1]->ptr))
+            server.zset_max_ziplist_value < sdslen((sds)c->m_argv[scoreidx+1]->ptr))
         {
             zobj = createZsetObject();
         } else {
             zobj = createZsetZiplistObject();
         }
-        dbAdd(c->db,key,zobj);
+        dbAdd(c->m_cur_selected_db,key,zobj);
     } else {
         if (zobj->type != OBJ_ZSET) {
             addReply(c,shared.wrongtypeerr);
@@ -1609,7 +1609,7 @@ void zaddGenericCommand(client *c, int flags) {
         score = scores[j];
         int retflags = flags;
 
-        ele = (sds)c->argv[scoreidx+1+j*2]->ptr;
+        ele = (sds)c->m_argv[scoreidx+1+j*2]->ptr;
         int retval = zsetAdd(zobj, score, ele, &retflags, &newscore);
         if (retval == 0) {
             addReplyError(c,nanerr);
@@ -1635,9 +1635,9 @@ reply_to_client:
 cleanup:
     zfree(scores);
     if (added || updated) {
-        signalModifiedKey(c->db,key);
+        signalModifiedKey(c->m_cur_selected_db,key);
         notifyKeyspaceEvent(NOTIFY_ZSET,
-            incr ? "zincr" : "zadd", key, c->db->m_id);
+            incr ? "zincr" : "zadd", key, c->m_cur_selected_db->m_id);
     }
 }
 
@@ -1650,27 +1650,27 @@ void zincrbyCommand(client *c) {
 }
 
 void zremCommand(client *c) {
-    robj *key = c->argv[1];
+    robj *key = c->m_argv[1];
     robj *zobj;
     int deleted = 0, keyremoved = 0, j;
 
     if ((zobj = lookupKeyWriteOrReply(c,key,shared.czero)) == NULL ||
         checkType(c,zobj,OBJ_ZSET)) return;
 
-    for (j = 2; j < c->argc; j++) {
-        if (zsetDel(zobj,(sds)c->argv[j]->ptr)) deleted++;
+    for (j = 2; j < c->m_argc; j++) {
+        if (zsetDel(zobj,(sds)c->m_argv[j]->ptr)) deleted++;
         if (zsetLength(zobj) == 0) {
-            dbDelete(c->db,key);
+            dbDelete(c->m_cur_selected_db,key);
             keyremoved = 1;
             break;
         }
     }
 
     if (deleted) {
-        notifyKeyspaceEvent(NOTIFY_ZSET,"zrem",key,c->db->m_id);
+        notifyKeyspaceEvent(NOTIFY_ZSET,"zrem",key,c->m_cur_selected_db->m_id);
         if (keyremoved)
-            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",key,c->db->m_id);
-        signalModifiedKey(c->db,key);
+            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",key,c->m_cur_selected_db->m_id);
+        signalModifiedKey(c->m_cur_selected_db,key);
         server.dirty += deleted;
     }
     addReplyLongLong(c,deleted);
@@ -1681,7 +1681,7 @@ void zremCommand(client *c) {
 #define ZRANGE_SCORE 1
 #define ZRANGE_LEX 2
 void zremrangeGenericCommand(client *c, int rangetype) {
-    robj *key = c->argv[1];
+    robj *key = c->m_argv[1];
     robj *zobj;
     int keyremoved = 0;
     unsigned long deleted = 0;
@@ -1691,16 +1691,16 @@ void zremrangeGenericCommand(client *c, int rangetype) {
 
     /* Step 1: Parse the range. */
     if (rangetype == ZRANGE_RANK) {
-        if ((getLongFromObjectOrReply(c,c->argv[2],&start,NULL) != C_OK) ||
-            (getLongFromObjectOrReply(c,c->argv[3],&end,NULL) != C_OK))
+        if ((getLongFromObjectOrReply(c,c->m_argv[2],&start,NULL) != C_OK) ||
+            (getLongFromObjectOrReply(c,c->m_argv[3],&end,NULL) != C_OK))
             return;
     } else if (rangetype == ZRANGE_SCORE) {
-        if (zslParseRange(c->argv[2],c->argv[3],&range) != C_OK) {
+        if (zslParseRange(c->m_argv[2],c->m_argv[3],&range) != C_OK) {
             addReplyError(c,"min or max is not a float");
             return;
         }
     } else if (rangetype == ZRANGE_LEX) {
-        if (zslParseLexRange(c->argv[2],c->argv[3],&lexrange) != C_OK) {
+        if (zslParseLexRange(c->m_argv[2],c->m_argv[3],&lexrange) != C_OK) {
             addReplyError(c,"min or max not valid string range item");
             return;
         }
@@ -1740,7 +1740,7 @@ void zremrangeGenericCommand(client *c, int rangetype) {
             break;
         }
         if (zzlLength((unsigned char *)zobj->ptr) == 0) {
-            dbDelete(c->db,key);
+            dbDelete(c->m_cur_selected_db,key);
             keyremoved = 1;
         }
     } else if (zobj->encoding == OBJ_ENCODING_SKIPLIST) {
@@ -1759,7 +1759,7 @@ void zremrangeGenericCommand(client *c, int rangetype) {
         if (htNeedsResize(zs->_dict))
             zs->_dict->dictResize();
         if (zs->_dict->dictSize() == 0) {
-            dbDelete(c->db,key);
+            dbDelete(c->m_cur_selected_db,key);
             keyremoved = 1;
         }
     } else {
@@ -1769,10 +1769,10 @@ void zremrangeGenericCommand(client *c, int rangetype) {
     /* Step 4: Notifications and reply. */
     if (deleted) {
         char *event[3] = {"zremrangebyrank","zremrangebyscore","zremrangebylex"};
-        signalModifiedKey(c->db,key);
-        notifyKeyspaceEvent(NOTIFY_ZSET,event[rangetype],key,c->db->m_id);
+        signalModifiedKey(c->m_cur_selected_db,key);
+        notifyKeyspaceEvent(NOTIFY_ZSET,event[rangetype],key,c->m_cur_selected_db->m_id);
         if (keyremoved)
-            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",key,c->db->m_id);
+            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",key,c->m_cur_selected_db->m_id);
     }
     server.dirty += deleted;
     addReplyLongLong(c,deleted);
@@ -2183,7 +2183,7 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
     int touched = 0;
 
     /* expect setnum input keys to be given */
-    if ((getLongFromObjectOrReply(c, c->argv[2], &setnum, NULL) != C_OK))
+    if ((getLongFromObjectOrReply(c, c->m_argv[2], &setnum, NULL) != C_OK))
         return;
 
     if (setnum < 1) {
@@ -2193,7 +2193,7 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
     }
 
     /* test if the expected number of keys would overflow */
-    if (setnum > c->argc-3) {
+    if (setnum > c->m_argc-3) {
         addReply(c,shared.syntaxerr);
         return;
     }
@@ -2201,7 +2201,7 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
     /* read keys to be used for input */
     src = (zsetopsrc *)zcalloc(sizeof(zsetopsrc) * setnum);
     for (i = 0, j = 3; i < setnum; i++, j++) {
-        robj *obj = lookupKeyWrite(c->db,c->argv[j]);
+        robj *obj = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[j]);
         if (obj != NULL) {
             if (obj->type != OBJ_ZSET && obj->type != OBJ_SET) {
                 zfree(src);
@@ -2221,16 +2221,16 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
     }
 
     /* parse optional extra arguments */
-    if (j < c->argc) {
-        int remaining = c->argc - j;
+    if (j < c->m_argc) {
+        int remaining = c->m_argc - j;
 
         while (remaining) {
             if (remaining >= (setnum + 1) &&
-                !strcasecmp((const char*)c->argv[j]->ptr,"weights"))
+                !strcasecmp((const char*)c->m_argv[j]->ptr,"weights"))
             {
                 j++; remaining--;
                 for (i = 0; i < setnum; i++, j++, remaining--) {
-                    if (getDoubleFromObjectOrReply(c,c->argv[j],&src[i].weight,
+                    if (getDoubleFromObjectOrReply(c,c->m_argv[j],&src[i].weight,
                             "weight value is not a float") != C_OK)
                     {
                         zfree(src);
@@ -2238,14 +2238,14 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
                     }
                 }
             } else if (remaining >= 2 &&
-                       !strcasecmp((const char*)c->argv[j]->ptr,"aggregate"))
+                       !strcasecmp((const char*)c->m_argv[j]->ptr,"aggregate"))
             {
                 j++; remaining--;
-                if (!strcasecmp((const char*)c->argv[j]->ptr,"sum")) {
+                if (!strcasecmp((const char*)c->m_argv[j]->ptr,"sum")) {
                     aggregate = REDIS_AGGR_SUM;
-                } else if (!strcasecmp((const char*)c->argv[j]->ptr,"min")) {
+                } else if (!strcasecmp((const char*)c->m_argv[j]->ptr,"min")) {
                     aggregate = REDIS_AGGR_MIN;
-                } else if (!strcasecmp((const char*)c->argv[j]->ptr,"max")) {
+                } else if (!strcasecmp((const char*)c->m_argv[j]->ptr,"max")) {
                     aggregate = REDIS_AGGR_MAX;
                 } else {
                     zfree(src);
@@ -2375,23 +2375,23 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
         serverPanic("Unknown operator");
     }
 
-    if (dbDelete(c->db,dstkey))
+    if (dbDelete(c->m_cur_selected_db,dstkey))
         touched = 1;
     if (dstzset->zsl->length()) {
         zsetConvertToZiplistIfNeeded(dstobj,maxelelen);
-        dbAdd(c->db,dstkey,dstobj);
+        dbAdd(c->m_cur_selected_db,dstkey,dstobj);
         addReplyLongLong(c,zsetLength(dstobj));
-        signalModifiedKey(c->db,dstkey);
+        signalModifiedKey(c->m_cur_selected_db,dstkey);
         notifyKeyspaceEvent(NOTIFY_ZSET,
             (op == SET_OP_UNION) ? "zunionstore" : "zinterstore",
-            dstkey,c->db->m_id);
+            dstkey,c->m_cur_selected_db->m_id);
         server.dirty++;
     } else {
         decrRefCount(dstobj);
         addReply(c,shared.czero);
         if (touched) {
-            signalModifiedKey(c->db,dstkey);
-            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",dstkey,c->db->m_id);
+            signalModifiedKey(c->m_cur_selected_db,dstkey);
+            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",dstkey,c->m_cur_selected_db->m_id);
             server.dirty++;
         }
     }
@@ -2399,15 +2399,15 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
 }
 
 void zunionstoreCommand(client *c) {
-    zunionInterGenericCommand(c,c->argv[1], SET_OP_UNION);
+    zunionInterGenericCommand(c,c->m_argv[1], SET_OP_UNION);
 }
 
 void zinterstoreCommand(client *c) {
-    zunionInterGenericCommand(c,c->argv[1], SET_OP_INTER);
+    zunionInterGenericCommand(c,c->m_argv[1], SET_OP_INTER);
 }
 
 void zrangeGenericCommand(client *c, int reverse) {
-    robj *key = c->argv[1];
+    robj *key = c->m_argv[1];
     robj *zobj;
     int withscores = 0;
     long start;
@@ -2415,12 +2415,12 @@ void zrangeGenericCommand(client *c, int reverse) {
     int llen;
     int rangelen;
 
-    if ((getLongFromObjectOrReply(c, c->argv[2], &start, NULL) != C_OK) ||
-        (getLongFromObjectOrReply(c, c->argv[3], &end, NULL) != C_OK)) return;
+    if ((getLongFromObjectOrReply(c, c->m_argv[2], &start, NULL) != C_OK) ||
+        (getLongFromObjectOrReply(c, c->m_argv[3], &end, NULL) != C_OK)) return;
 
-    if (c->argc == 5 && !strcasecmp((const char*)c->argv[4]->ptr,"withscores")) {
+    if (c->m_argc == 5 && !strcasecmp((const char*)c->m_argv[4]->ptr,"withscores")) {
         withscores = 1;
-    } else if (c->argc >= 5) {
+    } else if (c->m_argc >= 5) {
         addReply(c,shared.syntaxerr);
         return;
     }
@@ -2519,7 +2519,7 @@ void zrevrangeCommand(client *c) {
 /* This command implements ZRANGEBYSCORE, ZREVRANGEBYSCORE. */
 void genericZrangebyscoreCommand(client *c, int reverse) {
     zrangespec range;
-    robj *key = c->argv[1];
+    robj *key = c->m_argv[1];
     robj *zobj;
     long offset = 0, limit = -1;
     int withscores = 0;
@@ -2536,25 +2536,25 @@ void genericZrangebyscoreCommand(client *c, int reverse) {
         minidx = 2; maxidx = 3;
     }
 
-    if (zslParseRange(c->argv[minidx],c->argv[maxidx],&range) != C_OK) {
+    if (zslParseRange(c->m_argv[minidx],c->m_argv[maxidx],&range) != C_OK) {
         addReplyError(c,"min or max is not a float");
         return;
     }
 
     /* Parse optional extra arguments. Note that ZCOUNT will exactly have
      * 4 arguments, so we'll never enter the following code path. */
-    if (c->argc > 4) {
-        int remaining = c->argc - 4;
+    if (c->m_argc > 4) {
+        int remaining = c->m_argc - 4;
         int pos = 4;
 
         while (remaining) {
-            if (remaining >= 1 && !strcasecmp((const char*)c->argv[pos]->ptr,"withscores")) {
+            if (remaining >= 1 && !strcasecmp((const char*)c->m_argv[pos]->ptr,"withscores")) {
                 pos++; remaining--;
                 withscores = 1;
-            } else if (remaining >= 3 && !strcasecmp((const char*)c->argv[pos]->ptr,"limit")) {
-                if ((getLongFromObjectOrReply(c, c->argv[pos+1], &offset, NULL)
+            } else if (remaining >= 3 && !strcasecmp((const char*)c->m_argv[pos]->ptr,"limit")) {
+                if ((getLongFromObjectOrReply(c, c->m_argv[pos+1], &offset, NULL)
                         != C_OK) ||
-                    (getLongFromObjectOrReply(c, c->argv[pos+2], &limit, NULL)
+                    (getLongFromObjectOrReply(c, c->m_argv[pos+2], &limit, NULL)
                         != C_OK))
                 {
                     return;
@@ -2717,13 +2717,13 @@ void zrevrangebyscoreCommand(client *c) {
 }
 
 void zcountCommand(client *c) {
-    robj *key = c->argv[1];
+    robj *key = c->m_argv[1];
     robj *zobj;
     zrangespec range;
     int count = 0;
 
     /* Parse the range arguments */
-    if (zslParseRange(c->argv[2],c->argv[3],&range) != C_OK) {
+    if (zslParseRange(c->m_argv[2],c->m_argv[3],&range) != C_OK) {
         addReplyError(c,"min or max is not a float");
         return;
     }
@@ -2794,13 +2794,13 @@ void zcountCommand(client *c) {
 }
 
 void zlexcountCommand(client *c) {
-    robj *key = c->argv[1];
+    robj *key = c->m_argv[1];
     robj *zobj;
     zlexrangespec range;
     int count = 0;
 
     /* Parse the range arguments */
-    if (zslParseLexRange(c->argv[2],c->argv[3],&range) != C_OK) {
+    if (zslParseLexRange(c->m_argv[2],c->m_argv[3],&range) != C_OK) {
         addReplyError(c,"min or max not valid string range item");
         return;
     }
@@ -2875,7 +2875,7 @@ void zlexcountCommand(client *c) {
 /* This command implements ZRANGEBYLEX, ZREVRANGEBYLEX. */
 void genericZrangebylexCommand(client *c, int reverse) {
     zlexrangespec range;
-    robj *key = c->argv[1];
+    robj *key = c->m_argv[1];
     robj *zobj;
     long offset = 0, limit = -1;
     unsigned long rangelen = 0;
@@ -2891,21 +2891,21 @@ void genericZrangebylexCommand(client *c, int reverse) {
         minidx = 2; maxidx = 3;
     }
 
-    if (zslParseLexRange(c->argv[minidx],c->argv[maxidx],&range) != C_OK) {
+    if (zslParseLexRange(c->m_argv[minidx],c->m_argv[maxidx],&range) != C_OK) {
         addReplyError(c,"min or max not valid string range item");
         return;
     }
 
     /* Parse optional extra arguments. Note that ZCOUNT will exactly have
      * 4 arguments, so we'll never enter the following code path. */
-    if (c->argc > 4) {
-        int remaining = c->argc - 4;
+    if (c->m_argc > 4) {
+        int remaining = c->m_argc - 4;
         int pos = 4;
 
         while (remaining) {
-            if (remaining >= 3 && !strcasecmp((const char*)c->argv[pos]->ptr,"limit")) {
-                if ((getLongFromObjectOrReply(c, c->argv[pos+1], &offset, NULL) != C_OK) ||
-                    (getLongFromObjectOrReply(c, c->argv[pos+2], &limit, NULL) != C_OK)) return;
+            if (remaining >= 3 && !strcasecmp((const char*)c->m_argv[pos]->ptr,"limit")) {
+                if ((getLongFromObjectOrReply(c, c->m_argv[pos+1], &offset, NULL) != C_OK) ||
+                    (getLongFromObjectOrReply(c, c->m_argv[pos+2], &limit, NULL) != C_OK)) return;
                 pos += 3; remaining -= 3;
             } else {
                 zslFreeLexRange(&range);
@@ -3058,7 +3058,7 @@ void zrevrangebylexCommand(client *c) {
 }
 
 void zcardCommand(client *c) {
-    robj *key = c->argv[1];
+    robj *key = c->m_argv[1];
     robj *zobj;
 
     if ((zobj = lookupKeyReadOrReply(c,key,shared.czero)) == NULL ||
@@ -3068,14 +3068,14 @@ void zcardCommand(client *c) {
 }
 
 void zscoreCommand(client *c) {
-    robj *key = c->argv[1];
+    robj *key = c->m_argv[1];
     robj *zobj;
     double score;
 
     if ((zobj = lookupKeyReadOrReply(c,key,shared.nullbulk)) == NULL ||
         checkType(c,zobj,OBJ_ZSET)) return;
 
-    if (zsetScore(zobj,(sds)c->argv[2]->ptr,&score) == C_ERR) {
+    if (zsetScore(zobj,(sds)c->m_argv[2]->ptr,&score) == C_ERR) {
         addReply(c,shared.nullbulk);
     } else {
         addReplyDouble(c,score);
@@ -3083,8 +3083,8 @@ void zscoreCommand(client *c) {
 }
 
 void zrankGenericCommand(client *c, int reverse) {
-    robj *key = c->argv[1];
-    robj *ele = c->argv[2];
+    robj *key = c->m_argv[1];
+    robj *ele = c->m_argv[2];
     robj *zobj;
     long rank;
 
@@ -3112,8 +3112,8 @@ void zscanCommand(client *c) {
     robj *o;
     unsigned long cursor;
 
-    if (parseScanCursorOrReply(c,c->argv[2],&cursor) == C_ERR) return;
-    if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.emptyscan)) == NULL ||
+    if (parseScanCursorOrReply(c,c->m_argv[2],&cursor) == C_ERR) return;
+    if ((o = lookupKeyReadOrReply(c,c->m_argv[1],shared.emptyscan)) == NULL ||
         checkType(c,o,OBJ_ZSET)) return;
     scanGenericCommand(c,o,cursor);
 }

@@ -198,7 +198,7 @@ void sortCommand(client *c) {
     redisSortObject *vector; /* Resulting vector to sort */
 
     /* Lookup the key to sort. It must be of the right types */
-    sortval = lookupKeyRead(c->db,c->argv[1]);
+    sortval = lookupKeyRead(c->m_cur_selected_db,c->m_argv[1]);
     if (sortval && sortval->type != OBJ_SET &&
                    sortval->type != OBJ_LIST &&
                    sortval->type != OBJ_ZSET)
@@ -222,32 +222,32 @@ void sortCommand(client *c) {
         sortval = createQuicklistObject();
 
     /* The SORT command has an SQL-alike syntax, parse it */
-    while(j < c->argc) {
-        int leftargs = c->argc-j-1;
-        if (!strcasecmp((const char*)c->argv[j]->ptr,"asc")) {
+    while(j < c->m_argc) {
+        int leftargs = c->m_argc-j-1;
+        if (!strcasecmp((const char*)c->m_argv[j]->ptr,"asc")) {
             desc = 0;
-        } else if (!strcasecmp((const char*)c->argv[j]->ptr,"desc")) {
+        } else if (!strcasecmp((const char*)c->m_argv[j]->ptr,"desc")) {
             desc = 1;
-        } else if (!strcasecmp((const char*)c->argv[j]->ptr,"alpha")) {
+        } else if (!strcasecmp((const char*)c->m_argv[j]->ptr,"alpha")) {
             alpha = 1;
-        } else if (!strcasecmp((const char*)c->argv[j]->ptr,"limit") && leftargs >= 2) {
-            if ((getLongFromObjectOrReply(c, c->argv[j+1], &limit_start, NULL)
+        } else if (!strcasecmp((const char*)c->m_argv[j]->ptr,"limit") && leftargs >= 2) {
+            if ((getLongFromObjectOrReply(c, c->m_argv[j+1], &limit_start, NULL)
                  != C_OK) ||
-                (getLongFromObjectOrReply(c, c->argv[j+2], &limit_count, NULL)
+                (getLongFromObjectOrReply(c, c->m_argv[j+2], &limit_count, NULL)
                  != C_OK))
             {
                 syntax_error++;
                 break;
             }
             j+=2;
-        } else if (!strcasecmp((const char*)c->argv[j]->ptr,"store") && leftargs >= 1) {
-            storekey = c->argv[j+1];
+        } else if (!strcasecmp((const char*)c->m_argv[j]->ptr,"store") && leftargs >= 1) {
+            storekey = c->m_argv[j+1];
             j++;
-        } else if (!strcasecmp((const char*)c->argv[j]->ptr,"by") && leftargs >= 1) {
-            sortby = c->argv[j+1];
+        } else if (!strcasecmp((const char*)c->m_argv[j]->ptr,"by") && leftargs >= 1) {
+            sortby = c->m_argv[j+1];
             /* If the BY pattern does not contain '*', i.e. it is constant,
              * we don't need to sort nor to lookup the weight keys. */
-            if (strchr((const char *)c->argv[j+1]->ptr,'*') == NULL) {
+            if (strchr((const char *)c->m_argv[j+1]->ptr,'*') == NULL) {
                 dontsort = 1;
             } else {
                 /* If BY is specified with a real patter, we can't accept
@@ -259,14 +259,14 @@ void sortCommand(client *c) {
                 }
             }
             j++;
-        } else if (!strcasecmp((const char*)c->argv[j]->ptr,"get") && leftargs >= 1) {
+        } else if (!strcasecmp((const char*)c->m_argv[j]->ptr,"get") && leftargs >= 1) {
             if (server.cluster_enabled) {
                 addReplyError(c,"GET option of SORT denied in Cluster mode.");
                 syntax_error++;
                 break;
             }
             operations->listAddNodeTail(createSortOperation(
-                SORT_OP_GET,c->argv[j+1]));
+                SORT_OP_GET,c->m_argv[j+1]));
             getop++;
             j++;
         } else {
@@ -447,7 +447,7 @@ void sortCommand(client *c) {
             robj *byval;
             if (sortby) {
                 /* lookup value to sort by */
-                byval = lookupKeyByPattern(c->db,sortby,vector[j].obj);
+                byval = lookupKeyByPattern(c->m_cur_selected_db,sortby,vector[j].obj);
                 if (!byval) continue;
             } else {
                 /* use object itself to sort by */
@@ -510,7 +510,7 @@ void sortCommand(client *c) {
             listIter li(operations);
             while((ln = li.listNext())) {
                 redisSortOperation *sop = (redisSortOperation *)ln->listNodeValue();
-                robj *val = lookupKeyByPattern(c->db,sop->pattern,
+                robj *val = lookupKeyByPattern(c->m_cur_selected_db,sop->pattern,
                     vector[j].obj);
 
                 if (sop->type == SORT_OP_GET) {
@@ -539,7 +539,7 @@ void sortCommand(client *c) {
                 listIter li(operations);
                 while((ln = li.listNext())) {
                     redisSortOperation *sop = (redisSortOperation *)ln->listNodeValue();
-                    robj *val = lookupKeyByPattern(c->db,sop->pattern,
+                    robj *val = lookupKeyByPattern(c->m_cur_selected_db,sop->pattern,
                         vector[j].obj);
 
                     if (sop->type == SORT_OP_GET) {
@@ -558,13 +558,13 @@ void sortCommand(client *c) {
             }
         }
         if (outputlen) {
-            setKey(c->db,storekey,sobj);
+            setKey(c->m_cur_selected_db,storekey,sobj);
             notifyKeyspaceEvent(NOTIFY_LIST,"sortstore",storekey,
-                                c->db->m_id);
+                                c->m_cur_selected_db->m_id);
             server.dirty += outputlen;
-        } else if (dbDelete(c->db,storekey)) {
-            signalModifiedKey(c->db,storekey);
-            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",storekey,c->db->m_id);
+        } else if (dbDelete(c->m_cur_selected_db,storekey)) {
+            signalModifiedKey(c->m_cur_selected_db,storekey);
+            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",storekey,c->m_cur_selected_db->m_id);
             server.dirty++;
         }
         decrRefCount(sobj);

@@ -449,20 +449,20 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
     }
 
     /* Setup our fake client for command execution */
-    c->argv = argv;
-    c->argc = argc;
+    c->m_argv = argv;
+    c->m_argc = argc;
 
     /* Log the command if debugging is active. */
     if (ldb.active && ldb.step) {
         sds cmdlog = sdsnew("<redis>");
-        for (j = 0; j < c->argc; j++) {
+        for (j = 0; j < c->m_argc; j++) {
             if (j == 10) {
                 cmdlog = sdscatprintf(cmdlog," ... (%d more)",
-                    c->argc-j-1);
+                    c->m_argc-j-1);
                 break;
             } else {
                 cmdlog = sdscatlen(cmdlog," ",1);
-                cmdlog = sdscatsds(cmdlog, (sds)c->argv[j]->ptr);
+                cmdlog = sdscatsds(cmdlog, (sds)c->m_argv[j]->ptr);
             }
         }
         ldbLog(cmdlog);
@@ -480,7 +480,7 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
             luaPushError(lua,"Unknown Redis command called from Lua script");
         goto cleanup;
     }
-    c->cmd = c->lastcmd = cmd;
+    c->m_cmd = c->m_last_cmd = cmd;
 
     /* There are commands that are not allowed inside scripts. */
     if (cmd->m_flags & CMD_NOSCRIPT) {
@@ -536,7 +536,7 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
         /* Duplicate relevant flags in the lua client. */
         c->m_flags &= ~(CLIENT_READONLY|CLIENT_ASKING);
         c->m_flags |= server.lua_caller->m_flags & (CLIENT_READONLY|CLIENT_ASKING);
-        if (getNodeByQuery(c,c->cmd,c->argv,c->argc,NULL,NULL) !=
+        if (getNodeByQuery(c,c->m_cmd,c->m_argv,c->m_argc,NULL,NULL) !=
                            server.cluster->m_myself)
         {
             luaPushError(lua,
@@ -572,21 +572,21 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
     /* Convert the result of the Redis command into a suitable Lua type.
      * The first thing we need is to create a single string from the client
      * output buffers. */
-    if (c->reply->listLength() == 0 && c->bufpos < PROTO_REPLY_CHUNK_BYTES) {
+    if (c->m_reply->listLength() == 0 && c->m_response_buff_pos < PROTO_REPLY_CHUNK_BYTES) {
         /* This is a fast path for the common case of a reply inside the
          * client static buffer. Don't create an SDS string but just use
          * the client buffer directly. */
-        c->buf[c->bufpos] = '\0';
-        reply = c->buf;
-        c->bufpos = 0;
+        c->m_response_buff[c->m_response_buff_pos] = '\0';
+        reply = c->m_response_buff;
+        c->m_response_buff_pos = 0;
     } else {
-        reply = sdsnewlen(c->buf,c->bufpos);
-        c->bufpos = 0;
-        while(c->reply->listLength()) {
-            sds o = (sds)c->reply->listFirst()->listNodeValue();
+        reply = sdsnewlen(c->m_response_buff,c->m_response_buff_pos);
+        c->m_response_buff_pos = 0;
+        while(c->m_reply->listLength()) {
+            sds o = (sds)c->m_reply->listFirst()->listNodeValue();
 
             reply = sdscatsds(reply,o);
-            c->reply->listDelNode(c->reply->listFirst());
+            c->m_reply->listDelNode(c->m_reply->listFirst());
         }
     }
     if (raise_error && reply[0] != '-') raise_error = 0;
@@ -603,14 +603,14 @@ int luaRedisGenericCommand(lua_State *lua, int raise_error) {
         (reply[0] == '*' && reply[1] != '-')) {
             luaSortArray(lua);
     }
-    if (reply != c->buf) sdsfree(reply);
-    c->reply_bytes = 0;
+    if (reply != c->m_response_buff) sdsfree(reply);
+    c->m_reply_bytes = 0;
 
 cleanup:
     /* Clean up. Command code may have changed argv/argc so we use the
      * argv/argc of the client instead of the local variables. */
-    for (j = 0; j < c->argc; j++) {
-        robj *o = c->argv[j];
+    for (j = 0; j < c->m_argc; j++) {
+        robj *o = c->m_argv[j];
 
         /* Try to cache the object in the cached_objects array.
          * The object must be small, SDS-encoded, and with refcount = 1
@@ -630,8 +630,8 @@ cleanup:
         }
     }
 
-    if (c->argv != argv) {
-        zfree(c->argv);
+    if (c->m_argv != argv) {
+        zfree(c->m_argv);
         argv = NULL;
         argv_size = 0;
     }
@@ -1239,7 +1239,7 @@ void luaMaskCountHook(lua_State *lua, lua_Debug *ar) {
          * we need to mask the client executing the script from the event loop.
          * If we don't do that the client may disconnect and could no longer be
          * here when the EVAL command will return. */
-         server.el->aeDeleteFileEvent( server.lua_caller->fd, AE_READABLE);
+         server.el->aeDeleteFileEvent( server.lua_caller->m_fd, AE_READABLE);
     }
     if (server.lua_timedout) processEventsWhileBlocked();
     if (server.lua_kill) {
@@ -1274,9 +1274,9 @@ void evalGenericCommand(client *c, int evalsha) {
     server.lua_repl = PROPAGATE_AOF|PROPAGATE_REPL;
 
     /* Get the number of arguments that are keys */
-    if (getLongLongFromObjectOrReply(c,c->argv[2],&numkeys,NULL) != C_OK)
+    if (getLongLongFromObjectOrReply(c,c->m_argv[2],&numkeys,NULL) != C_OK)
         return;
-    if (numkeys > (c->argc - 3)) {
+    if (numkeys > (c->m_argc - 3)) {
         addReplyError(c,"Number of keys can't be greater than number of args");
         return;
     } else if (numkeys < 0) {
@@ -1290,11 +1290,11 @@ void evalGenericCommand(client *c, int evalsha) {
     funcname[1] = '_';
     if (!evalsha) {
         /* Hash the code if this is an EVAL call */
-        sha1hex(funcname+2, (char *)c->argv[1]->ptr,sdslen((sds)c->argv[1]->ptr));
+        sha1hex(funcname+2, (char *)c->m_argv[1]->ptr,sdslen((sds)c->m_argv[1]->ptr));
     } else {
         /* We already have the SHA if it is a EVALSHA */
         int j;
-        char *sha = (char *)c->argv[1]->ptr;
+        char *sha = (char *)c->m_argv[1]->ptr;
 
         /* Convert to lowercase. We don't use tolower since the function
          * managed to always show up in the profiler output consuming
@@ -1320,7 +1320,7 @@ void evalGenericCommand(client *c, int evalsha) {
             addReply(c, shared.noscripterr);
             return;
         }
-        if (luaCreateFunction(c,lua,c->argv[1]) == NULL) {
+        if (luaCreateFunction(c,lua,c->m_argv[1]) == NULL) {
             lua_pop(lua,1); /* remove the error handler from the stack. */
             /* The error is sent to the client by luaCreateFunction()
              * itself when it returns NULL. */
@@ -1333,11 +1333,11 @@ void evalGenericCommand(client *c, int evalsha) {
 
     /* Populate the argv and keys table accordingly to the arguments that
      * EVAL received. */
-    luaSetGlobalArray(lua,"KEYS",c->argv+3,numkeys);
-    luaSetGlobalArray(lua,"ARGV",c->argv+3+numkeys,c->argc-3-numkeys);
+    luaSetGlobalArray(lua,"KEYS",c->m_argv+3,numkeys);
+    luaSetGlobalArray(lua,"ARGV",c->m_argv+3+numkeys,c->m_argc-3-numkeys);
 
     /* Select the right DB in the context of the Lua client */
-    selectDb(server.lua_client,c->db->m_id);
+    server.lua_client->selectDb(c->m_cur_selected_db->m_id);
 
     /* Set a hook in order to be able to stop the script execution if it
      * is running for too much time.
@@ -1370,7 +1370,7 @@ void evalGenericCommand(client *c, int evalsha) {
         server.lua_timedout = 0;
         /* Restore the readable handler that was unregistered when the
          * script timeout was detected. */
-        server.el->aeCreateFileEvent(c->fd,AE_READABLE,
+        server.el->aeCreateFileEvent(c->m_fd,AE_READABLE,
                           readQueryFromClient,c);
     }
     server.lua_caller = NULL;
@@ -1410,7 +1410,7 @@ void evalGenericCommand(client *c, int evalsha) {
         if (server.lua_multi_emitted) {
             robj *propargv[1];
             propargv[0] = createStringObject("EXEC",4);
-            alsoPropagate(server.execCommand,c->db->m_id,propargv,1,
+            alsoPropagate(server.execCommand,c->m_cur_selected_db->m_id,propargv,1,
                 PROPAGATE_AOF|PROPAGATE_REPL);
             decrRefCount(propargv[0]);
         }
@@ -1427,13 +1427,13 @@ void evalGenericCommand(client *c, int evalsha) {
      * flush our cache of scripts that can be replicated as EVALSHA, while
      * for AOF we need to do so every time we rewrite the AOF file. */
     if (evalsha && !server.lua_replicate_commands) {
-        if (!replicationScriptCacheExists((sds)c->argv[1]->ptr)) {
+        if (!replicationScriptCacheExists((sds)c->m_argv[1]->ptr)) {
             /* This script is not in our script cache, replicate it as
              * EVAL, then add it into the script cache, as from now on
              * slaves and AOF know about it. */
-            robj *script = (robj *)server.lua_scripts->dictFetchValue(c->argv[1]->ptr);
+            robj *script = (robj *)server.lua_scripts->dictFetchValue(c->m_argv[1]->ptr);
 
-            replicationScriptCacheAdd((sds)c->argv[1]->ptr);
+            replicationScriptCacheAdd((sds)c->m_argv[1]->ptr);
             serverAssertWithInfo(c,NULL,script != NULL);
             rewriteClientCommandArgument(c,0,
                 resetRefCount(createStringObject("EVAL",4)));
@@ -1451,7 +1451,7 @@ void evalCommand(client *c) {
 }
 
 void evalShaCommand(client *c) {
-    if (sdslen((sds)c->argv[1]->ptr) != 40) {
+    if (sdslen((sds)c->m_argv[1]->ptr) != 40) {
         /* We know that a match is not possible if the provided SHA is
          * not the right length. So we return an error ASAP, this way
          * evalGenericCommand() can be implemented without string length
@@ -1468,27 +1468,27 @@ void evalShaCommand(client *c) {
 }
 
 void scriptCommand(client *c) {
-    if (c->argc == 2 && !strcasecmp((const char*)c->argv[1]->ptr,"flush")) {
+    if (c->m_argc == 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"flush")) {
         scriptingReset();
         addReply(c,shared.ok);
         replicationScriptCacheFlush();
         server.dirty++; /* Propagating this command is a good idea. */
-    } else if (c->argc >= 2 && !strcasecmp((const char*)c->argv[1]->ptr,"exists")) {
+    } else if (c->m_argc >= 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"exists")) {
         int j;
 
-        addReplyMultiBulkLen(c, c->argc-2);
-        for (j = 2; j < c->argc; j++) {
-            if (server.lua_scripts->dictFind(c->argv[j]->ptr))
+        addReplyMultiBulkLen(c, c->m_argc-2);
+        for (j = 2; j < c->m_argc; j++) {
+            if (server.lua_scripts->dictFind(c->m_argv[j]->ptr))
                 addReply(c,shared.cone);
             else
                 addReply(c,shared.czero);
         }
-    } else if (c->argc == 3 && !strcasecmp((const char*)c->argv[1]->ptr,"load")) {
-        sds sha = luaCreateFunction(c,server.lua,c->argv[2]);
+    } else if (c->m_argc == 3 && !strcasecmp((const char*)c->m_argv[1]->ptr,"load")) {
+        sds sha = luaCreateFunction(c,server.lua,c->m_argv[2]);
         if (sha == NULL) return; /* The error was sent by luaCreateFunction(). */
         addReplyBulkCBuffer(c,sha,40);
         forceCommandPropagation(c,PROPAGATE_REPL|PROPAGATE_AOF);
-    } else if (c->argc == 2 && !strcasecmp((const char*)c->argv[1]->ptr,"kill")) {
+    } else if (c->m_argc == 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"kill")) {
         if (server.lua_caller == NULL) {
             addReplySds(c,sdsnew("-NOTBUSY No scripts in execution right now.\r\n"));
         } else if (server.lua_write_dirty) {
@@ -1497,18 +1497,18 @@ void scriptCommand(client *c) {
             server.lua_kill = 1;
             addReply(c,shared.ok);
         }
-    } else if (c->argc == 3 && !strcasecmp((const char*)c->argv[1]->ptr,"debug")) {
+    } else if (c->m_argc == 3 && !strcasecmp((const char*)c->m_argv[1]->ptr,"debug")) {
         if (clientHasPendingReplies(c)) {
             addReplyError(c,"SCRIPT DEBUG must be called outside a pipeline");
             return;
         }
-        if (!strcasecmp((const char*)c->argv[2]->ptr,"no")) {
+        if (!strcasecmp((const char*)c->m_argv[2]->ptr,"no")) {
             ldbDisable(c);
             addReply(c,shared.ok);
-        } else if (!strcasecmp((const char*)c->argv[2]->ptr,"yes")) {
+        } else if (!strcasecmp((const char*)c->m_argv[2]->ptr,"yes")) {
             ldbEnable(c);
             addReply(c,shared.ok);
-        } else if (!strcasecmp((const char*)c->argv[2]->ptr,"sync")) {
+        } else if (!strcasecmp((const char*)c->m_argv[2]->ptr,"sync")) {
             ldbEnable(c);
             addReply(c,shared.ok);
             c->m_flags |= CLIENT_LUA_DEBUG_SYNC;
@@ -1548,7 +1548,7 @@ void ldbFlushLog(list *log) {
 void ldbEnable(client *c) {
     c->m_flags |= CLIENT_LUA_DEBUG;
     ldbFlushLog(ldb.logs);
-    ldb.fd = c->fd;
+    ldb.fd = c->m_fd;
     ldb.step = 1;
     ldb.bpcount = 0;
     ldb.luabp = 0;
@@ -1662,7 +1662,7 @@ int ldbStartSession(client *c) {
 
     /* First argument of EVAL is the script itself. We split it into different
      * lines since this is the way the debugger accesses the source code. */
-    sds srcstring = sdsdup((sds)c->argv[1]->ptr);
+    sds srcstring = sdsdup((sds)c->m_argv[1]->ptr);
     size_t srclen = sdslen(srcstring);
     while(srclen && (srcstring[srclen-1] == '\n' ||
                      srcstring[srclen-1] == '\r'))
@@ -1684,7 +1684,7 @@ void ldbEndSession(client *c) {
 
     /* If it's a fork()ed session, we just exit. */
     if (ldb.forked) {
-        writeToClient(c->fd, c, 0);
+        writeToClient(c->m_fd, c, 0);
         serverLog(LL_WARNING,"Lua debugging session child exiting");
         exitFromChild(0);
     } else {

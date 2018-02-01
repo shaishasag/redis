@@ -788,7 +788,7 @@ int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
         !(c->m_flags & CLIENT_MASTER) &&   /* no timeout for masters */
         !(c->m_flags & CLIENT_BLOCKED) &&  /* no timeout for BLPOP */
         !(c->m_flags & CLIENT_PUBSUB) &&   /* no timeout for Pub/Sub clients */
-        (now - c->lastinteraction > server.maxidletime))
+        (now - c->m_last_interaction_time > server.maxidletime))
     {
         serverLog(LL_VERBOSE,"Closing idle client");
         freeClient(c);
@@ -798,7 +798,7 @@ int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
          * However note that the actual resolution is limited by
          * server.hz. */
 
-        if (c->bpop.timeout != 0 && c->bpop.timeout < now_ms) {
+        if (c->m_blocking_state.timeout != 0 && c->m_blocking_state.timeout < now_ms) {
             /* Handle blocking operation specific timeout. */
             replyToBlockedClientTimedOut(c);
             unblockClient(c);
@@ -817,24 +817,24 @@ int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
  *
  * The function always returns 0 as it never terminates the client. */
 int clientsCronResizeQueryBuffer(client *c) {
-    size_t querybuf_size = sdsAllocSize(c->querybuf);
-    time_t idletime = server.unixtime - c->lastinteraction;
+    size_t querybuf_size = sdsAllocSize(c->m_query_buf);
+    time_t idletime = server.unixtime - c->m_last_interaction_time;
 
     /* There are two conditions to resize the query buffer:
      * 1) Query buffer is > BIG_ARG and too big for latest peak.
      * 2) Client is inactive and the buffer is bigger than 1k. */
     if (((querybuf_size > PROTO_MBULK_BIG_ARG) &&
-         (querybuf_size/(c->querybuf_peak+1)) > 2) ||
+         (querybuf_size/(c->m_query_buf_peak+1)) > 2) ||
          (querybuf_size > 1024 && idletime > 2))
     {
         /* Only resize the query buffer if it is actually wasting space. */
-        if (sdsavail(c->querybuf) > 1024) {
-            c->querybuf = sdsRemoveFreeSpace(c->querybuf);
+        if (sdsavail(c->m_query_buf) > 1024) {
+            c->m_query_buf = sdsRemoveFreeSpace(c->m_query_buf);
         }
     }
     /* Reset the peak again to capture the peak memory usage in the next
      * cycle. */
-    c->querybuf_peak = 0;
+    c->m_query_buf_peak = 0;
     return 0;
 }
 
@@ -2199,9 +2199,9 @@ void call(client *c, int flags) {
      * not generated from reading an AOF. */
     if (server.monitors->listLength() &&
         !server.loading &&
-        !(c->cmd->m_flags & (CMD_SKIP_MONITOR|CMD_ADMIN)))
+        !(c->m_cmd->m_flags & (CMD_SKIP_MONITOR|CMD_ADMIN)))
     {
-        replicationFeedMonitors(c,server.monitors,c->db->m_id,c->argv,c->argc);
+        replicationFeedMonitors(c,server.monitors,c->m_cur_selected_db->m_id,c->m_argv,c->m_argc);
     }
 
     /* Initialization: clear the flags that must be set by the command on
@@ -2213,7 +2213,7 @@ void call(client *c, int flags) {
     /* Call the command. */
     dirty = server.dirty;
     start = ustime();
-    c->cmd->proc(c);
+    c->m_cmd->proc(c);
     duration = ustime()-start;
     dirty = server.dirty-dirty;
     if (dirty < 0) dirty = 0;
@@ -2235,15 +2235,15 @@ void call(client *c, int flags) {
 
     /* Log the command into the Slow log if needed, and populate the
      * per-command statistics that we show in INFO commandstats. */
-    if (flags & CMD_CALL_SLOWLOG && c->cmd->proc != execCommand) {
-        const char *latency_event = (c->cmd->m_flags & CMD_FAST) ?
+    if (flags & CMD_CALL_SLOWLOG && c->m_cmd->proc != execCommand) {
+        const char *latency_event = (c->m_cmd->m_flags & CMD_FAST) ?
                               "fast-command" : "command";
         latencyAddSampleIfNeeded(latency_event,duration/1000);
-        slowlogPushEntryIfNeeded(c,c->argv,c->argc,duration);
+        slowlogPushEntryIfNeeded(c,c->m_argv,c->m_argc,duration);
     }
     if (flags & CMD_CALL_STATS) {
-        c->lastcmd->microseconds += duration;
-        c->lastcmd->calls++;
+        c->m_last_cmd->microseconds += duration;
+        c->m_last_cmd->calls++;
     }
 
     /* Propagate the command into the AOF and replication link */
@@ -2274,8 +2274,8 @@ void call(client *c, int flags) {
         /* Call propagate() only if at least one of AOF / replication
          * propagation is needed. Note that modules commands handle replication
          * in an explicit way, so we never replicate them automatically. */
-        if (propagate_flags != PROPAGATE_NONE && !(c->cmd->m_flags & CMD_MODULE))
-            propagate(c->cmd,c->db->m_id,c->argv,c->argc,propagate_flags);
+        if (propagate_flags != PROPAGATE_NONE && !(c->m_cmd->m_flags & CMD_MODULE))
+            propagate(c->m_cmd,c->m_cur_selected_db->m_id,c->m_argv,c->m_argc,propagate_flags);
     }
 
     /* Restore the old replication flags, since call() can be executed
@@ -2321,7 +2321,7 @@ int processCommand(client *c) {
      * go through checking for replication and QUIT will cause trouble
      * when FORCE_REPLICATION is enabled and would be implemented in
      * a regular command proc. */
-    if (!strcasecmp((const char*)c->argv[0]->ptr,"quit")) {
+    if (!strcasecmp((const char*)c->m_argv[0]->ptr,"quit")) {
         addReply(c,shared.ok);
         c->m_flags |= CLIENT_CLOSE_AFTER_REPLY;
         return C_ERR;
@@ -2329,22 +2329,22 @@ int processCommand(client *c) {
 
     /* Now lookup the command and check ASAP about trivial error conditions
      * such as wrong arity, bad command name and so forth. */
-    c->cmd = c->lastcmd = lookupCommand((sds)c->argv[0]->ptr);
-    if (!c->cmd) {
+    c->m_cmd = c->m_last_cmd = lookupCommand((sds)c->m_argv[0]->ptr);
+    if (!c->m_cmd) {
         flagTransaction(c);
         addReplyErrorFormat(c,"unknown command '%s'",
-            (char*)c->argv[0]->ptr);
+            (char*)c->m_argv[0]->ptr);
         return C_OK;
-    } else if ((c->cmd->arity > 0 && c->cmd->arity != c->argc) ||
-               (c->argc < -c->cmd->arity)) {
+    } else if ((c->m_cmd->arity > 0 && c->m_cmd->arity != c->m_argc) ||
+               (c->m_argc < -c->m_cmd->arity)) {
         flagTransaction(c);
         addReplyErrorFormat(c,"wrong number of arguments for '%s' command",
-            c->cmd->name);
+            c->m_cmd->name);
         return C_OK;
     }
 
     /* Check if the user is authenticated */
-    if (server.requirepass && !c->authenticated && c->cmd->proc != authCommand)
+    if (server.requirepass && !c->m_authenticated && c->m_cmd->proc != authCommand)
     {
         flagTransaction(c);
         addReply(c,shared.noautherr);
@@ -2359,15 +2359,15 @@ int processCommand(client *c) {
         !(c->m_flags & CLIENT_MASTER) &&
         !(c->m_flags & CLIENT_LUA &&
           server.lua_caller->m_flags & CLIENT_MASTER) &&
-        !(c->cmd->getkeys_proc == NULL && c->cmd->firstkey == 0 &&
-          c->cmd->proc != execCommand))
+        !(c->m_cmd->getkeys_proc == NULL && c->m_cmd->firstkey == 0 &&
+          c->m_cmd->proc != execCommand))
     {
         int hashslot;
         int error_code;
-        clusterNode *n = getNodeByQuery(c,c->cmd,c->argv,c->argc,
+        clusterNode *n = getNodeByQuery(c,c->m_cmd,c->m_argv,c->m_argc,
                                         &hashslot,&error_code);
         if (n == NULL || n != server.cluster->m_myself) {
-            if (c->cmd->proc == execCommand) {
+            if (c->m_cmd->proc == execCommand) {
                 discardTransaction(c);
             } else {
                 flagTransaction(c);
@@ -2390,7 +2390,7 @@ int processCommand(client *c) {
 
         /* It was impossible to free enough memory, and the command the client
          * is trying to execute is denied during OOM conditions? Error. */
-        if ((c->cmd->m_flags & CMD_DENYOOM) && retval == C_ERR) {
+        if ((c->m_cmd->m_flags & CMD_DENYOOM) && retval == C_ERR) {
             flagTransaction(c);
             addReply(c, shared.oomerr);
             return C_OK;
@@ -2404,8 +2404,8 @@ int processCommand(client *c) {
           server.lastbgsave_status == C_ERR) ||
           server.aof_last_write_status == C_ERR) &&
         server.masterhost == NULL &&
-        (c->cmd->m_flags & CMD_WRITE ||
-         c->cmd->proc == pingCommand))
+        (c->m_cmd->m_flags & CMD_WRITE ||
+         c->m_cmd->proc == pingCommand))
     {
         flagTransaction(c);
         if (server.aof_last_write_status == C_OK)
@@ -2423,7 +2423,7 @@ int processCommand(client *c) {
     if (server.masterhost == NULL &&
         server.repl_min_slaves_to_write &&
         server.repl_min_slaves_max_lag &&
-        c->cmd->m_flags & CMD_WRITE &&
+        c->m_cmd->m_flags & CMD_WRITE &&
         server.repl_good_slaves_count < server.repl_min_slaves_to_write)
     {
         flagTransaction(c);
@@ -2435,7 +2435,7 @@ int processCommand(client *c) {
      * accept write commands if this is our master. */
     if (server.masterhost && server.repl_slave_ro &&
         !(c->m_flags & CLIENT_MASTER) &&
-        c->cmd->m_flags & CMD_WRITE)
+        c->m_cmd->m_flags & CMD_WRITE)
     {
         addReply(c, shared.roslaveerr);
         return C_OK;
@@ -2443,11 +2443,11 @@ int processCommand(client *c) {
 
     /* Only allow SUBSCRIBE and UNSUBSCRIBE in the context of Pub/Sub */
     if (c->m_flags & CLIENT_PUBSUB &&
-        c->cmd->proc != pingCommand &&
-        c->cmd->proc != subscribeCommand &&
-        c->cmd->proc != unsubscribeCommand &&
-        c->cmd->proc != psubscribeCommand &&
-        c->cmd->proc != punsubscribeCommand) {
+        c->m_cmd->proc != pingCommand &&
+        c->m_cmd->proc != subscribeCommand &&
+        c->m_cmd->proc != unsubscribeCommand &&
+        c->m_cmd->proc != psubscribeCommand &&
+        c->m_cmd->proc != punsubscribeCommand) {
         addReplyError(c,"only (P)SUBSCRIBE / (P)UNSUBSCRIBE / PING / QUIT allowed in this context");
         return C_OK;
     }
@@ -2456,7 +2456,7 @@ int processCommand(client *c) {
      * we are a slave with a broken link with master. */
     if (server.masterhost && server.repl_state != REPL_STATE_CONNECTED &&
         server.repl_serve_stale_data == 0 &&
-        !(c->cmd->m_flags & CMD_STALE))
+        !(c->m_cmd->m_flags & CMD_STALE))
     {
         flagTransaction(c);
         addReply(c, shared.masterdownerr);
@@ -2465,21 +2465,21 @@ int processCommand(client *c) {
 
     /* Loading DB? Return an error if the command has not the
      * CMD_LOADING flag. */
-    if (server.loading && !(c->cmd->m_flags & CMD_LOADING)) {
+    if (server.loading && !(c->m_cmd->m_flags & CMD_LOADING)) {
         addReply(c, shared.loadingerr);
         return C_OK;
     }
 
     /* Lua script too slow? Only allow a limited number of commands. */
     if (server.lua_timedout &&
-          c->cmd->proc != authCommand &&
-          c->cmd->proc != replconfCommand &&
-        !(c->cmd->proc == shutdownCommand &&
-          c->argc == 2 &&
-          tolower(((char*)c->argv[1]->ptr)[0]) == 'n') &&
-        !(c->cmd->proc == scriptCommand &&
-          c->argc == 2 &&
-          tolower(((char*)c->argv[1]->ptr)[0]) == 'k'))
+          c->m_cmd->proc != authCommand &&
+          c->m_cmd->proc != replconfCommand &&
+        !(c->m_cmd->proc == shutdownCommand &&
+          c->m_argc == 2 &&
+          tolower(((char*)c->m_argv[1]->ptr)[0]) == 'n') &&
+        !(c->m_cmd->proc == scriptCommand &&
+          c->m_argc == 2 &&
+          tolower(((char*)c->m_argv[1]->ptr)[0]) == 'k'))
     {
         flagTransaction(c);
         addReply(c, shared.slowscripterr);
@@ -2488,14 +2488,14 @@ int processCommand(client *c) {
 
     /* Exec the command */
     if (c->m_flags & CLIENT_MULTI &&
-        c->cmd->proc != execCommand && c->cmd->proc != discardCommand &&
-        c->cmd->proc != multiCommand && c->cmd->proc != watchCommand)
+        c->m_cmd->proc != execCommand && c->m_cmd->proc != discardCommand &&
+        c->m_cmd->proc != multiCommand && c->m_cmd->proc != watchCommand)
     {
         queueMultiCommand(c);
         addReply(c,shared.queued);
     } else {
         call(c,CMD_CALL_FULL);
-        c->woff = server.master_repl_offset;
+        c->m_last_write_global_replication_offset = server.master_repl_offset;
         if (server.ready_keys->listLength())
             handleClientsBlockedOnLists();
     }
@@ -2638,11 +2638,11 @@ int time_independent_strcmp(const char *a, const char *b) {
 void authCommand(client *c) {
     if (!server.requirepass) {
         addReplyError(c,"Client sent AUTH, but no password is set");
-    } else if (!time_independent_strcmp((const char*)c->argv[1]->ptr, (const char*)server.requirepass)) {
-      c->authenticated = 1;
+    } else if (!time_independent_strcmp((const char*)c->m_argv[1]->ptr, (const char*)server.requirepass)) {
+      c->m_authenticated = 1;
       addReply(c,shared.ok);
     } else {
-      c->authenticated = 0;
+      c->m_authenticated = 0;
       addReplyError(c,"invalid password");
     }
 }
@@ -2651,29 +2651,29 @@ void authCommand(client *c) {
  * in Pub/Sub mode. */
 void pingCommand(client *c) {
     /* The command takes zero or one arguments. */
-    if (c->argc > 2) {
+    if (c->m_argc > 2) {
         addReplyErrorFormat(c,"wrong number of arguments for '%s' command",
-            c->cmd->name);
+            c->m_cmd->name);
         return;
     }
 
     if (c->m_flags & CLIENT_PUBSUB) {
         addReply(c,shared.mbulkhdr[2]);
         addReplyBulkCBuffer(c,"pong",4);
-        if (c->argc == 1)
+        if (c->m_argc == 1)
             addReplyBulkCBuffer(c,"",0);
         else
-            addReplyBulk(c,c->argv[1]);
+            addReplyBulk(c,c->m_argv[1]);
     } else {
-        if (c->argc == 1)
+        if (c->m_argc == 1)
             addReply(c,shared.pong);
         else
-            addReplyBulk(c,c->argv[1]);
+            addReplyBulk(c,c->m_argv[1]);
     }
 }
 
 void echoCommand(client *c) {
-    addReplyBulk(c,c->argv[1]);
+    addReplyBulk(c,c->m_argv[1]);
 }
 
 void timeCommand(client *c) {
@@ -2739,37 +2739,37 @@ void addReplyCommand(client *c, struct redisCommand *cmd) {
 void commandCommand(client *c) {
     dictEntry *de;
 
-    if (c->argc == 1) {
+    if (c->m_argc == 1) {
         addReplyMultiBulkLen(c, server.commands->dictSize());
         dictIterator di(server.commands);
         while ((de = di.dictNext()) != NULL) {
             addReplyCommand(c, (struct redisCommand *)de->dictGetVal());
         }
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr, "info")) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr, "info")) {
         int i;
-        addReplyMultiBulkLen(c, c->argc-2);
-        for (i = 2; i < c->argc; i++) {
-            addReplyCommand(c, (struct redisCommand *)server.commands->dictFetchValue(c->argv[i]->ptr));
+        addReplyMultiBulkLen(c, c->m_argc-2);
+        for (i = 2; i < c->m_argc; i++) {
+            addReplyCommand(c, (struct redisCommand *)server.commands->dictFetchValue(c->m_argv[i]->ptr));
         }
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr, "count") && c->argc == 2) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr, "count") && c->m_argc == 2) {
         addReplyLongLong(c, server.commands->dictSize());
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"getkeys") && c->argc >= 3) {
-        struct redisCommand *cmd = lookupCommand((sds)c->argv[2]->ptr);
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"getkeys") && c->m_argc >= 3) {
+        struct redisCommand *cmd = lookupCommand((sds)c->m_argv[2]->ptr);
         int *keys, numkeys, j;
 
         if (!cmd) {
             addReplyErrorFormat(c,"Invalid command specified");
             return;
-        } else if ((cmd->arity > 0 && cmd->arity != c->argc-2) ||
-                   ((c->argc-2) < -cmd->arity))
+        } else if ((cmd->arity > 0 && cmd->arity != c->m_argc-2) ||
+                   ((c->m_argc-2) < -cmd->arity))
         {
             addReplyError(c,"Invalid number of arguments specified for command");
             return;
         }
 
-        keys = getKeysFromCommand(cmd,c->argv+2,c->argc-2,&numkeys);
+        keys = getKeysFromCommand(cmd,c->m_argv+2,c->m_argc-2,&numkeys);
         addReplyMultiBulkLen(c,numkeys);
-        for (j = 0; j < numkeys; j++) addReplyBulk(c,c->argv[keys[j]+2]);
+        for (j = 0; j < numkeys; j++) addReplyBulk(c,c->m_argv[keys[j]+2]);
         getKeysFreeResult(keys);
     } else {
         addReplyError(c, "Unknown subcommand or wrong number of arguments.");
@@ -3142,9 +3142,9 @@ sds genRedisInfoString(const char *section) {
             long long slave_repl_offset = 1;
 
             if (server.master)
-                slave_repl_offset = server.master->reploff;
+                slave_repl_offset = server.master->m_applied_replication_offset;
             else if (server.cached_master)
-                slave_repl_offset = server.cached_master->reploff;
+                slave_repl_offset = server.cached_master->m_applied_replication_offset;
 
             info = sdscatprintf(info,
                 "master_host:%s\r\n"
@@ -3158,7 +3158,7 @@ sds genRedisInfoString(const char *section) {
                 (server.repl_state == REPL_STATE_CONNECTED) ?
                     "up" : "down",
                 server.master ?
-                ((int)(server.unixtime-server.master->lastinteraction)) : -1,
+                ((int)(server.unixtime-server.master->m_last_interaction_time)) : -1,
                 server.repl_state == REPL_STATE_TRANSFER,
                 slave_repl_offset
             );
@@ -3207,16 +3207,16 @@ sds genRedisInfoString(const char *section) {
                 //client *slave = (client *)ln->listNodeValue();
                 auto slave = (client *)ln->listNodeValue();
                 char *state = NULL;
-                char ip[NET_IP_STR_LEN], *slaveip = slave->slave_ip;
+                char ip[NET_IP_STR_LEN], *slaveip = slave->m_slave_ip;
                 int port;
                 long lag = 0;
 
                 if (slaveip[0] == '\0') {
-                    if (anetPeerToString(slave->fd,ip,sizeof(ip),&port) == -1)
+                    if (anetPeerToString(slave->m_fd,ip,sizeof(ip),&port) == -1)
                         continue;
                     slaveip = ip;
                 }
-                switch(slave->replstate) {
+                switch(slave->m_replication_state) {
                 case SLAVE_STATE_WAIT_BGSAVE_START:
                 case SLAVE_STATE_WAIT_BGSAVE_END:
                     state = "wait_bgsave";
@@ -3229,14 +3229,14 @@ sds genRedisInfoString(const char *section) {
                     break;
                 }
                 if (state == NULL) continue;
-                if (slave->replstate == SLAVE_STATE_ONLINE)
-                    lag = time(NULL) - slave->repl_ack_time;
+                if (slave->m_replication_state == SLAVE_STATE_ONLINE)
+                    lag = time(NULL) - slave->m_replication_ack_time;
 
                 info = sdscatprintf(info,
                     "slave%d:ip=%s,port=%d,state=%s,"
                     "offset=%lld,lag=%ld\r\n",
-                    slaveid,slaveip,slave->slave_listening_port,state,
-                    slave->repl_ack_off, lag);
+                    slaveid,slaveip,slave->m_slave_listening_port,state,
+                    slave->m_replication_ack_off, lag);
                 slaveid++;
             }
         }
@@ -3321,9 +3321,9 @@ sds genRedisInfoString(const char *section) {
 }
 
 void infoCommand(client *c) {
-    const char *section = c->argc == 2 ? (char *)c->argv[1]->ptr : "default";
+    const char *section = c->m_argc == 2 ? (char *)c->m_argv[1]->ptr : "default";
 
-    if (c->argc > 2) {
+    if (c->m_argc > 2) {
         addReply(c,shared.syntaxerr);
         return;
     }
@@ -3553,7 +3553,7 @@ void loadDataFromDisk() {
                  * information, in order to allow partial resynchronizations
                  * with masters. */
                 replicationCacheMasterUsingMyself();
-                selectDb(server.cached_master,rsi.repl_stream_db);
+                server.cached_master->selectDb(rsi.repl_stream_db);
             }
         } else if (errno != ENOENT) {
             serverLog(LL_WARNING,"Fatal error loading the DB: %s. Exiting.",strerror(errno));

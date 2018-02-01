@@ -50,8 +50,8 @@ int listMatchPubsubPattern(void *a, void *b) {
 
 /* Return the number of channels + patterns a client is subscribed to. */
 int clientSubscriptionsCount(client *c) {
-    return c->pubsub_channels->dictSize()+
-           c->pubsub_patterns->listLength();
+    return c->m_pubsub_channels->dictSize()+
+           c->m_pubsub_patterns->listLength();
 }
 
 /* Subscribe a client to a channel. Returns 1 if the operation succeeded, or
@@ -62,7 +62,7 @@ int pubsubSubscribeChannel(client *c, robj *channel) {
     int retval = 0;
 
     /* Add the channel to the client -> channels hash table */
-    if (c->pubsub_channels->dictAdd(channel,NULL) == DICT_OK) {
+    if (c->m_pubsub_channels->dictAdd(channel,NULL) == DICT_OK) {
         retval = 1;
         incrRefCount(channel);
         /* Add the client to the channel -> list of clients hash table */
@@ -95,7 +95,7 @@ int pubsubUnsubscribeChannel(client *c, robj *channel, int notify) {
     /* Remove the channel from the client -> channels hash table */
     incrRefCount(channel); /* channel may be just a pointer to the same object
                             we have in the hash tables. Protect it... */
-    if (c->pubsub_channels->dictDelete(channel) == DICT_OK) {
+    if (c->m_pubsub_channels->dictDelete(channel) == DICT_OK) {
         retval = 1;
         /* Remove the client from the channel -> clients list hash table */
         de = server.pubsub_channels->dictFind(channel);
@@ -116,8 +116,8 @@ int pubsubUnsubscribeChannel(client *c, robj *channel, int notify) {
         addReply(c,shared.mbulkhdr[3]);
         addReply(c,shared.unsubscribebulk);
         addReplyBulk(c,channel);
-        addReplyLongLong(c,c->pubsub_channels->dictSize()+
-                       c->pubsub_patterns->listLength());
+        addReplyLongLong(c,c->m_pubsub_channels->dictSize()+
+                       c->m_pubsub_patterns->listLength());
 
     }
     decrRefCount(channel); /* it is finally safe to release it */
@@ -128,10 +128,10 @@ int pubsubUnsubscribeChannel(client *c, robj *channel, int notify) {
 int pubsubSubscribePattern(client *c, robj *pattern) {
     int retval = 0;
 
-    if (c->pubsub_patterns->listSearchKey(pattern) == NULL) {
+    if (c->m_pubsub_patterns->listSearchKey(pattern) == NULL) {
         retval = 1;
         pubsubPattern *pat;
-        c->pubsub_patterns->listAddNodeTail(pattern);
+        c->m_pubsub_patterns->listAddNodeTail(pattern);
         incrRefCount(pattern);
         pat = (pubsubPattern *)zmalloc(sizeof(*pat));
         pat->pattern = getDecodedObject(pattern);
@@ -154,9 +154,9 @@ int pubsubUnsubscribePattern(client *c, robj *pattern, int notify) {
     int retval = 0;
 
     incrRefCount(pattern); /* Protect the object. May be the same we remove */
-    if ((ln = c->pubsub_patterns->listSearchKey(pattern)) != NULL) {
+    if ((ln = c->m_pubsub_patterns->listSearchKey(pattern)) != NULL) {
         retval = 1;
-        c->pubsub_patterns->listDelNode(ln);
+        c->m_pubsub_patterns->listDelNode(ln);
         pat.client = c;
         pat.pattern = pattern;
         ln = server.pubsub_patterns->listSearchKey(&pat);
@@ -167,8 +167,8 @@ int pubsubUnsubscribePattern(client *c, robj *pattern, int notify) {
         addReply(c,shared.mbulkhdr[3]);
         addReply(c,shared.punsubscribebulk);
         addReplyBulk(c,pattern);
-        addReplyLongLong(c,c->pubsub_channels->dictSize()+
-                       c->pubsub_patterns->listLength());
+        addReplyLongLong(c,c->m_pubsub_channels->dictSize()+
+                       c->m_pubsub_patterns->listLength());
     }
     decrRefCount(pattern);
     return retval;
@@ -180,7 +180,7 @@ int pubsubUnsubscribeAllChannels(client *c, int notify) {
     dictEntry *de;
     int count = 0;
 
-    dictIterator di(c->pubsub_channels, 1);
+    dictIterator di(c->m_pubsub_channels, 1);
     while((de = di.dictNext()) != NULL) {
         robj *channel = (robj *)de->dictGetKey();
 
@@ -191,8 +191,8 @@ int pubsubUnsubscribeAllChannels(client *c, int notify) {
         addReply(c,shared.mbulkhdr[3]);
         addReply(c,shared.unsubscribebulk);
         addReply(c,shared.nullbulk);
-        addReplyLongLong(c,c->pubsub_channels->dictSize()+
-                       c->pubsub_patterns->listLength());
+        addReplyLongLong(c,c->m_pubsub_channels->dictSize()+
+                       c->m_pubsub_patterns->listLength());
     }
 
     return count;
@@ -204,7 +204,7 @@ int pubsubUnsubscribeAllPatterns(client *c, int notify) {
     listNode *ln;
     int count = 0;
 
-    listIter li(c->pubsub_patterns);
+    listIter li(c->m_pubsub_patterns);
     while ((ln = li.listNext()) != NULL) {
         robj *pattern = (robj *)ln->listNodeValue();
 
@@ -215,8 +215,8 @@ int pubsubUnsubscribeAllPatterns(client *c, int notify) {
         addReply(c,shared.mbulkhdr[3]);
         addReply(c,shared.punsubscribebulk);
         addReply(c,shared.nullbulk);
-        addReplyLongLong(c,c->pubsub_channels->dictSize()+
-                       c->pubsub_patterns->listLength());
+        addReplyLongLong(c,c->m_pubsub_channels->dictSize()+
+                       c->m_pubsub_patterns->listLength());
     }
     return count;
 }
@@ -275,19 +275,19 @@ int pubsubPublishMessage(robj *channel, robj *message) {
 void subscribeCommand(client *c) {
     int j;
 
-    for (j = 1; j < c->argc; j++)
-        pubsubSubscribeChannel(c,c->argv[j]);
+    for (j = 1; j < c->m_argc; j++)
+        pubsubSubscribeChannel(c,c->m_argv[j]);
     c->m_flags |= CLIENT_PUBSUB;
 }
 
 void unsubscribeCommand(client *c) {
-    if (c->argc == 1) {
+    if (c->m_argc == 1) {
         pubsubUnsubscribeAllChannels(c,1);
     } else {
         int j;
 
-        for (j = 1; j < c->argc; j++)
-            pubsubUnsubscribeChannel(c,c->argv[j],1);
+        for (j = 1; j < c->m_argc; j++)
+            pubsubUnsubscribeChannel(c,c->m_argv[j],1);
     }
     if (clientSubscriptionsCount(c) == 0) c->m_flags &= ~CLIENT_PUBSUB;
 }
@@ -295,27 +295,27 @@ void unsubscribeCommand(client *c) {
 void psubscribeCommand(client *c) {
     int j;
 
-    for (j = 1; j < c->argc; j++)
-        pubsubSubscribePattern(c,c->argv[j]);
+    for (j = 1; j < c->m_argc; j++)
+        pubsubSubscribePattern(c,c->m_argv[j]);
     c->m_flags |= CLIENT_PUBSUB;
 }
 
 void punsubscribeCommand(client *c) {
-    if (c->argc == 1) {
+    if (c->m_argc == 1) {
         pubsubUnsubscribeAllPatterns(c,1);
     } else {
         int j;
 
-        for (j = 1; j < c->argc; j++)
-            pubsubUnsubscribePattern(c,c->argv[j],1);
+        for (j = 1; j < c->m_argc; j++)
+            pubsubUnsubscribePattern(c,c->m_argv[j],1);
     }
     if (clientSubscriptionsCount(c) == 0) c->m_flags &= ~CLIENT_PUBSUB;
 }
 
 void publishCommand(client *c) {
-    int receivers = pubsubPublishMessage(c->argv[1],c->argv[2]);
+    int receivers = pubsubPublishMessage(c->m_argv[1],c->m_argv[2]);
     if (server.cluster_enabled)
-        clusterPropagatePublish(c->argv[1],c->argv[2]);
+        clusterPropagatePublish(c->m_argv[1],c->m_argv[2]);
     else
         forceCommandPropagation(c,PROPAGATE_REPL);
     addReplyLongLong(c,receivers);
@@ -323,11 +323,11 @@ void publishCommand(client *c) {
 
 /* PUBSUB command for Pub/Sub introspection. */
 void pubsubCommand(client *c) {
-    if (!strcasecmp((const char*)c->argv[1]->ptr,"channels") &&
-        (c->argc == 2 || c->argc ==3))
+    if (!strcasecmp((const char*)c->m_argv[1]->ptr,"channels") &&
+        (c->m_argc == 2 || c->m_argc ==3))
     {
         /* PUBSUB CHANNELS [<pattern>] */
-        sds pat = (c->argc == 2) ? NULL : (sds)c->argv[2]->ptr;
+        sds pat = (c->m_argc == 2) ? NULL : (sds)c->m_argv[2]->ptr;
         dictIterator di(server.pubsub_channels);
         dictEntry *de;
         long mblen = 0;
@@ -346,23 +346,23 @@ void pubsubCommand(client *c) {
             }
         }
         setDeferredMultiBulkLength(c,replylen,mblen);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"numsub") && c->argc >= 2) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"numsub") && c->m_argc >= 2) {
         /* PUBSUB NUMSUB [Channel_1 ... Channel_N] */
         int j;
 
-        addReplyMultiBulkLen(c,(c->argc-2)*2);
-        for (j = 2; j < c->argc; j++) {
-            list *l = (list *)server.pubsub_channels->dictFetchValue(c->argv[j]);
+        addReplyMultiBulkLen(c,(c->m_argc-2)*2);
+        for (j = 2; j < c->m_argc; j++) {
+            list *l = (list *)server.pubsub_channels->dictFetchValue(c->m_argv[j]);
 
-            addReplyBulk(c,c->argv[j]);
+            addReplyBulk(c,c->m_argv[j]);
             addReplyLongLong(c,l ? l->listLength() : 0);
         }
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"numpat") && c->argc == 2) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"numpat") && c->m_argc == 2) {
         /* PUBSUB NUMPAT */
         addReplyLongLong(c,server.pubsub_patterns->listLength());
     } else {
         addReplyErrorFormat(c,
             "Unknown PUBSUB subcommand or wrong number of arguments for '%s'",
-            (char*)c->argv[1]->ptr);
+            (char*)c->m_argv[1]->ptr);
     }
 }

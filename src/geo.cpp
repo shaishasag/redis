@@ -430,18 +430,18 @@ void geoArray::sort_array(const int sort_direction)
 /* GEOADD key long lat name [long2 lat2 name2 ... longN latN nameN] */
 void geoaddCommand(client *c) {
     /* Check arguments number for sanity. */
-    if ((c->argc - 2) % 3 != 0) {
+    if ((c->m_argc - 2) % 3 != 0) {
         /* Need an odd number of arguments if we got this far... */
         addReplyError(c, "syntax error. Try GEOADD key [x1] [y1] [name1] "
                          "[x2] [y2] [name2] ... ");
         return;
     }
 
-    int elements = (c->argc - 2) / 3;
+    int elements = (c->m_argc - 2) / 3;
     int argc = 2+elements*2; /* ZADD key score ele ... */
     robj **argv = (robj **)zcalloc(argc*sizeof(robj*));
     argv[0] = createRawStringObject("zadd",4);
-    argv[1] = c->argv[1]; /* key */
+    argv[1] = c->m_argv[1]; /* key */
     incrRefCount(argv[1]);
 
     /* Create the argument vector to call ZADD in order to add all
@@ -451,7 +451,7 @@ void geoaddCommand(client *c) {
     for (i = 0; i < elements; i++) {
         double xy[2];
 
-        if (extractLongLatOrReply(c, (c->argv+2)+(i*3),xy) == C_ERR) {
+        if (extractLongLatOrReply(c, (c->m_argv+2)+(i*3),xy) == C_ERR) {
             for (i = 0; i < argc; i++)
                 if (argv[i]) decrRefCount(argv[i]);
             zfree(argv);
@@ -463,7 +463,7 @@ void geoaddCommand(client *c) {
         geohashEncodeWGS84(xy[0], xy[1], GEO_STEP_MAX, &hash);
         GeoHashFix52Bits bits = geohashAlign52Bits(hash);
         robj *score = createObject(OBJ_STRING, sdsfromlonglong(bits));
-        robj *val = c->argv[2 + i * 3 + 2];
+        robj *val = c->m_argv[2 + i * 3 + 2];
         argv[2+i*2] = score;
         argv[3+i*2] = val;
         incrRefCount(val);
@@ -482,7 +482,7 @@ void geoaddCommand(client *c) {
  *                               [COUNT count] [STORE key] [STOREDIST key]
  * GEORADIUSBYMEMBER key member radius unit ... options ... */
 void georadiusGeneric(client *c, int flags) {
-    robj *key = c->argv[1];
+    robj *key = c->m_argv[1];
     robj *storekey = NULL;
     int storedist = 0; /* 0 for STORE, 1 for STOREDIST. */
 
@@ -498,11 +498,11 @@ void georadiusGeneric(client *c, int flags) {
     double xy[2] = {0};
     if (flags & RADIUS_COORDS) {
         base_args = 6;
-        if (extractLongLatOrReply(c, c->argv + 2, xy) == C_ERR)
+        if (extractLongLatOrReply(c, c->m_argv + 2, xy) == C_ERR)
             return;
     } else if (flags & RADIUS_MEMBER) {
         base_args = 5;
-        robj *member = c->argv[2];
+        robj *member = c->m_argv[2];
         if (longLatFromMember(zobj, member, xy) == C_ERR) {
             addReplyError(c, "could not decode requested zset member");
             return;
@@ -514,7 +514,7 @@ void georadiusGeneric(client *c, int flags) {
 
     /* Extract radius and units from arguments */
     double radius_meters = 0, conversion = 1;
-    if ((radius_meters = extractDistanceOrReply(c, c->argv + base_args - 2,
+    if ((radius_meters = extractDistanceOrReply(c, c->m_argv + base_args - 2,
                                                 &conversion)) < 0) {
         return;
     }
@@ -523,10 +523,10 @@ void georadiusGeneric(client *c, int flags) {
     int withdist = 0, withhash = 0, withcoords = 0;
     int sort = SORT_NONE;
     long long count = 0;
-    if (c->argc > base_args) {
-        int remaining = c->argc - base_args;
+    if (c->m_argc > base_args) {
+        int remaining = c->m_argc - base_args;
         for (int i = 0; i < remaining; i++) {
-            char *arg = (char *) c->argv[base_args + i]->ptr;
+            char *arg = (char *) c->m_argv[base_args + i]->ptr;
             if (!strcasecmp(arg, "withdist")) {
                 withdist = 1;
             } else if (!strcasecmp(arg, "withhash")) {
@@ -538,7 +538,7 @@ void georadiusGeneric(client *c, int flags) {
             } else if (!strcasecmp(arg, "desc")) {
                 sort = SORT_DESC;
             } else if (!strcasecmp(arg, "count") && (i + 1) < remaining) {
-                if (getLongLongFromObjectOrReply(c, c->argv[base_args + i + 1],
+                if (getLongLongFromObjectOrReply(c, c->m_argv[base_args + i + 1],
                                                  &count, NULL) != C_OK)
                     return;
                 if (count <= 0) {
@@ -549,13 +549,13 @@ void georadiusGeneric(client *c, int flags) {
             } else if (!strcasecmp(arg, "store") &&
                        (i + 1) < remaining &&
                        !(flags & RADIUS_NOSTORE)) {
-                storekey = c->argv[base_args + i + 1];
+                storekey = c->m_argv[base_args + i + 1];
                 storedist = 0;
                 i++;
             } else if (!strcasecmp(arg, "storedist") &&
                        (i + 1) < remaining &&
                        !(flags & RADIUS_NOSTORE)) {
-                storekey = c->argv[base_args + i + 1];
+                storekey = c->m_argv[base_args + i + 1];
                 storedist = 1;
                 i++;
             } else {
@@ -669,14 +669,14 @@ void georadiusGeneric(client *c, int flags) {
 
         if (returned_items) {
             zsetConvertToZiplistIfNeeded(zobj,maxelelen);
-            setKey(c->db,storekey,zobj);
+            setKey(c->m_cur_selected_db,storekey,zobj);
             decrRefCount(zobj);
             notifyKeyspaceEvent(NOTIFY_LIST,"georadiusstore",storekey,
-                                c->db->m_id);
+                                c->m_cur_selected_db->m_id);
             server.dirty += returned_items;
-        } else if (dbDelete(c->db,storekey)) {
-            signalModifiedKey(c->db,storekey);
-            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",storekey,c->db->m_id);
+        } else if (dbDelete(c->m_cur_selected_db,storekey)) {
+            signalModifiedKey(c->m_cur_selected_db,storekey);
+            notifyKeyspaceEvent(NOTIFY_GENERIC,"del",storekey,c->m_cur_selected_db->m_id);
             server.dirty++;
         }
         addReplyLongLong(c, returned_items);
@@ -712,15 +712,15 @@ void geohashCommand(client *c) {
     int j;
 
     /* Look up the requested zset */
-    robj *zobj = lookupKeyRead(c->db, c->argv[1]);
+    robj *zobj = lookupKeyRead(c->m_cur_selected_db, c->m_argv[1]);
     if (zobj && checkType(c, zobj, OBJ_ZSET)) return;
 
     /* Geohash elements one after the other, using a null bulk reply for
      * missing elements. */
-    addReplyMultiBulkLen(c,c->argc-2);
-    for (j = 2; j < c->argc; j++) {
+    addReplyMultiBulkLen(c,c->m_argc-2);
+    for (j = 2; j < c->m_argc; j++) {
         double score;
-        if (!zobj || zsetScore(zobj, (sds)c->argv[j]->ptr, &score) == C_ERR) {
+        if (!zobj || zsetScore(zobj, (sds)c->m_argv[j]->ptr, &score) == C_ERR) {
             addReply(c,shared.nullbulk);
         } else {
             /* The internal format we use for geocoding is a bit different
@@ -765,15 +765,15 @@ void geoposCommand(client *c) {
     int j;
 
     /* Look up the requested zset */
-    robj *zobj = lookupKeyRead(c->db, c->argv[1]);
+    robj *zobj = lookupKeyRead(c->m_cur_selected_db, c->m_argv[1]);
     if (zobj && checkType(c, zobj, OBJ_ZSET)) return;
 
     /* Report elements one after the other, using a null bulk reply for
      * missing elements. */
-    addReplyMultiBulkLen(c,c->argc-2);
-    for (j = 2; j < c->argc; j++) {
+    addReplyMultiBulkLen(c,c->m_argc-2);
+    for (j = 2; j < c->m_argc; j++) {
         double score;
-        if (!zobj || zsetScore(zobj, (sds)c->argv[j]->ptr, &score) == C_ERR) {
+        if (!zobj || zsetScore(zobj, (sds)c->m_argv[j]->ptr, &score) == C_ERR) {
             addReply(c,shared.nullmultibulk);
         } else {
             /* Decode... */
@@ -798,23 +798,23 @@ void geodistCommand(client *c) {
     double to_meter = 1;
 
     /* Check if there is the unit to extract, otherwise assume meters. */
-    if (c->argc == 5) {
-        to_meter = extractUnitOrReply(c,c->argv[4]);
+    if (c->m_argc == 5) {
+        to_meter = extractUnitOrReply(c,c->m_argv[4]);
         if (to_meter < 0) return;
-    } else if (c->argc > 5) {
+    } else if (c->m_argc > 5) {
         addReply(c,shared.syntaxerr);
         return;
     }
 
     /* Look up the requested zset */
     robj *zobj = NULL;
-    if ((zobj = lookupKeyReadOrReply(c, c->argv[1], shared.nullbulk))
+    if ((zobj = lookupKeyReadOrReply(c, c->m_argv[1], shared.nullbulk))
         == NULL || checkType(c, zobj, OBJ_ZSET)) return;
 
     /* Get the scores. We need both otherwise NULL is returned. */
     double score1, score2, xyxy[4];
-    if (zsetScore(zobj, (sds)c->argv[2]->ptr, &score1) == C_ERR ||
-        zsetScore(zobj, (sds)c->argv[3]->ptr, &score2) == C_ERR)
+    if (zsetScore(zobj, (sds)c->m_argv[2]->ptr, &score1) == C_ERR ||
+        zsetScore(zobj, (sds)c->m_argv[3]->ptr, &score2) == C_ERR)
     {
         addReply(c,shared.nullbulk);
         return;

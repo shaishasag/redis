@@ -118,8 +118,8 @@ robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags) {
          * Notably this covers GETs when slaves are used to scale reads. */
         if (server.current_client &&
             server.current_client != server.master &&
-            server.current_client->cmd &&
-            server.current_client->cmd->m_flags & CMD_READONLY)
+            server.current_client->m_cmd &&
+            server.current_client->m_cmd->m_flags & CMD_READONLY)
         {
             return NULL;
         }
@@ -149,14 +149,16 @@ robj *lookupKeyWrite(redisDb *db, robj *key) {
 }
 
 robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply) {
-    robj *o = lookupKeyRead(c->db, key);
-    if (!o) addReply(c,reply);
+    robj *o = lookupKeyRead(c->m_cur_selected_db, key);
+    if (!o)
+        addReply(c,reply);
     return o;
 }
 
 robj *lookupKeyWriteOrReply(client *c, robj *key, robj *reply) {
-    robj *o = lookupKeyWrite(c->db, key);
-    if (!o) addReply(c,reply);
+    robj *o = lookupKeyWrite(c->m_cur_selected_db, key);
+    if (!o)
+        addReply(c,reply);
     return o;
 }
 
@@ -346,10 +348,10 @@ long long emptyDb(int dbnum, int flags, void(callback)(void*)) {
     return removed;
 }
 
-int selectDb(client *c, int id) {
+int client::selectDb(int id) {
     if (id < 0 || id >= server.dbnum)
         return C_ERR;
-    c->db = &server.db[id];
+    m_cur_selected_db = &server.db[id];
     return C_OK;
 }
 
@@ -384,8 +386,8 @@ void signalFlushedDb(int dbid) {
  * C_ERR is returned and the function sends an error to the client. */
 int getFlushCommandFlags(client *c, int *flags) {
     /* Parse the optional ASYNC option. */
-    if (c->argc > 1) {
-        if (c->argc > 2 || strcasecmp((const char*)c->argv[1]->ptr,"async")) {
+    if (c->m_argc > 1) {
+        if (c->m_argc > 2 || strcasecmp((const char*)c->m_argv[1]->ptr,"async")) {
             addReply(c,shared.syntaxerr);
             return C_ERR;
         }
@@ -403,8 +405,8 @@ void flushdbCommand(client *c) {
     int flags;
 
     if (getFlushCommandFlags(c,&flags) == C_ERR) return;
-    signalFlushedDb(c->db->m_id);
-    server.dirty += emptyDb(c->db->m_id,flags,NULL);
+    signalFlushedDb(c->m_cur_selected_db->m_id);
+    server.dirty += emptyDb(c->m_cur_selected_db->m_id,flags,NULL);
     addReply(c,shared.ok);
 }
 
@@ -438,14 +440,14 @@ void flushallCommand(client *c) {
 void delGenericCommand(client *c, int lazy) {
     int numdel = 0, j;
 
-    for (j = 1; j < c->argc; j++) {
-        expireIfNeeded(c->db,c->argv[j]);
-        int deleted  = lazy ? dbAsyncDelete(c->db,c->argv[j]) :
-                              dbSyncDelete(c->db,c->argv[j]);
+    for (j = 1; j < c->m_argc; j++) {
+        expireIfNeeded(c->m_cur_selected_db,c->m_argv[j]);
+        int deleted  = lazy ? dbAsyncDelete(c->m_cur_selected_db,c->m_argv[j]) :
+                              dbSyncDelete(c->m_cur_selected_db,c->m_argv[j]);
         if (deleted) {
-            signalModifiedKey(c->db,c->argv[j]);
+            signalModifiedKey(c->m_cur_selected_db,c->m_argv[j]);
             notifyKeyspaceEvent(NOTIFY_GENERIC,
-                "del",c->argv[j],c->db->m_id);
+                "del",c->m_argv[j],c->m_cur_selected_db->m_id);
             server.dirty++;
             numdel++;
         }
@@ -467,9 +469,9 @@ void existsCommand(client *c) {
     long long count = 0;
     int j;
 
-    for (j = 1; j < c->argc; j++) {
-        expireIfNeeded(c->db,c->argv[j]);
-        if (dbExists(c->db,c->argv[j])) count++;
+    for (j = 1; j < c->m_argc; j++) {
+        expireIfNeeded(c->m_cur_selected_db,c->m_argv[j]);
+        if (dbExists(c->m_cur_selected_db,c->m_argv[j])) count++;
     }
     addReplyLongLong(c,count);
 }
@@ -477,7 +479,7 @@ void existsCommand(client *c) {
 void selectCommand(client *c) {
     long id;
 
-    if (getLongFromObjectOrReply(c, c->argv[1], &id,
+    if (getLongFromObjectOrReply(c, c->m_argv[1], &id,
         "invalid DB index") != C_OK)
         return;
 
@@ -485,7 +487,7 @@ void selectCommand(client *c) {
         addReplyError(c,"SELECT is not allowed in cluster mode");
         return;
     }
-    if (selectDb(c,id) == C_ERR) {
+    if (c->selectDb(id) == C_ERR) {
         addReplyError(c,"DB index is out of range");
     } else {
         addReply(c,shared.ok);
@@ -495,7 +497,7 @@ void selectCommand(client *c) {
 void randomkeyCommand(client *c) {
     robj *key;
 
-    if ((key = dbRandomKey(c->db)) == NULL) {
+    if ((key = dbRandomKey(c->m_cur_selected_db)) == NULL) {
         addReply(c,shared.nullbulk);
         return;
     }
@@ -506,12 +508,12 @@ void randomkeyCommand(client *c) {
 
 void keysCommand(client *c) {
     dictEntry *de;
-    sds pattern = (sds)c->argv[1]->ptr;
+    sds pattern = (sds)c->m_argv[1]->ptr;
     int plen = sdslen(pattern), allkeys;
     unsigned long numkeys = 0;
     void *replylen = addDeferredMultiBulkLength(c);
 
-    dictIterator di(c->db->m_dict, 1);
+    dictIterator di(c->m_cur_selected_db->m_dict, 1);
     allkeys = (pattern[0] == '*' && pattern[1] == '\0');
     while((de = di.dictNext()) != NULL) {
         sds key = (sds)de->dictGetKey();
@@ -519,7 +521,7 @@ void keysCommand(client *c) {
 
         if (allkeys || stringmatchlen(pattern,plen,key,sdslen(key),0)) {
             keyobj = createStringObject(key,sdslen(key));
-            if (expireIfNeeded(c->db,keyobj) == 0) {
+            if (expireIfNeeded(c->m_cur_selected_db,keyobj) == 0) {
                 addReplyBulk(c,keyobj);
                 numkeys++;
             }
@@ -609,10 +611,10 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
     i = (o == NULL) ? 2 : 3; /* Skip the key argument if needed. */
 
     /* Step 1: Parse options. */
-    while (i < c->argc) {
-        j = c->argc - i;
-        if (!strcasecmp((const char*)c->argv[i]->ptr, "count") && j >= 2) {
-            if (getLongFromObjectOrReply(c, c->argv[i+1], &count, NULL)
+    while (i < c->m_argc) {
+        j = c->m_argc - i;
+        if (!strcasecmp((const char*)c->m_argv[i]->ptr, "count") && j >= 2) {
+            if (getLongFromObjectOrReply(c, c->m_argv[i+1], &count, NULL)
                 != C_OK)
             {
                 goto cleanup;
@@ -624,8 +626,8 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
             }
 
             i += 2;
-        } else if (!strcasecmp((const char*)c->argv[i]->ptr, "match") && j >= 2) {
-            pat = (sds)c->argv[i+1]->ptr;
+        } else if (!strcasecmp((const char*)c->m_argv[i]->ptr, "match") && j >= 2) {
+            pat = (sds)c->m_argv[i+1]->ptr;
             patlen = sdslen(pat);
 
             /* The pattern always matches if it is exactly "*", so it is
@@ -650,7 +652,7 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
     /* Handle the case of a hash table. */
     ht = NULL;
     if (o == NULL) {
-        ht = c->db->m_dict;
+        ht = c->m_cur_selected_db->m_dict;
     } else if (o->type == OBJ_SET && o->encoding == OBJ_ENCODING_HT) {
         ht = (dict *)o->ptr;
     } else if (o->type == OBJ_HASH && o->encoding == OBJ_ENCODING_HT) {
@@ -728,7 +730,7 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
         }
 
         /* Filter element if it is an expired key. */
-        if (!filter && o == NULL && expireIfNeeded(c->db, kobj)) filter = 1;
+        if (!filter && o == NULL && expireIfNeeded(c->m_cur_selected_db, kobj)) filter = 1;
 
         /* Remove the element and its associted value if needed. */
         if (filter) {
@@ -771,12 +773,12 @@ cleanup:
 /* The SCAN command completely relies on scanGenericCommand. */
 void scanCommand(client *c) {
     unsigned long cursor;
-    if (parseScanCursorOrReply(c,c->argv[1],&cursor) == C_ERR) return;
+    if (parseScanCursorOrReply(c,c->m_argv[1],&cursor) == C_ERR) return;
     scanGenericCommand(c,NULL,cursor);
 }
 
 void dbsizeCommand(client *c) {
-    addReplyLongLong(c,c->db->m_dict->dictSize());
+    addReplyLongLong(c,c->m_cur_selected_db->m_dict->dictSize());
 }
 
 void lastsaveCommand(client *c) {
@@ -787,7 +789,7 @@ void typeCommand(client *c) {
     robj *o;
     char *type;
 
-    o = lookupKeyReadWithFlags(c->db,c->argv[1],LOOKUP_NOTOUCH);
+    o = lookupKeyReadWithFlags(c->m_cur_selected_db,c->m_argv[1],LOOKUP_NOTOUCH);
     if (o == NULL) {
         type = "none";
     } else {
@@ -810,13 +812,13 @@ void typeCommand(client *c) {
 void shutdownCommand(client *c) {
     int flags = 0;
 
-    if (c->argc > 2) {
+    if (c->m_argc > 2) {
         addReply(c,shared.syntaxerr);
         return;
-    } else if (c->argc == 2) {
-        if (!strcasecmp((const char*)c->argv[1]->ptr,"nosave")) {
+    } else if (c->m_argc == 2) {
+        if (!strcasecmp((const char*)c->m_argv[1]->ptr,"nosave")) {
             flags |= SHUTDOWN_NOSAVE;
-        } else if (!strcasecmp((const char*)c->argv[1]->ptr,"save")) {
+        } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"save")) {
             flags |= SHUTDOWN_SAVE;
         } else {
             addReply(c,shared.syntaxerr);
@@ -842,9 +844,9 @@ void renameGenericCommand(client *c, int nx) {
 
     /* When source and dest key is the same, no operation is performed,
      * if the key exists, however we still return an error on unexisting key. */
-    if (sdscmp((sds)c->argv[1]->ptr,(sds)c->argv[2]->ptr) == 0) samekey = 1;
+    if (sdscmp((sds)c->m_argv[1]->ptr,(sds)c->m_argv[2]->ptr) == 0) samekey = 1;
 
-    if ((o = lookupKeyWriteOrReply(c,c->argv[1],shared.nokeyerr)) == NULL)
+    if ((o = lookupKeyWriteOrReply(c,c->m_argv[1],shared.nokeyerr)) == NULL)
         return;
 
     if (samekey) {
@@ -853,8 +855,8 @@ void renameGenericCommand(client *c, int nx) {
     }
 
     incrRefCount(o);
-    expire = getExpire(c->db,c->argv[1]);
-    if (lookupKeyWrite(c->db,c->argv[2]) != NULL) {
+    expire = getExpire(c->m_cur_selected_db,c->m_argv[1]);
+    if (lookupKeyWrite(c->m_cur_selected_db,c->m_argv[2]) != NULL) {
         if (nx) {
             decrRefCount(o);
             addReply(c,shared.czero);
@@ -862,17 +864,17 @@ void renameGenericCommand(client *c, int nx) {
         }
         /* Overwrite: delete the old key before creating the new one
          * with the same name. */
-        dbDelete(c->db,c->argv[2]);
+        dbDelete(c->m_cur_selected_db,c->m_argv[2]);
     }
-    dbAdd(c->db,c->argv[2],o);
-    if (expire != -1) setExpire(c,c->db,c->argv[2],expire);
-    dbDelete(c->db,c->argv[1]);
-    signalModifiedKey(c->db,c->argv[1]);
-    signalModifiedKey(c->db,c->argv[2]);
+    dbAdd(c->m_cur_selected_db,c->m_argv[2],o);
+    if (expire != -1) setExpire(c,c->m_cur_selected_db,c->m_argv[2],expire);
+    dbDelete(c->m_cur_selected_db,c->m_argv[1]);
+    signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
+    signalModifiedKey(c->m_cur_selected_db,c->m_argv[2]);
     notifyKeyspaceEvent(NOTIFY_GENERIC,"rename_from",
-        c->argv[1],c->db->m_id);
+        c->m_argv[1],c->m_cur_selected_db->m_id);
     notifyKeyspaceEvent(NOTIFY_GENERIC,"rename_to",
-        c->argv[2],c->db->m_id);
+        c->m_argv[2],c->m_cur_selected_db->m_id);
     server.dirty++;
     addReply(c,nx ? shared.cone : shared.ok);
 }
@@ -897,18 +899,18 @@ void moveCommand(client *c) {
     }
 
     /* Obtain source and target DB pointers */
-    src = c->db;
-    srcid = c->db->m_id;
+    src = c->m_cur_selected_db;
+    srcid = c->m_cur_selected_db->m_id;
 
-    if (getLongLongFromObject(c->argv[2],&dbid) == C_ERR ||
+    if (getLongLongFromObject(c->m_argv[2],&dbid) == C_ERR ||
         dbid < INT_MIN || dbid > INT_MAX ||
-        selectDb(c,dbid) == C_ERR)
+        c->selectDb(dbid) == C_ERR)
     {
         addReply(c,shared.outofrangeerr);
         return;
     }
-    dst = c->db;
-    selectDb(c,srcid); /* Back to the source DB */
+    dst = c->m_cur_selected_db;
+    c->selectDb(srcid); /* Back to the source DB */
 
     /* If the user is moving using as target the same
      * DB as the source DB it is probably an error. */
@@ -918,24 +920,24 @@ void moveCommand(client *c) {
     }
 
     /* Check if the element exists and get a reference */
-    o = lookupKeyWrite(c->db,c->argv[1]);
+    o = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[1]);
     if (!o) {
         addReply(c,shared.czero);
         return;
     }
-    expire = getExpire(c->db,c->argv[1]);
+    expire = getExpire(c->m_cur_selected_db,c->m_argv[1]);
 
     /* Return zero if the key already exists in the target DB */
-    if (lookupKeyWrite(dst,c->argv[1]) != NULL) {
+    if (lookupKeyWrite(dst,c->m_argv[1]) != NULL) {
         addReply(c,shared.czero);
         return;
     }
-    dbAdd(dst,c->argv[1],o);
-    if (expire != -1) setExpire(c,dst,c->argv[1],expire);
+    dbAdd(dst,c->m_argv[1],o);
+    if (expire != -1) setExpire(c,dst,c->m_argv[1],expire);
     incrRefCount(o);
 
     /* OK! key moved, free the entry in the source DB */
-    dbDelete(src,c->argv[1]);
+    dbDelete(src,c->m_argv[1]);
     server.dirty++;
     addReply(c,shared.cone);
 }
@@ -1006,11 +1008,11 @@ void swapdbCommand(client *c) {
     }
 
     /* Get the two DBs indexes. */
-    if (getLongFromObjectOrReply(c, c->argv[1], &id1,
+    if (getLongFromObjectOrReply(c, c->m_argv[1], &id1,
         "invalid first DB index") != C_OK)
         return;
 
-    if (getLongFromObjectOrReply(c, c->argv[2], &id2,
+    if (getLongFromObjectOrReply(c, c->m_argv[2], &id2,
         "invalid second DB index") != C_OK)
         return;
 

@@ -581,26 +581,26 @@ void feedAppendOnlyFile(struct redisCommand *cmd, int dictid, robj **argv, int a
 struct client *createFakeClient() {
     struct client* c = (client*)zmalloc(sizeof(*c));
 
-    selectDb(c,0);
-    c->fd = -1;
-    c->name = NULL;
-    c->querybuf = sdsempty();
-    c->querybuf_peak = 0;
-    c->argc = 0;
-    c->argv = NULL;
-    c->bufpos = 0;
+    c->selectDb(0);
+    c->m_fd = -1;
+    c->m_client_name = NULL;
+    c->m_query_buf = sdsempty();
+    c->m_query_buf_peak = 0;
+    c->m_argc = 0;
+    c->m_argv = NULL;
+    c->m_response_buff_pos = 0;
     c->m_flags = 0;
-    c->btype = BLOCKED_NONE;
+    c->m_blocking_op_type = BLOCKED_NONE;
     /* We set the fake client as a slave waiting for the synchronization
      * so that Redis will not try to send replies to this client. */
-    c->replstate = SLAVE_STATE_WAIT_BGSAVE_START;
-    c->reply = listCreate();
-    c->reply_bytes = 0;
-    c->obuf_soft_limit_reached_time = 0;
-    c->watched_keys = listCreate();
-    c->peerid = NULL;
-    c->reply->listSetFreeMethod(decrRefCountVoid);
-    c->reply->listSetDupMethod(dupClientReplyValue);
+    c->m_replication_state = SLAVE_STATE_WAIT_BGSAVE_START;
+    c->m_reply = listCreate();
+    c->m_reply_bytes = 0;
+    c->m_obuf_soft_limit_reached_time = 0;
+    c->m_watched_keys = listCreate();
+    c->m_cached_peer_id = NULL;
+    c->m_reply->listSetFreeMethod(decrRefCountVoid);
+    c->m_reply->listSetDupMethod(dupClientReplyValue);
     initClientMultiState(c);
     return c;
 }
@@ -608,15 +608,15 @@ struct client *createFakeClient() {
 void freeFakeClientArgv(struct client *c) {
     int j;
 
-    for (j = 0; j < c->argc; j++)
-        decrRefCount(c->argv[j]);
-    zfree(c->argv);
+    for (j = 0; j < c->m_argc; j++)
+        decrRefCount(c->m_argv[j]);
+    zfree(c->m_argv);
 }
 
 void freeFakeClient(struct client *c) {
-    sdsfree(c->querybuf);
-    listRelease(c->reply);
-    listRelease(c->watched_keys);
+    sdsfree(c->m_query_buf);
+    listRelease(c->m_reply);
+    listRelease(c->m_watched_keys);
     freeClientMultiState(c);
     zfree(c);
 }
@@ -703,12 +703,12 @@ int loadAppendOnlyFile(char *filename) {
         if (argc < 1) goto fmterr;
 
         argv = (robj **)zmalloc(sizeof(robj*)*argc);
-        fakeClient->argc = argc;
-        fakeClient->argv = argv;
+        fakeClient->m_argc = argc;
+        fakeClient->m_argv = argv;
 
         for (j = 0; j < argc; j++) {
             if (fgets(buf,sizeof(buf),fp) == NULL) {
-                fakeClient->argc = j; /* Free up to j-1. */
+                fakeClient->m_argc = j; /* Free up to j-1. */
                 freeFakeClientArgv(fakeClient);
                 goto readerr;
             }
@@ -717,13 +717,13 @@ int loadAppendOnlyFile(char *filename) {
             argsds = sdsnewlen(NULL,len);
             if (len && fread(argsds,len,1,fp) == 0) {
                 sdsfree(argsds);
-                fakeClient->argc = j; /* Free up to j-1. */
+                fakeClient->m_argc = j; /* Free up to j-1. */
                 freeFakeClientArgv(fakeClient);
                 goto readerr;
             }
             argv[j] = createObject(OBJ_STRING,argsds);
             if (fread(buf,2,1,fp) == 0) {
-                fakeClient->argc = j+1; /* Free up to j. */
+                fakeClient->m_argc = j+1; /* Free up to j. */
                 freeFakeClientArgv(fakeClient);
                 goto readerr; /* discard CRLF */
             }
@@ -737,18 +737,18 @@ int loadAppendOnlyFile(char *filename) {
         }
 
         /* Run the command in the context of a fake client */
-        fakeClient->cmd = cmd;
+        fakeClient->m_cmd = cmd;
         cmd->proc(fakeClient);
 
         /* The fake client should not have a reply */
-        serverAssert(fakeClient->bufpos == 0 && fakeClient->reply->listLength() == 0);
+        serverAssert(fakeClient->m_response_buff_pos == 0 && fakeClient->m_reply->listLength() == 0);
         /* The fake client should never get blocked */
         serverAssert((fakeClient->m_flags & CLIENT_BLOCKED) == 0);
 
         /* Clean up. Command code may have changed argv/argc so we use the
          * argv/argc of the client instead of the local variables. */
         freeFakeClientArgv(fakeClient);
-        fakeClient->cmd = NULL;
+        fakeClient->m_cmd = NULL;
         if (server.aof_load_truncated) valid_up_to = ftello(fp);
     }
 

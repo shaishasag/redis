@@ -260,12 +260,12 @@ void computeDatasetDigest(unsigned char *final) {
 }
 
 void debugCommand(client *c) {
-    if (c->argc == 1) {
+    if (c->m_argc == 1) {
         addReplyError(c,"You must specify a subcommand for DEBUG. Try DEBUG HELP for info.");
         return;
     }
 
-    if (!strcasecmp((const char*)c->argv[1]->ptr,"help")) {
+    if (!strcasecmp((const char*)c->m_argv[1]->ptr,"help")) {
         void *blenp = addDeferredMultiBulkLength(c);
         int blen = 0;
         blen++; addReplyStatus(c,
@@ -309,32 +309,32 @@ void debugCommand(client *c) {
         blen++; addReplyStatus(c,
         "change-repl-id -- Change the replication IDs of the instance. Dangerous, should be used only for testing the replication subsystem.");
         setDeferredMultiBulkLength(c,blenp,blen);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"segfault")) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"segfault")) {
         *((char*)-1) = 'x';
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"panic")) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"panic")) {
         serverPanic("DEBUG PANIC called at Unix time %ld", time(NULL));
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"restart") ||
-               !strcasecmp((const char*)c->argv[1]->ptr,"crash-and-recover"))
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"restart") ||
+               !strcasecmp((const char*)c->m_argv[1]->ptr,"crash-and-recover"))
     {
         long long delay = 0;
-        if (c->argc >= 3) {
-            if (getLongLongFromObjectOrReply(c, c->argv[2], &delay, NULL)
+        if (c->m_argc >= 3) {
+            if (getLongLongFromObjectOrReply(c, c->m_argv[2], &delay, NULL)
                 != C_OK) return;
             if (delay < 0) delay = 0;
         }
-        int flags = !strcasecmp((const char*)c->argv[1]->ptr,"restart") ?
+        int flags = !strcasecmp((const char*)c->m_argv[1]->ptr,"restart") ?
             (RESTART_SERVER_GRACEFULLY|RESTART_SERVER_CONFIG_REWRITE) :
              RESTART_SERVER_NONE;
         restartServer(flags,delay);
         addReplyError(c,"failed to restart the server. Check server logs.");
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"oom")) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"oom")) {
         void* ptr = (void*)zmalloc(ULONG_MAX); /* Should trigger an out of memory. */
         zfree(ptr);
         addReply(c,shared.ok);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"assert")) {
-        if (c->argc >= 3) c->argv[2] = tryObjectEncoding(c->argv[2]);
-        serverAssertWithInfo(c,c->argv[0],1 == 2);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"reload")) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"assert")) {
+        if (c->m_argc >= 3) c->m_argv[2] = tryObjectEncoding(c->m_argv[2]);
+        serverAssertWithInfo(c,c->m_argv[0],1 == 2);
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"reload")) {
         rdbSaveInfo rsi, *rsiptr;
         rsiptr = rdbPopulateSaveInfo(&rsi);
         if (rdbSave(server.rdb_filename,rsiptr) != C_OK) {
@@ -348,7 +348,7 @@ void debugCommand(client *c) {
         }
         serverLog(LL_WARNING,"DB reloaded by DEBUG RELOAD");
         addReply(c,shared.ok);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"loadaof")) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"loadaof")) {
         if (server.aof_state == AOF_ON) flushAppendOnlyFile(1);
         emptyDb(-1,EMPTYDB_NO_FLAGS,NULL);
         if (loadAppendOnlyFile(server.aof_filename) != C_OK) {
@@ -358,12 +358,12 @@ void debugCommand(client *c) {
         server.dirty = 0; /* Prevent AOF / replication */
         serverLog(LL_WARNING,"Append Only File loaded by DEBUG LOADAOF");
         addReply(c,shared.ok);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"object") && c->argc == 3) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"object") && c->m_argc == 3) {
         dictEntry *de;
         robj *val;
         char *strenc;
 
-        if ((de = c->db->m_dict->dictFind(c->argv[2]->ptr)) == NULL) {
+        if ((de = c->m_cur_selected_db->m_dict->dictFind(c->m_argv[2]->ptr)) == NULL) {
             addReply(c,shared.nokeyerr);
             return;
         }
@@ -410,12 +410,12 @@ void debugCommand(client *c) {
             (void*)val, val->refcount,
             strenc, rdbSavedObjectLen(val),
             val->lru, estimateObjectIdleTime(val)/1000, extra);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"sdslen") && c->argc == 3) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"sdslen") && c->m_argc == 3) {
         dictEntry *de;
         robj *val;
         sds key;
 
-        if ((de = c->db->m_dict->dictFind(c->argv[2]->ptr)) == NULL) {
+        if ((de = c->m_cur_selected_db->m_dict->dictFind(c->m_argv[2]->ptr)) == NULL) {
             addReply(c,shared.nokeyerr);
             return;
         }
@@ -435,10 +435,10 @@ void debugCommand(client *c) {
                 (long long) sdsavail((sds)val->ptr),
                 (long long) getStringObjectSdsUsedMemory(val));
         }
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"ziplist") && c->argc == 3) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"ziplist") && c->m_argc == 3) {
         robj *o;
 
-        if ((o = objectCommandLookupOrReply(c,c->argv[2],shared.nokeyerr))
+        if ((o = objectCommandLookupOrReply(c,c->m_argv[2],shared.nokeyerr))
                 == NULL) return;
 
         if (o->encoding != OBJ_ENCODING_ZIPLIST) {
@@ -447,24 +447,24 @@ void debugCommand(client *c) {
             ziplistRepr((unsigned char *)o->ptr);
             addReplyStatus(c,"Ziplist structure printed on stdout");
         }
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"populate") &&
-               c->argc >= 3 && c->argc <= 5) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"populate") &&
+               c->m_argc >= 3 && c->m_argc <= 5) {
         long keys, j;
         robj *key, *val;
         char buf[128];
 
-        if (getLongFromObjectOrReply(c, c->argv[2], &keys, NULL) != C_OK)
+        if (getLongFromObjectOrReply(c, c->m_argv[2], &keys, NULL) != C_OK)
             return;
-        c->db->m_dict->dictExpand(keys);
+        c->m_cur_selected_db->m_dict->dictExpand(keys);
         for (j = 0; j < keys; j++) {
             long valsize = 0;
             snprintf(buf,sizeof(buf),"%s:%lu",
-                (c->argc == 3) ? "key" : (char*)c->argv[3]->ptr, j);
+                (c->m_argc == 3) ? "key" : (char*)c->m_argv[3]->ptr, j);
             key = createStringObject(buf,strlen(buf));
-            if (c->argc == 5)
-                if (getLongFromObjectOrReply(c, c->argv[4], &valsize, NULL) != C_OK)
+            if (c->m_argc == 5)
+                if (getLongFromObjectOrReply(c, c->m_argv[4], &valsize, NULL) != C_OK)
                     return;
-            if (lookupKeyWrite(c->db,key) != NULL) {
+            if (lookupKeyWrite(c->m_cur_selected_db,key) != NULL) {
                 decrRefCount(key);
                 continue;
             }
@@ -476,12 +476,12 @@ void debugCommand(client *c) {
                 val = createStringObject(NULL,valsize);
                 memcpy(val->ptr, buf, valsize<=buflen? valsize: buflen);
             }
-            dbAdd(c->db,key,val);
-            signalModifiedKey(c->db,key);
+            dbAdd(c->m_cur_selected_db,key,val);
+            signalModifiedKey(c->m_cur_selected_db,key);
             decrRefCount(key);
         }
         addReply(c,shared.ok);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"digest") && c->argc == 2) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"digest") && c->m_argc == 2) {
         unsigned char digest[20];
         sds d = sdsempty();
         int j;
@@ -491,8 +491,8 @@ void debugCommand(client *c) {
             d = sdscatprintf(d, "%02x",digest[j]);
         addReplyStatus(c,d);
         sdsfree(d);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"sleep") && c->argc == 3) {
-        double dtime = strtod((const char *)c->argv[2]->ptr,NULL);
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"sleep") && c->m_argc == 3) {
+        double dtime = strtod((const char *)c->m_argv[2]->ptr,NULL);
         long long utime = dtime*1000000;
         struct timespec tv;
 
@@ -500,24 +500,24 @@ void debugCommand(client *c) {
         tv.tv_nsec = (utime % 1000000) * 1000;
         nanosleep(&tv, NULL);
         addReply(c,shared.ok);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"set-active-expire") &&
-               c->argc == 3)
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"set-active-expire") &&
+               c->m_argc == 3)
     {
-        server.active_expire_enabled = atoi((const char *)c->argv[2]->ptr);
+        server.active_expire_enabled = atoi((const char *)c->m_argv[2]->ptr);
         addReply(c,shared.ok);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"lua-always-replicate-commands") &&
-               c->argc == 3)
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"lua-always-replicate-commands") &&
+               c->m_argc == 3)
     {
-        server.lua_always_replicate_commands = atoi((const char *)c->argv[2]->ptr);
+        server.lua_always_replicate_commands = atoi((const char *)c->m_argv[2]->ptr);
         addReply(c,shared.ok);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"error") && c->argc == 3) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"error") && c->m_argc == 3) {
         sds errstr = sdsnewlen("-",1);
 
-        errstr = sdscatsds(errstr, (sds)c->argv[2]->ptr);
+        errstr = sdscatsds(errstr, (sds)c->m_argv[2]->ptr);
         errstr = sdsmapchars(errstr,"\n\r","  ",2); /* no newlines in errors. */
         errstr = sdscatlen(errstr,"\r\n",2);
         addReplySds(c,errstr);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"structsize") && c->argc == 2) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"structsize") && c->m_argc == 2) {
         sds sizes = sdsempty();
         sizes = sdscatprintf(sizes,"bits:%d ",(sizeof(void*) == 8)?64:32);
         sizes = sdscatprintf(sizes,"robj:%d ",(int)sizeof(robj));
@@ -528,12 +528,12 @@ void debugCommand(client *c) {
         sizes = sdscatprintf(sizes,"sdshdr32:%d ",(int)sizeof(struct sdshdr32));
         sizes = sdscatprintf(sizes,"sdshdr64:%d ",(int)sizeof(struct sdshdr64));
         addReplyBulkSds(c,sizes);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"htstats") && c->argc == 3) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"htstats") && c->m_argc == 3) {
         long dbid;
         sds stats = sdsempty();
         char buf[4096];
 
-        if (getLongFromObjectOrReply(c, c->argv[2], &dbid, NULL) != C_OK)
+        if (getLongFromObjectOrReply(c, c->m_argv[2], &dbid, NULL) != C_OK)
             return;
         if (dbid < 0 || dbid >= server.dbnum) {
             addReplyError(c,"Out of range database");
@@ -549,14 +549,14 @@ void debugCommand(client *c) {
         stats = sdscat(stats,buf);
 
         addReplyBulkSds(c,stats);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"change-repl-id") && c->argc == 2) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"change-repl-id") && c->m_argc == 2) {
         serverLog(LL_WARNING,"Changing replication IDs after receiving DEBUG change-repl-id");
         changeReplicationId();
         clearReplicationId2();
         addReply(c,shared.ok);
     } else {
         addReplyErrorFormat(c, "Unknown DEBUG subcommand or wrong number of arguments for '%s'",
-            (char*)c->argv[1]->ptr);
+            (char*)c->m_argv[1]->ptr);
     }
 }
 
@@ -581,21 +581,21 @@ void _serverAssertPrintClientInfo(const client *c) {
     bugReportStart();
     serverLog(LL_WARNING,"=== ASSERTION FAILED CLIENT CONTEXT ===");
     serverLog(LL_WARNING,"client->m_flags = %d", c->m_flags);
-    serverLog(LL_WARNING,"client->fd = %d", c->fd);
-    serverLog(LL_WARNING,"client->argc = %d", c->argc);
-    for (j=0; j < c->argc; j++) {
+    serverLog(LL_WARNING,"client->fd = %d", c->m_fd);
+    serverLog(LL_WARNING,"client->argc = %d", c->m_argc);
+    for (j=0; j < c->m_argc; j++) {
         char buf[128];
         char *arg;
 
-        if (c->argv[j]->type == OBJ_STRING && sdsEncodedObject(c->argv[j])) {
-            arg = (char*) c->argv[j]->ptr;
+        if (c->m_argv[j]->type == OBJ_STRING && sdsEncodedObject(c->m_argv[j])) {
+            arg = (char*) c->m_argv[j]->ptr;
         } else {
             snprintf(buf,sizeof(buf),"Object type: %u, encoding: %u",
-                c->argv[j]->type, c->argv[j]->encoding);
+                c->m_argv[j]->type, c->m_argv[j]->encoding);
             arg = buf;
         }
         serverLog(LL_WARNING,"client->argv[%d] = \"%s\" (refcount: %d)",
-            j, arg, c->argv[j]->refcount);
+            j, arg, c->m_argv[j]->refcount);
     }
 }
 
@@ -898,22 +898,22 @@ void logCurrentClient() {
     client = catClientInfoString(sdsempty(),cc);
     serverLog(LL_WARNING|LL_RAW,"%s\n", client);
     sdsfree(client);
-    for (j = 0; j < cc->argc; j++) {
+    for (j = 0; j < cc->m_argc; j++) {
         robj *decoded;
 
-        decoded = getDecodedObject(cc->argv[j]);
+        decoded = getDecodedObject(cc->m_argv[j]);
         serverLog(LL_WARNING|LL_RAW,"argv[%d]: '%s'\n", j,
             (char*)decoded->ptr);
         decrRefCount(decoded);
     }
     /* Check if the first argument, usually a key, is found inside the
      * selected DB, and if so print info about the associated object. */
-    if (cc->argc >= 1) {
+    if (cc->m_argc >= 1) {
         robj *val, *key;
         dictEntry *de;
 
-        key = getDecodedObject(cc->argv[1]);
-        de = cc->db->m_dict->dictFind(key->ptr);
+        key = getDecodedObject(cc->m_argv[1]);
+        de = cc->m_cur_selected_db->m_dict->dictFind(key->ptr);
         if (de) {
             val = (robj *)de->dictGetVal();
             serverLog(LL_WARNING,"key '%s' found in DB containing the following object:", (char*)key->ptr);

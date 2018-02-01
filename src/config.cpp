@@ -793,32 +793,32 @@ void loadServerConfig(char *filename, char *options) {
  *----------------------------------------------------------------------------*/
 
 #define config_set_bool_field(_name,_var) \
-    } else if (!strcasecmp((const char*)c->argv[2]->ptr,_name)) { \
+    } else if (!strcasecmp((const char*)c->m_argv[2]->ptr,_name)) { \
         int yn = yesnotoi((const char *)o->ptr); \
         if (yn == -1) goto badfmt; \
         _var = yn;
 
 #define config_set_numerical_field(_name,_var,min,max) \
-    } else if (!strcasecmp((const char*)c->argv[2]->ptr,_name)) { \
+    } else if (!strcasecmp((const char*)c->m_argv[2]->ptr,_name)) { \
         if (getLongLongFromObject(o,&ll) == C_ERR) goto badfmt; \
         if (min != LLONG_MIN && ll < min) goto badfmt; \
         if (max != LLONG_MAX && ll > max) goto badfmt; \
         _var = ll;
 
 #define config_set_memory_field(_name,_var) \
-    } else if (!strcasecmp((const char*)c->argv[2]->ptr,_name)) { \
+    } else if (!strcasecmp((const char*)c->m_argv[2]->ptr,_name)) { \
         ll = memtoll((const char *)o->ptr,&err); \
         if (err || ll < 0) goto badfmt; \
         _var = ll;
 
 #define config_set_enum_field(_name,_var,_enumvar) \
-    } else if (!strcasecmp((const char*)c->argv[2]->ptr,_name)) { \
+    } else if (!strcasecmp((const char*)c->m_argv[2]->ptr,_name)) { \
         int enumval = configEnumGetValue(_enumvar,(const char *)o->ptr); \
         if (enumval == INT_MIN) goto badfmt; \
         _var = enumval;
 
 #define config_set_special_field(_name) \
-    } else if (!strcasecmp((const char*)c->argv[2]->ptr,_name)) {
+    } else if (!strcasecmp((const char*)c->m_argv[2]->ptr,_name)) {
 
 #define config_set_else } else
 
@@ -826,9 +826,9 @@ void configSetCommand(client *c) {
     robj *o;
     long long ll;
     int err;
-    serverAssertWithInfo(c,c->argv[2],sdsEncodedObject(c->argv[2]));
-    serverAssertWithInfo(c,c->argv[3],sdsEncodedObject(c->argv[3]));
-    o = c->argv[3];
+    serverAssertWithInfo(c,c->m_argv[2],sdsEncodedObject(c->m_argv[2]));
+    serverAssertWithInfo(c,c->m_argv[3],sdsEncodedObject(c->m_argv[3]));
+    o = c->m_argv[3];
 
     if (0) { /* this starts the config_set macros else-if chain. */
 
@@ -1149,7 +1149,7 @@ void configSetCommand(client *c) {
     /* Everyhing else is an error... */
     } config_set_else {
         addReplyErrorFormat(c,"Unsupported CONFIG parameter: %s",
-            (char*)c->argv[2]->ptr);
+            (char*)c->m_argv[2]->ptr);
         return;
     }
 
@@ -1160,7 +1160,7 @@ void configSetCommand(client *c) {
 badfmt: /* Bad format errors */
     addReplyErrorFormat(c,"Invalid argument '%s' for CONFIG SET '%s'",
             (char*)o->ptr,
-            (char*)c->argv[2]->ptr);
+            (char*)c->m_argv[2]->ptr);
 }
 
 /*-----------------------------------------------------------------------------
@@ -1201,7 +1201,7 @@ badfmt: /* Bad format errors */
 } while(0);
 
 void configGetCommand(client *c) {
-    robj *o = c->argv[2];
+    robj *o = c->m_argv[2];
     void *replylen = addDeferredMultiBulkLength(c);
     char* pattern = (char*)o->ptr;
     char buf[128];
@@ -2063,24 +2063,24 @@ int rewriteConfig(char *path) {
 
 void configCommand(client *c) {
     /* Only allow CONFIG GET while loading. */
-    if (server.loading && strcasecmp((const char*)c->argv[1]->ptr,"get")) {
+    if (server.loading && strcasecmp((const char*)c->m_argv[1]->ptr,"get")) {
         addReplyError(c,"Only CONFIG GET is allowed during loading");
         return;
     }
 
-    if (!strcasecmp((const char*)c->argv[1]->ptr,"set")) {
-        if (c->argc != 4) goto badarity;
+    if (!strcasecmp((const char*)c->m_argv[1]->ptr,"set")) {
+        if (c->m_argc != 4) goto badarity;
         configSetCommand(c);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"get")) {
-        if (c->argc != 3) goto badarity;
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"get")) {
+        if (c->m_argc != 3) goto badarity;
         configGetCommand(c);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"resetstat")) {
-        if (c->argc != 2) goto badarity;
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"resetstat")) {
+        if (c->m_argc != 2) goto badarity;
         resetServerStats();
         resetCommandTableStats();
         addReply(c,shared.ok);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"rewrite")) {
-        if (c->argc != 2) goto badarity;
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"rewrite")) {
+        if (c->m_argc != 2) goto badarity;
         if (server.configfile == NULL) {
             addReplyError(c,"The server is running without a config file");
             return;
@@ -2100,5 +2100,5 @@ void configCommand(client *c) {
 
 badarity:
     addReplyErrorFormat(c,"Wrong number of arguments for CONFIG %s",
-        (char*) c->argv[1]->ptr);
+        (char*) c->m_argv[1]->ptr);
 }

@@ -384,7 +384,7 @@ void flushSlaveKeysWithExpireList() {
  * unit is either UNIT_SECONDS or UNIT_MILLISECONDS, and is only used for
  * the argv[2] parameter. The basetime is always specified in milliseconds. */
 void expireGenericCommand(client *c, long long basetime, int unit) {
-    robj *key = c->argv[1], *param = c->argv[2];
+    robj *key = c->m_argv[1], *param = c->m_argv[2];
     long long when; /* unix time in milliseconds when the key will expire. */
 
     if (getLongLongFromObjectOrReply(c, param, &when, NULL) != C_OK)
@@ -394,7 +394,7 @@ void expireGenericCommand(client *c, long long basetime, int unit) {
     when += basetime;
 
     /* No key, return zero. */
-    if (lookupKeyWrite(c->db,key) == NULL) {
+    if (lookupKeyWrite(c->m_cur_selected_db,key) == NULL) {
         addReply(c,shared.czero);
         return;
     }
@@ -408,23 +408,23 @@ void expireGenericCommand(client *c, long long basetime, int unit) {
     if (when <= mstime() && !server.loading && !server.masterhost) {
         robj *aux;
 
-        int deleted = server.lazyfree_lazy_expire ? dbAsyncDelete(c->db,key) :
-                                                    dbSyncDelete(c->db,key);
+        int deleted = server.lazyfree_lazy_expire ? dbAsyncDelete(c->m_cur_selected_db,key) :
+                                                    dbSyncDelete(c->m_cur_selected_db,key);
         serverAssertWithInfo(c,key,deleted);
         server.dirty++;
 
         /* Replicate/AOF this as an explicit DEL or UNLINK. */
         aux = server.lazyfree_lazy_expire ? shared.unlink : shared.del;
         rewriteClientCommandVector(c,2,aux,key);
-        signalModifiedKey(c->db,key);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",key,c->db->m_id);
+        signalModifiedKey(c->m_cur_selected_db,key);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"del",key,c->m_cur_selected_db->m_id);
         addReply(c, shared.cone);
         return;
     } else {
-        setExpire(c,c->db,key,when);
+        setExpire(c,c->m_cur_selected_db,key,when);
         addReply(c,shared.cone);
-        signalModifiedKey(c->db,key);
-        notifyKeyspaceEvent(NOTIFY_GENERIC,"expire",key,c->db->m_id);
+        signalModifiedKey(c->m_cur_selected_db,key);
+        notifyKeyspaceEvent(NOTIFY_GENERIC,"expire",key,c->m_cur_selected_db->m_id);
         server.dirty++;
         return;
     }
@@ -455,13 +455,13 @@ void ttlGenericCommand(client *c, int output_ms) {
     long long expire, ttl = -1;
 
     /* If the key does not exist at all, return -2 */
-    if (lookupKeyReadWithFlags(c->db,c->argv[1],LOOKUP_NOTOUCH) == NULL) {
+    if (lookupKeyReadWithFlags(c->m_cur_selected_db,c->m_argv[1],LOOKUP_NOTOUCH) == NULL) {
         addReplyLongLong(c,-2);
         return;
     }
     /* The key exists. Return -1 if it has no expire, or the actual
      * TTL value otherwise. */
-    expire = getExpire(c->db,c->argv[1]);
+    expire = getExpire(c->m_cur_selected_db,c->m_argv[1]);
     if (expire != -1) {
         ttl = expire-mstime();
         if (ttl < 0) ttl = 0;
@@ -485,8 +485,8 @@ void pttlCommand(client *c) {
 
 /* PERSIST key */
 void persistCommand(client *c) {
-    if (lookupKeyWrite(c->db,c->argv[1])) {
-        if (removeExpire(c->db,c->argv[1])) {
+    if (lookupKeyWrite(c->m_cur_selected_db,c->m_argv[1])) {
+        if (removeExpire(c->m_cur_selected_db,c->m_argv[1])) {
             addReply(c,shared.cone);
             server.dirty++;
         } else {
@@ -500,8 +500,8 @@ void persistCommand(client *c) {
 /* TOUCH key1 [key2 key3 ... keyN] */
 void touchCommand(client *c) {
     int touched = 0;
-    for (int j = 1; j < c->argc; j++)
-        if (lookupKeyRead(c->db,c->argv[j]) != NULL) touched++;
+    for (int j = 1; j < c->m_argc; j++)
+        if (lookupKeyRead(c->m_cur_selected_db,c->m_argv[j]) != NULL) touched++;
     addReplyLongLong(c,touched);
 }
 

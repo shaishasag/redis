@@ -1793,7 +1793,7 @@ void backgroundSaveDoneHandlerSocket(int exitcode, int bysignal) {
     while((ln = li.listNext())) {
         client *slave = (client *)ln->listNodeValue();
 
-        if (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_END) {
+        if (slave->m_replication_state == SLAVE_STATE_WAIT_BGSAVE_END) {
             uint64_t j;
             int errorcode = 0;
 
@@ -1801,7 +1801,7 @@ void backgroundSaveDoneHandlerSocket(int exitcode, int bysignal) {
              * continue the replication process, we need to find it in the list,
              * and it must have an error code set to 0 (which means success). */
             for (j = 0; j < ok_slaves[0]; j++) {
-                if (slave->id == ok_slaves[2*j+1]) {
+                if (slave->m_id == ok_slaves[2*j+1]) {
                     errorcode = ok_slaves[2*j+2];
                     break; /* Found in slaves list. */
                 }
@@ -1818,8 +1818,8 @@ void backgroundSaveDoneHandlerSocket(int exitcode, int bysignal) {
                 "Slave %s correctly received the streamed RDB file.",
                     replicationGetSlaveName(slave));
                 /* Restore the socket as non-blocking. */
-                anetNonBlock(NULL,slave->fd);
-                anetSendTimeout(NULL,slave->fd,0);
+                anetNonBlock(NULL,slave->m_fd);
+                anetSendTimeout(NULL,slave->m_fd,0);
             }
         }
     }
@@ -1876,15 +1876,15 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
     while((ln = li.listNext())) {
         client *slave = (client *)ln->listNodeValue();
 
-        if (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_START) {
-            clientids[numfds] = slave->id;
-            fds[numfds++] = slave->fd;
+        if (slave->m_replication_state == SLAVE_STATE_WAIT_BGSAVE_START) {
+            clientids[numfds] = slave->m_id;
+            fds[numfds++] = slave->m_fd;
             replicationSetupSlaveForFullResync(slave,getPsyncInitialOffset());
             /* Put the socket in blocking mode to simplify RDB transfer.
              * We'll restore it when the children returns (since duped socket
              * will share the O_NONBLOCK attribute with the parent). */
-            anetBlock(NULL,slave->fd);
-            anetSendTimeout(NULL,slave->fd,server.repl_timeout*1000);
+            anetBlock(NULL,slave->m_fd);
+            anetSendTimeout(NULL,slave->m_fd,server.repl_timeout*1000);
         }
     }
 
@@ -1974,8 +1974,8 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
                 int j;
 
                 for (j = 0; j < numfds; j++) {
-                    if (slave->id == clientids[j]) {
-                        slave->replstate = SLAVE_STATE_WAIT_BGSAVE_START;
+                    if (slave->m_id == clientids[j]) {
+                        slave->m_replication_state = SLAVE_STATE_WAIT_BGSAVE_START;
                         break;
                     }
                 }
@@ -2022,8 +2022,8 @@ void bgsaveCommand(client *c) {
 
     /* The SCHEDULE option changes the behavior of BGSAVE when an AOF rewrite
      * is in progress. Instead of returning an error a BGSAVE gets scheduled. */
-    if (c->argc > 1) {
-        if (c->argc == 2 && !strcasecmp((const char*)c->argv[1]->ptr,"schedule")) {
+    if (c->m_argc > 1) {
+        if (c->m_argc == 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"schedule")) {
             schedule = 1;
         } else {
             addReply(c,shared.syntaxerr);
@@ -2086,7 +2086,7 @@ rdbSaveInfo *rdbPopulateSaveInfo(rdbSaveInfo *rsi) {
     /* If the instance is a slave we need a connected master
      * in order to fetch the currently selected DB. */
     if (server.master) {
-        rsi->repl_stream_db = server.master->db->m_id;
+        rsi->repl_stream_db = server.master->m_cur_selected_db->m_id;
         return rsi;
     }
 
@@ -2096,7 +2096,7 @@ rdbSaveInfo *rdbPopulateSaveInfo(rdbSaveInfo *rsi) {
      * master, so if we are disconnected the offset in the cached master
      * is valid. */
     if (server.cached_master) {
-        rsi->repl_stream_db = server.cached_master->db->m_id;
+        rsi->repl_stream_db = server.cached_master->m_cur_selected_db->m_id;
         return rsi;
     }
     return NULL;

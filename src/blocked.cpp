@@ -99,7 +99,7 @@ int getTimeoutFromObjectOrReply(client *c, robj *object, mstime_t *timeout, int 
  * and will be processed when the client is unblocked. */
 void blockClient(client *c, int btype) {
     c->m_flags |= CLIENT_BLOCKED;
-    c->btype = btype;
+    c->m_blocking_op_type = btype;
     server.bpop_blocked_clients++;
 }
 
@@ -122,7 +122,7 @@ void processUnblockedClients() {
          * client is not blocked before to proceed, but things may change and
          * the code is conceptually more correct this way. */
         if (!(c->m_flags & CLIENT_BLOCKED)) {
-            if (c->querybuf && sdslen(c->querybuf) > 0) {
+            if (c->m_query_buf && sdslen(c->m_query_buf) > 0) {
                 processInputBuffer(c);
             }
         }
@@ -132,11 +132,11 @@ void processUnblockedClients() {
 /* Unblock a client calling the right function depending on the kind
  * of operation the client is blocking for. */
 void unblockClient(client *c) {
-    if (c->btype == BLOCKED_LIST) {
+    if (c->m_blocking_op_type == BLOCKED_LIST) {
         unblockClientWaitingData(c);
-    } else if (c->btype == BLOCKED_WAIT) {
+    } else if (c->m_blocking_op_type == BLOCKED_WAIT) {
         unblockClientWaitingReplicas(c);
-    } else if (c->btype == BLOCKED_MODULE) {
+    } else if (c->m_blocking_op_type == BLOCKED_MODULE) {
         unblockClientFromModule(c);
     } else {
         serverPanic("Unknown btype in unblockClient().");
@@ -144,7 +144,7 @@ void unblockClient(client *c) {
     /* Clear the flags, and put the client in the unblocked list so that
      * we'll process new commands in its query buffer ASAP. */
     c->m_flags &= ~CLIENT_BLOCKED;
-    c->btype = BLOCKED_NONE;
+    c->m_blocking_op_type = BLOCKED_NONE;
     server.bpop_blocked_clients--;
     /* The client may already be into the unblocked list because of a previous
      * blocking operation, don't add back it into the list multiple times. */
@@ -158,11 +158,11 @@ void unblockClient(client *c) {
  * send it a reply of some kind. After this function is called,
  * unblockClient() will be called with the same client as argument. */
 void replyToBlockedClientTimedOut(client *c) {
-    if (c->btype == BLOCKED_LIST) {
+    if (c->m_blocking_op_type == BLOCKED_LIST) {
         addReply(c,shared.nullmultibulk);
-    } else if (c->btype == BLOCKED_WAIT) {
-        addReplyLongLong(c,replicationCountAcksByOffset(c->bpop.reploffset));
-    } else if (c->btype == BLOCKED_MODULE) {
+    } else if (c->m_blocking_op_type == BLOCKED_WAIT) {
+        addReplyLongLong(c,replicationCountAcksByOffset(c->m_blocking_state.reploffset));
+    } else if (c->m_blocking_op_type == BLOCKED_MODULE) {
         moduleBlockedClientTimedOut(c);
     } else {
         serverPanic("Unknown btype in replyToBlockedClientTimedOut().");

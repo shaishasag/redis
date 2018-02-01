@@ -837,7 +837,7 @@ struct redisMemOverhead *getMemoryOverheadData() {
         while((ln = li.listNext())) {
             client *c = (client *)ln->listNodeValue();
             mem += getClientOutputBufferMemoryUsage(c);
-            mem += sdsAllocSize(c->querybuf);
+            mem += sdsAllocSize(c->m_query_buf);
             mem += sizeof(client);
         }
     }
@@ -854,7 +854,7 @@ struct redisMemOverhead *getMemoryOverheadData() {
             if (c->m_flags & CLIENT_SLAVE)
                 continue;
             mem += getClientOutputBufferMemoryUsage(c);
-            mem += sdsAllocSize(c->querybuf);
+            mem += sdsAllocSize(c->m_query_buf);
             mem += sizeof(client);
         }
     }
@@ -996,7 +996,7 @@ sds getMemoryDoctorReport() {
 robj *objectCommandLookup(client *c, robj *key) {
     dictEntry *de;
 
-    if ((de = c->db->m_dict->dictFind(key->ptr)) == NULL) return NULL;
+    if ((de = c->m_cur_selected_db->m_dict->dictFind(key->ptr)) == NULL) return NULL;
     return (robj*) de->dictGetVal();
 }
 
@@ -1012,7 +1012,7 @@ robj *objectCommandLookupOrReply(client *c, robj *key, robj *reply) {
 void objectCommand(client *c) {
     robj *o;
 
-    if (!strcasecmp((const char*)c->argv[1]->ptr,"help") && c->argc == 2) {
+    if (!strcasecmp((const char*)c->m_argv[1]->ptr,"help") && c->m_argc == 2) {
         void *blenp = addDeferredMultiBulkLength(c);
         int blen = 0;
         blen++; addReplyStatus(c,
@@ -1026,24 +1026,24 @@ void objectCommand(client *c) {
         blen++; addReplyStatus(c,
         "freq -- Return the access frequency index of the key. The returned integer is proportional to the logarithm of the recent access frequency of the key.");
         setDeferredMultiBulkLength(c,blenp,blen);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"refcount") && c->argc == 3) {
-        if ((o = objectCommandLookupOrReply(c,c->argv[2],shared.nullbulk))
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"refcount") && c->m_argc == 3) {
+        if ((o = objectCommandLookupOrReply(c,c->m_argv[2],shared.nullbulk))
                 == NULL) return;
         addReplyLongLong(c,o->refcount);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"encoding") && c->argc == 3) {
-        if ((o = objectCommandLookupOrReply(c,c->argv[2],shared.nullbulk))
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"encoding") && c->m_argc == 3) {
+        if ((o = objectCommandLookupOrReply(c,c->m_argv[2],shared.nullbulk))
                 == NULL) return;
         addReplyBulkCString(c,strEncoding(o->encoding));
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"idletime") && c->argc == 3) {
-        if ((o = objectCommandLookupOrReply(c,c->argv[2],shared.nullbulk))
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"idletime") && c->m_argc == 3) {
+        if ((o = objectCommandLookupOrReply(c,c->m_argv[2],shared.nullbulk))
                 == NULL) return;
         if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
             addReplyError(c,"An LFU maxmemory policy is selected, idle time not tracked. Please note that when switching between policies at runtime LRU and LFU data will take some time to adjust.");
             return;
         }
         addReplyLongLong(c,estimateObjectIdleTime(o)/1000);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"freq") && c->argc == 3) {
-        if ((o = objectCommandLookupOrReply(c,c->argv[2],shared.nullbulk))
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"freq") && c->m_argc == 3) {
+        if ((o = objectCommandLookupOrReply(c,c->m_argv[2],shared.nullbulk))
                 == NULL) return;
         if (!(server.maxmemory_policy & MAXMEMORY_FLAG_LFU)) {
             addReplyError(c,"An LFU maxmemory policy is not selected, access frequency not tracked. Please note that when switching between policies at runtime LRU and LFU data will take some time to adjust.");
@@ -1056,7 +1056,7 @@ void objectCommand(client *c) {
         addReplyLongLong(c,LFUDecrAndReturn(o));
     } else {
         addReplyErrorFormat(c, "Unknown subcommand or wrong number of arguments for '%s'. Try OBJECT help",
-            (char *)c->argv[1]->ptr);
+            (char *)c->m_argv[1]->ptr);
     }
 }
 
@@ -1067,13 +1067,13 @@ void objectCommand(client *c) {
 void memoryCommand(client *c) {
     robj *o;
 
-    if (!strcasecmp((const char*)c->argv[1]->ptr,"usage") && c->argc >= 3) {
+    if (!strcasecmp((const char*)c->m_argv[1]->ptr,"usage") && c->m_argc >= 3) {
         long long samples = OBJ_COMPUTE_SIZE_DEF_SAMPLES;
-        for (int j = 3; j < c->argc; j++) {
-            if (!strcasecmp((const char*)c->argv[j]->ptr,"samples") &&
-                j+1 < c->argc)
+        for (int j = 3; j < c->m_argc; j++) {
+            if (!strcasecmp((const char*)c->m_argv[j]->ptr,"samples") &&
+                j+1 < c->m_argc)
             {
-                if (getLongLongFromObjectOrReply(c,c->argv[j+1],&samples,NULL)
+                if (getLongLongFromObjectOrReply(c,c->m_argv[j+1],&samples,NULL)
                      == C_ERR) return;
                 if (samples < 0) {
                     addReply(c,shared.syntaxerr);
@@ -1086,13 +1086,13 @@ void memoryCommand(client *c) {
                 return;
             }
         }
-        if ((o = objectCommandLookupOrReply(c,c->argv[2],shared.nullbulk))
+        if ((o = objectCommandLookupOrReply(c,c->m_argv[2],shared.nullbulk))
                 == NULL) return;
         size_t usage = objectComputeSize(o,samples);
-        usage += sdsAllocSize((sds)c->argv[2]->ptr);
+        usage += sdsAllocSize((sds)c->m_argv[2]->ptr);
         usage += sizeof(dictEntry);
         addReplyLongLong(c,usage);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"stats") && c->argc == 2) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"stats") && c->m_argc == 2) {
         struct redisMemOverhead *mh = getMemoryOverheadData();
 
         addReplyMultiBulkLen(c,(14+mh->num_dbs)*2);
@@ -1153,7 +1153,7 @@ void memoryCommand(client *c) {
         addReplyDouble(c,mh->fragmentation);
 
         freeMemoryOverheadData(mh);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"malloc-stats") && c->argc == 2) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"malloc-stats") && c->m_argc == 2) {
 #if defined(USE_JEMALLOC)
         sds info = sdsempty();
         je_malloc_stats_print(inputCatSds, &info, NULL);
@@ -1161,10 +1161,10 @@ void memoryCommand(client *c) {
 #else
         addReplyBulkCString(c,"Stats not supported for the current allocator");
 #endif
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"doctor") && c->argc == 2) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"doctor") && c->m_argc == 2) {
         sds report = getMemoryDoctorReport();
         addReplyBulkSds(c,report);
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"purge") && c->argc == 2) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"purge") && c->m_argc == 2) {
 #if defined(USE_JEMALLOC)
         char tmp[32];
         unsigned narenas = 0;
@@ -1181,7 +1181,7 @@ void memoryCommand(client *c) {
         addReply(c, shared.ok);
         /* Nothing to do for other allocators. */
 #endif
-    } else if (!strcasecmp((const char*)c->argv[1]->ptr,"help") && c->argc == 2) {
+    } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"help") && c->m_argc == 2) {
         addReplyMultiBulkLen(c,5);
         addReplyBulkCString(c,
 "MEMORY DOCTOR                        - Outputs memory problems report");
