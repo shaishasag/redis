@@ -329,8 +329,7 @@ hashTypeIterator *hashTypeInitIterator(robj *subject)
 }
 
 hashTypeIterator::hashTypeIterator(robj* in_subject)
-: m_subject(in_subject)
-, m_encoding(in_subject->encoding)
+: genericIterator(in_subject)
 , m_fptr(NULL)
 , m_vptr(NULL)
 , m_di(NULL)
@@ -352,7 +351,7 @@ void hashTypeReleaseIterator(hashTypeIterator *hi)
 
 hashTypeIterator::~hashTypeIterator()
 {
-    if (m_encoding == OBJ_ENCODING_HT)
+    if (NULL != m_di)
         dictReleaseIterator(m_di);
 }
 

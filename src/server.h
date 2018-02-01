@@ -1338,7 +1338,7 @@ private:
  * hashes involves both fields and values. Because it is possible that
  * not both are required, store pointers in the iterator to avoid
  * unnecessary memory allocation for fields/values. */
-struct hashTypeIterator
+struct hashTypeIterator : public genericIterator
 {
     hashTypeIterator(robj* in_subject);
     ~hashTypeIterator();
@@ -1353,8 +1353,6 @@ struct hashTypeIterator
     int encoding() {return m_encoding;}
 
 private:
-    robj *m_subject;
-    int m_encoding;
 
     unsigned char* m_fptr;
     unsigned char* m_vptr;
