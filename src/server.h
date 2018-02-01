@@ -1291,8 +1291,9 @@ public:
             , m_encoding(in_subject->encoding)
     {}
     ~genericIterator() {}
+    inline int encoding() const {return m_encoding;}
 
-//protected:
+protected:
     robj* m_subject;
     int m_encoding;
 };
@@ -1306,7 +1307,9 @@ public:
     listTypeIterator(robj* in_subject, long index, unsigned char direction);
     ~listTypeIterator();
     int listTypeNext(listTypeEntry *entry);
+    void listTypeDelete(listTypeEntry *entry);
 
+private:
     unsigned char m_direction; /* Iteration direction */
     quicklistIter *m_ql_iter;
 };
@@ -1479,11 +1482,9 @@ robj *listTypePop(robj *subject, int where);
 unsigned long listTypeLength(const robj *subject);
 listTypeIterator *listTypeInitIterator(robj *subject, long index, unsigned char direction);
 void listTypeReleaseIterator(listTypeIterator *li);
-int listTypeNext(listTypeIterator *li, listTypeEntry *entry);
 robj *listTypeGet(listTypeEntry *entry);
 void listTypeInsert(listTypeEntry *entry, robj *value, int where);
 int listTypeEqual(listTypeEntry *entry, robj *o);
-void listTypeDelete(listTypeIterator *iter, listTypeEntry *entry);
 void listTypeConvert(robj *subject, int enc);
 void unblockClientWaitingData(client *c);
 void handleClientsBlockedOnLists();

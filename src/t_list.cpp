@@ -135,26 +135,10 @@ int listTypeIterator::listTypeNext(listTypeEntry *entry) {
     return 0;
 }
 
-int listTypeNext(listTypeIterator *li, listTypeEntry *entry) {
-    /* Protect from converting when iterating */
-    serverAssert(li->m_subject->encoding == li->m_encoding);
-
-    entry->li = li;
-    if (li->m_encoding == OBJ_ENCODING_QUICKLIST) {
-        if (li->m_ql_iter)
-            return li->m_ql_iter->quicklistNext(entry->m_ql_entry);
-        else
-            return 0;
-    } else {
-        serverPanic("Unknown list encoding");
-    }
-    return 0;
-}
-
 /* Return entry or NULL at the current position of the iterator. */
 robj *listTypeGet(listTypeEntry *entry) {
     robj *value = NULL;
-    if (entry->li->m_encoding == OBJ_ENCODING_QUICKLIST) {
+    if (entry->li->encoding() == OBJ_ENCODING_QUICKLIST) {
         if (entry->m_ql_entry.m_value) {
             value = createStringObject((char *)entry->m_ql_entry.m_value,
                                        entry->m_ql_entry.m_size);
@@ -168,7 +152,7 @@ robj *listTypeGet(listTypeEntry *entry) {
 }
 
 void listTypeInsert(listTypeEntry *entry, robj *value, int where) {
-    if (entry->li->m_encoding == OBJ_ENCODING_QUICKLIST) {
+    if (entry->li->encoding() == OBJ_ENCODING_QUICKLIST) {
         value = getDecodedObject(value);
         sds str = (sds)value->ptr;
         size_t len = sdslen(str);
@@ -187,7 +171,7 @@ void listTypeInsert(listTypeEntry *entry, robj *value, int where) {
 
 /* Compare the given object with the entry at the current position. */
 int listTypeEqual(listTypeEntry *entry, robj *o) {
-    if (entry->li->m_encoding == OBJ_ENCODING_QUICKLIST) {
+    if (entry->li->encoding() == OBJ_ENCODING_QUICKLIST) {
         serverAssertWithInfo(NULL,o,sdsEncodedObject(o));
         return quicklistCompare((unsigned char *)entry->m_ql_entry.m_zip_list,(unsigned char *)o->ptr,sdslen((sds)o->ptr));
     } else {
@@ -196,9 +180,10 @@ int listTypeEqual(listTypeEntry *entry, robj *o) {
 }
 
 /* Delete the element pointed to. */
-void listTypeDelete(listTypeIterator *iter, listTypeEntry *entry) {
+void listTypeIterator::listTypeDelete(listTypeEntry *entry)
+{
     if (entry->li->m_encoding == OBJ_ENCODING_QUICKLIST) {
-        iter->m_ql_iter->quicklistDelEntry(&entry->m_ql_entry);
+        m_ql_iter->quicklistDelEntry(&entry->m_ql_entry);
     } else {
         serverPanic("Unknown list encoding");
     }
@@ -543,7 +528,7 @@ void lremCommand(client *c) {
     {
         if (listTypeEqual(&entry,obj))
         {
-            listTypeDelete(&li, &entry);
+            li.listTypeDelete(&entry);
             server.dirty++;
             removed++;
             if (toremove && removed == toremove)
