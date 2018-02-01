@@ -549,7 +549,7 @@ void hsetCommand(client *c) {
     robj *o;
 
     if ((c->m_argc % 2) == 1) {
-        addReplyError(c,"wrong number of arguments for HMSET");
+        c->addReplyError("wrong number of arguments for HMSET");
         return;
     }
 
@@ -585,7 +585,7 @@ void hincrbyCommand(client *c) {
     if (hashTypeGetValue(o, (sds)c->m_argv[2]->ptr,&vstr,&vlen,&value) == C_OK) {
         if (vstr) {
             if (string2ll((char*)vstr,vlen,&value) == 0) {
-                addReplyError(c,"hash value is not an integer");
+                c->addReplyError("hash value is not an integer");
                 return;
             }
         } /* Else hashTypeGetValue() already stored it into &value */
@@ -596,7 +596,7 @@ void hincrbyCommand(client *c) {
     oldvalue = value;
     if ((incr < 0 && oldvalue < 0 && incr < (LLONG_MIN-oldvalue)) ||
         (incr > 0 && oldvalue > 0 && incr > (LLONG_MAX-oldvalue))) {
-        addReplyError(c,"increment or decrement would overflow");
+        c->addReplyError("increment or decrement would overflow");
         return;
     }
     value += incr;
@@ -623,7 +623,7 @@ void hincrbyfloatCommand(client *c) {
     if (hashTypeGetValue(o, (sds)c->m_argv[2]->ptr,&vstr,&vlen,&ll) == C_OK) {
         if (vstr) {
             if (string2ld((char*)vstr,vlen,&value) == 0) {
-                addReplyError(c,"hash value is not a float");
+                c->addReplyError("hash value is not a float");
                 return;
             }
         } else {

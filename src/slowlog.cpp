@@ -158,7 +158,7 @@ void slowlogCommand(client *c) {
             return;
 
         listIter li(server.slowlog);
-        totentries = addDeferredMultiBulkLength(c);
+        totentries = c->addDeferredMultiBulkLength();
         while(count-- && (ln = li.listNext())) {
             int j;
 
@@ -176,7 +176,7 @@ void slowlogCommand(client *c) {
         }
         setDeferredMultiBulkLength(c,totentries,sent);
     } else {
-        addReplyError(c,
+        c->addReplyError(
             "Unknown SLOWLOG subcommand or wrong # of args. Try GET, RESET, LEN.");
     }
 }

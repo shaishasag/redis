@@ -333,7 +333,7 @@ void pubsubCommand(client *c) {
         long mblen = 0;
         void *replylen;
 
-        replylen = addDeferredMultiBulkLength(c);
+        replylen = c->addDeferredMultiBulkLength();
         while((de = di.dictNext()) != NULL) {
             robj *cobj = (robj *)de->dictGetKey();
             sds channel = (sds)cobj->ptr;
@@ -361,7 +361,7 @@ void pubsubCommand(client *c) {
         /* PUBSUB NUMPAT */
         addReplyLongLong(c,server.pubsub_patterns->listLength());
     } else {
-        addReplyErrorFormat(c,
+        c->addReplyErrorFormat(
             "Unknown PUBSUB subcommand or wrong number of arguments for '%s'",
             (char*)c->m_argv[1]->ptr);
     }

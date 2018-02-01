@@ -112,7 +112,7 @@ int extractLongLatOrReply(client *c, robj **argv, double *xy) {
     }
     if (xy[0] < GEO_LONG_MIN || xy[0] > GEO_LONG_MAX ||
         xy[1] < GEO_LAT_MIN  || xy[1] > GEO_LAT_MAX) {
-        addReplySds(c, sdscatprintf(sdsempty(),
+        c->addReplySds( sdscatprintf(sdsempty(),
             "-ERR invalid longitude,latitude pair %f,%f\r\n",xy[0],xy[1]));
         return C_ERR;
     }
@@ -148,7 +148,7 @@ double extractUnitOrReply(client *c, robj *unit) {
     } else if (!strcmp(u, "mi")) {
         return 1609.34;
     } else {
-        addReplyError(c,
+        c->addReplyError(
             "unsupported unit provided. please use m, km, ft, mi");
         return -1;
     }
@@ -170,7 +170,7 @@ double extractDistanceOrReply(client *c, robj **argv,
     }
 
     if (distance < 0) {
-        addReplyError(c,"radius cannot be negative");
+        c->addReplyError("radius cannot be negative");
         return -1;
     }
 
@@ -432,7 +432,7 @@ void geoaddCommand(client *c) {
     /* Check arguments number for sanity. */
     if ((c->m_argc - 2) % 3 != 0) {
         /* Need an odd number of arguments if we got this far... */
-        addReplyError(c, "syntax error. Try GEOADD key [x1] [y1] [name1] "
+        c->addReplyError( "syntax error. Try GEOADD key [x1] [y1] [name1] "
                          "[x2] [y2] [name2] ... ");
         return;
     }
@@ -504,11 +504,11 @@ void georadiusGeneric(client *c, int flags) {
         base_args = 5;
         robj *member = c->m_argv[2];
         if (longLatFromMember(zobj, member, xy) == C_ERR) {
-            addReplyError(c, "could not decode requested zset member");
+            c->addReplyError( "could not decode requested zset member");
             return;
         }
     } else {
-        addReplyError(c, "Unknown georadius search type");
+        c->addReplyError( "Unknown georadius search type");
         return;
     }
 
@@ -542,7 +542,7 @@ void georadiusGeneric(client *c, int flags) {
                                                  &count, NULL) != C_OK)
                     return;
                 if (count <= 0) {
-                    addReplyError(c, "COUNT must be > 0");
+                    c->addReplyError( "COUNT must be > 0");
                     return;
                 }
                 i++;
@@ -567,7 +567,7 @@ void georadiusGeneric(client *c, int flags) {
 
     /* Trap options not compatible with STORE and STOREDIST. */
     if (storekey && (withdist || withhash || withcoords)) {
-        addReplyError(c,
+        c->addReplyError(
                       "STORE option in GEORADIUS is not compatible with "
                               "WITHDIST, WITHHASH and WITHCOORDS options");
         return;

@@ -349,17 +349,17 @@ void client::addReply(robj *obj) {
     }
 }
 
-void addReplySds(client *c, sds s) {
-    if (c->prepareClientToWrite() != C_OK) {
+void client::addReplySds(sds s) {
+    if (prepareClientToWrite() != C_OK) {
         /* The caller expects the sds to be free'd. */
         sdsfree(s);
         return;
     }
-    if (c->_addReplyToBuffer((const char*)s,sdslen(s)) == C_OK) {
+    if (_addReplyToBuffer((const char*)s,sdslen(s)) == C_OK) {
         sdsfree(s);
     } else {
         /* This method free's the sds when it is no longer needed. */
-        c->_addReplySdsToList(s);
+        _addReplySdsToList(s);
     }
 }
 
@@ -371,24 +371,24 @@ void addReplySds(client *c, sds s) {
  * if not needed. The object will only be created by calling
  * _addReplyStringToList() if we fail to extend the existing tail object
  * in the list of objects. */
-void addReplyString(client *c, const char *s, size_t len) {
-    if (c->prepareClientToWrite() != C_OK)
+void client::addReplyString(const char *s, size_t len) {
+    if (prepareClientToWrite() != C_OK)
         return;
-    if (c->_addReplyToBuffer(s,len) != C_OK)
-        c->_addReplyStringToList(s,len);
+    if (_addReplyToBuffer(s,len) != C_OK)
+        _addReplyStringToList(s,len);
 }
 
-void addReplyErrorLength(client *c, const char *s, size_t len) {
-    addReplyString(c,"-ERR ",5);
-    addReplyString(c,s,len);
-    addReplyString(c,"\r\n",2);
+void client::addReplyErrorLength(const char *s, size_t len) {
+    addReplyString("-ERR ",5);
+    addReplyString(s,len);
+    addReplyString("\r\n",2);
 }
 
-void addReplyError(client *c, const char *err) {
-    addReplyErrorLength(c,err,strlen(err));
+void client::addReplyError(const char *err) {
+    addReplyErrorLength(err, strlen(err));
 }
 
-void addReplyErrorFormat(client *c, const char *fmt, ...) {
+void client::addReplyErrorFormat(const char *fmt, ...) {
     size_t l, j;
     va_list ap;
     va_start(ap,fmt);
@@ -400,38 +400,39 @@ void addReplyErrorFormat(client *c, const char *fmt, ...) {
     for (j = 0; j < l; j++) {
         if (s[j] == '\r' || s[j] == '\n') s[j] = ' ';
     }
-    addReplyErrorLength(c,s,sdslen(s));
+    addReplyErrorLength(s,sdslen(s));
     sdsfree(s);
 }
 
-void addReplyStatusLength(client *c, const char *s, size_t len) {
-    addReplyString(c,"+",1);
-    addReplyString(c,s,len);
-    addReplyString(c,"\r\n",2);
+void client::addReplyStatusLength(const char *s, size_t len) {
+    addReplyString("+",1);
+    addReplyString(s,len);
+    addReplyString("\r\n",2);
 }
 
-void addReplyStatus(client *c, const char *status) {
-    addReplyStatusLength(c,status,strlen(status));
+void client::addReplyStatus(const char *status) {
+    addReplyStatusLength(status,strlen(status));
 }
 
-void addReplyStatusFormat(client *c, const char *fmt, ...) {
+void client::addReplyStatusFormat(const char *fmt, ...) {
     va_list ap;
     va_start(ap,fmt);
     sds s = sdscatvprintf(sdsempty(),fmt,ap);
     va_end(ap);
-    addReplyStatusLength(c,s,sdslen(s));
+    addReplyStatusLength(s,sdslen(s));
     sdsfree(s);
 }
 
 /* Adds an empty object to the reply list that will contain the multi bulk
  * length, which is not known when this function is called. */
-void *addDeferredMultiBulkLength(client *c) {
+void* client::addDeferredMultiBulkLength() {
     /* Note that we install the write event here even if the object is not
      * ready to be sent, since we are sure that before returning to the
      * event loop setDeferredMultiBulkLength() will be called. */
-    if (c->prepareClientToWrite() != C_OK) return NULL;
-    c->m_reply->listAddNodeTail(NULL); /* NULL is our placeholder. */
-    return c->m_reply->listLast();
+    if (prepareClientToWrite() != C_OK)
+        return NULL;
+    m_reply->listAddNodeTail(NULL); /* NULL is our placeholder. */
+    return m_reply->listLast();
 }
 
 /* Populate the length object and try gluing it to the next chunk. */
@@ -472,7 +473,7 @@ void addReplyDouble(client *c, double d) {
     } else {
         dlen = snprintf(dbuf,sizeof(dbuf),"%.17g",d);
         slen = snprintf(sbuf,sizeof(sbuf),"$%d\r\n%s\r\n",dlen,dbuf);
-        addReplyString(c,sbuf,slen);
+        c->addReplyString(sbuf,slen);
     }
 }
 
@@ -506,7 +507,7 @@ void addReplyLongLongWithPrefix(client *c, long long ll, char prefix) {
     len = ll2string(buf+1,sizeof(buf)-1,ll);
     buf[len+1] = '\r';
     buf[len+2] = '\n';
-    addReplyString(c,buf,len+3);
+    c->addReplyString(buf,len+3);
 }
 
 void addReplyLongLong(client *c, long long ll) {
@@ -561,14 +562,14 @@ void addReplyBulk(client *c, robj *obj) {
 /* Add a C buffer as bulk reply */
 void addReplyBulkCBuffer(client *c, const void *p, size_t len) {
     addReplyLongLongWithPrefix(c,len,'$');
-    addReplyString(c,(const char *)p,len);
+    c->addReplyString((const char *)p,len);
     c->addReply(shared.crlf);
 }
 
 /* Add sds to reply (takes ownership of sds and frees it) */
 void addReplyBulkSds(client *c, sds s)  {
     addReplyLongLongWithPrefix(c,sdslen(s),'$');
-    addReplySds(c,s);
+    c->addReplySds(s);
     c->addReply(shared.crlf);
 }
 
@@ -1060,7 +1061,7 @@ int processInlineBuffer(client *c) {
     /* Nothing to do without a \r\n */
     if (newline == NULL) {
         if (sdslen((sds)c->m_query_buf) > PROTO_INLINE_MAX_SIZE) {
-            addReplyError(c,"Protocol error: too big inline request");
+            c->addReplyError("Protocol error: too big inline request");
             setProtocolError("too big inline request",c,0);
         }
         return C_ERR;
@@ -1076,7 +1077,7 @@ int processInlineBuffer(client *c) {
     argv = sdssplitargs(aux,&argc);
     sdsfree(aux);
     if (argv == NULL) {
-        addReplyError(c,"Protocol error: unbalanced quotes in request");
+        c->addReplyError("Protocol error: unbalanced quotes in request");
         setProtocolError("unbalanced quotes in inline request",c,0);
         return C_ERR;
     }
@@ -1164,7 +1165,7 @@ int processMultibulkBuffer(client *c) {
         newline = strchr(c->m_query_buf,'\r');
         if (newline == NULL) {
             if (sdslen((sds)c->m_query_buf) > PROTO_INLINE_MAX_SIZE) {
-                addReplyError(c,"Protocol error: too big mbulk count string");
+                c->addReplyError("Protocol error: too big mbulk count string");
                 setProtocolError("too big mbulk count string",c,0);
             }
             return C_ERR;
@@ -1179,7 +1180,7 @@ int processMultibulkBuffer(client *c) {
         serverAssertWithInfo(c,NULL,c->m_query_buf[0] == '*');
         ok = string2ll(c->m_query_buf+1,newline-(c->m_query_buf+1),&ll);
         if (!ok || ll > 1024*1024) {
-            addReplyError(c,"Protocol error: invalid multibulk length");
+            c->addReplyError("Protocol error: invalid multibulk length");
             setProtocolError("invalid mbulk count",c,pos);
             return C_ERR;
         }
@@ -1204,7 +1205,7 @@ int processMultibulkBuffer(client *c) {
             newline = strchr(c->m_query_buf+pos,'\r');
             if (newline == NULL) {
                 if (sdslen((sds)c->m_query_buf) > PROTO_INLINE_MAX_SIZE) {
-                    addReplyError(c,
+                    c->addReplyError(
                         "Protocol error: too big bulk count string");
                     setProtocolError("too big bulk count string",c,0);
                     return C_ERR;
@@ -1217,7 +1218,7 @@ int processMultibulkBuffer(client *c) {
                 break;
 
             if (c->m_query_buf[pos] != '$') {
-                addReplyErrorFormat(c,
+                c->addReplyErrorFormat(
                     "Protocol error: expected '$', got '%c'",
                     c->m_query_buf[pos]);
                 setProtocolError("expected $ but got something else",c,pos);
@@ -1226,7 +1227,7 @@ int processMultibulkBuffer(client *c) {
 
             ok = string2ll(c->m_query_buf+pos+1,newline-(c->m_query_buf+pos+1),&ll);
             if (!ok || ll < 0 || ll > 512*1024*1024) {
-                addReplyError(c,"Protocol error: invalid bulk length");
+                c->addReplyError("Protocol error: invalid bulk length");
                 setProtocolError("invalid bulk length",c,pos);
                 return C_ERR;
             }
@@ -1605,7 +1606,7 @@ void clientCommand(client *c) {
                 } else if (!strcasecmp((const char*)c->m_argv[i]->ptr,"type") && moreargs) {
                     type = getClientTypeByName((char*)c->m_argv[i+1]->ptr);
                     if (type == -1) {
-                        addReplyErrorFormat(c,"Unknown client type '%s'",
+                        c->addReplyErrorFormat("Unknown client type '%s'",
                             (char*) c->m_argv[i+1]->ptr);
                         return;
                     }
@@ -1652,7 +1653,7 @@ void clientCommand(client *c) {
         /* Reply according to old/new format. */
         if (c->m_argc == 3) {
             if (killed == 0)
-                addReplyError(c,"No such client");
+                c->addReplyError("No such client");
             else
                 c->addReply(shared.ok);
         } else {
@@ -1681,7 +1682,7 @@ void clientCommand(client *c) {
          * split by space to get the different fields. */
         for (j = 0; j < len; j++) {
             if (p[j] < '!' || p[j] > '~') { /* ASCII is assumed. */
-                addReplyError(c,
+                c->addReplyError(
                     "Client names cannot contain spaces, "
                     "newlines or special characters.");
                 return;
@@ -1704,7 +1705,7 @@ void clientCommand(client *c) {
         pauseClients(duration);
         c->addReply(shared.ok);
     } else {
-        addReplyError(c, "Syntax error, try CLIENT (LIST | KILL | GETNAME | SETNAME | PAUSE | REPLY)");
+        c->addReplyError( "Syntax error, try CLIENT (LIST | KILL | GETNAME | SETNAME | PAUSE | REPLY)");
     }
 }
 

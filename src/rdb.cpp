@@ -2004,7 +2004,7 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
 
 void saveCommand(client *c) {
     if (server.rdb_child_pid != -1) {
-        addReplyError(c,"Background save already in progress");
+        c->addReplyError("Background save already in progress");
         return;
     }
     rdbSaveInfo rsi, *rsiptr;
@@ -2035,19 +2035,19 @@ void bgsaveCommand(client *c) {
     rsiptr = rdbPopulateSaveInfo(&rsi);
 
     if (server.rdb_child_pid != -1) {
-        addReplyError(c,"Background save already in progress");
+        c->addReplyError("Background save already in progress");
     } else if (server.aof_child_pid != -1) {
         if (schedule) {
             server.rdb_bgsave_scheduled = 1;
-            addReplyStatus(c,"Background saving scheduled");
+            c->addReplyStatus("Background saving scheduled");
         } else {
-            addReplyError(c,
+            c->addReplyError(
                 "An AOF log rewriting in progress: can't BGSAVE right now. "
                 "Use BGSAVE SCHEDULE in order to schedule a BGSAVE whenever "
                 "possible.");
         }
     } else if (rdbSaveBackground(server.rdb_filename,rsiptr) == C_OK) {
-        addReplyStatus(c,"Background saving started");
+        c->addReplyStatus("Background saving started");
     } else {
         c->addReply(shared.err);
     }

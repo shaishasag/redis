@@ -471,7 +471,7 @@ sds createLatencyReport() {
 /* latencyCommand() helper to produce a time-delay reply for all the samples
  * in memory for the specified time series. */
 void latencyCommandReplyWithSamples(client *c, latencyTimeSeries *ts) {
-    void *replylen = addDeferredMultiBulkLength(c);
+    void *replylen = c->addDeferredMultiBulkLength();
     int samples = 0, j;
 
     for (j = 0; j < LATENCY_TS_LEN; j++) {
@@ -608,7 +608,7 @@ void latencyCommand(client *c) {
 nodataerr:
     /* Common error when the user asks for an event we have no latency
      * information about. */
-    addReplyErrorFormat(c,
+    c->addReplyErrorFormat(
         "No samples available for event '%s'", (char*) c->m_argv[2]->ptr);
 }
 

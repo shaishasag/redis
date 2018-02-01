@@ -85,7 +85,7 @@ void flagTransaction(client *c) {
 
 void multiCommand(client *c) {
     if (c->m_flags & CLIENT_MULTI) {
-        addReplyError(c,"MULTI calls can not be nested");
+        c->addReplyError("MULTI calls can not be nested");
         return;
     }
     c->m_flags |= CLIENT_MULTI;
@@ -94,7 +94,7 @@ void multiCommand(client *c) {
 
 void discardCommand(client *c) {
     if (!(c->m_flags & CLIENT_MULTI)) {
-        addReplyError(c,"DISCARD without MULTI");
+        c->addReplyError("DISCARD without MULTI");
         return;
     }
     discardTransaction(c);
@@ -120,7 +120,7 @@ void execCommand(client *c) {
     int was_master = server.masterhost == NULL;
 
     if (!(c->m_flags & CLIENT_MULTI)) {
-        addReplyError(c,"EXEC without MULTI");
+        c->addReplyError("EXEC without MULTI");
         return;
     }
 
@@ -316,7 +316,7 @@ void watchCommand(client *c) {
     int j;
 
     if (c->m_flags & CLIENT_MULTI) {
-        addReplyError(c,"WATCH inside MULTI is not allowed");
+        c->addReplyError("WATCH inside MULTI is not allowed");
         return;
     }
     for (j = 1; j < c->m_argc; j++)

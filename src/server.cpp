@@ -2332,13 +2332,13 @@ int processCommand(client *c) {
     c->m_cmd = c->m_last_cmd = lookupCommand((sds)c->m_argv[0]->ptr);
     if (!c->m_cmd) {
         flagTransaction(c);
-        addReplyErrorFormat(c,"unknown command '%s'",
+        c->addReplyErrorFormat("unknown command '%s'",
             (char*)c->m_argv[0]->ptr);
         return C_OK;
     } else if ((c->m_cmd->arity > 0 && c->m_cmd->arity != c->m_argc) ||
                (c->m_argc < -c->m_cmd->arity)) {
         flagTransaction(c);
-        addReplyErrorFormat(c,"wrong number of arguments for '%s' command",
+        c->addReplyErrorFormat("wrong number of arguments for '%s' command",
             c->m_cmd->name);
         return C_OK;
     }
@@ -2411,7 +2411,7 @@ int processCommand(client *c) {
         if (server.aof_last_write_status == C_OK)
             c->addReply( shared.bgsaveerr);
         else
-            addReplySds(c,
+            c->addReplySds(
                 sdscatprintf(sdsempty(),
                 "-MISCONF Errors writing to the AOF file: %s\r\n",
                 strerror(server.aof_last_write_errno)));
@@ -2448,7 +2448,7 @@ int processCommand(client *c) {
         c->m_cmd->proc != unsubscribeCommand &&
         c->m_cmd->proc != psubscribeCommand &&
         c->m_cmd->proc != punsubscribeCommand) {
-        addReplyError(c,"only (P)SUBSCRIBE / (P)UNSUBSCRIBE / PING / QUIT allowed in this context");
+        c->addReplyError("only (P)SUBSCRIBE / (P)UNSUBSCRIBE / PING / QUIT allowed in this context");
         return C_OK;
     }
 
@@ -2637,13 +2637,13 @@ int time_independent_strcmp(const char *a, const char *b) {
 
 void authCommand(client *c) {
     if (!server.requirepass) {
-        addReplyError(c,"Client sent AUTH, but no password is set");
+        c->addReplyError("Client sent AUTH, but no password is set");
     } else if (!time_independent_strcmp((const char*)c->m_argv[1]->ptr, (const char*)server.requirepass)) {
       c->m_authenticated = 1;
       c->addReply(shared.ok);
     } else {
       c->m_authenticated = 0;
-      addReplyError(c,"invalid password");
+      c->addReplyError("invalid password");
     }
 }
 
@@ -2652,7 +2652,7 @@ void authCommand(client *c) {
 void pingCommand(client *c) {
     /* The command takes zero or one arguments. */
     if (c->m_argc > 2) {
-        addReplyErrorFormat(c,"wrong number of arguments for '%s' command",
+        c->addReplyErrorFormat("wrong number of arguments for '%s' command",
             c->m_cmd->name);
         return;
     }
@@ -2690,7 +2690,7 @@ void timeCommand(client *c) {
 /* Helper function for addReplyCommand() to output flags. */
 int addReplyCommandFlag(client *c, struct redisCommand *cmd, int f, char *reply) {
     if (cmd->m_flags & f) {
-        addReplyStatus(c, reply);
+        c->addReplyStatus( reply);
         return 1;
     }
     return 0;
@@ -2707,7 +2707,7 @@ void addReplyCommand(client *c, struct redisCommand *cmd) {
         addReplyLongLong(c, cmd->arity);
 
         int flagcount = 0;
-        void *flaglen = addDeferredMultiBulkLength(c);
+        void *flaglen = c->addDeferredMultiBulkLength();
         flagcount += addReplyCommandFlag(c,cmd,CMD_WRITE, "write");
         flagcount += addReplyCommandFlag(c,cmd,CMD_READONLY, "readonly");
         flagcount += addReplyCommandFlag(c,cmd,CMD_DENYOOM, "denyoom");
@@ -2724,7 +2724,7 @@ void addReplyCommand(client *c, struct redisCommand *cmd) {
         if ((cmd->getkeys_proc && !(cmd->m_flags & CMD_MODULE)) ||
             cmd->m_flags & CMD_MODULE_GETKEYS)
         {
-            addReplyStatus(c, "movablekeys");
+            c->addReplyStatus( "movablekeys");
             flagcount += 1;
         }
         setDeferredMultiBulkLength(c, flaglen, flagcount);
@@ -2758,12 +2758,12 @@ void commandCommand(client *c) {
         int *keys, numkeys, j;
 
         if (!cmd) {
-            addReplyErrorFormat(c,"Invalid command specified");
+            c->addReplyErrorFormat("Invalid command specified");
             return;
         } else if ((cmd->arity > 0 && cmd->arity != c->m_argc-2) ||
                    ((c->m_argc-2) < -cmd->arity))
         {
-            addReplyError(c,"Invalid number of arguments specified for command");
+            c->addReplyError("Invalid number of arguments specified for command");
             return;
         }
 
@@ -2772,7 +2772,7 @@ void commandCommand(client *c) {
         for (j = 0; j < numkeys; j++) addReplyBulk(c,c->m_argv[keys[j]+2]);
         getKeysFreeResult(keys);
     } else {
-        addReplyError(c, "Unknown subcommand or wrong number of arguments.");
+        c->addReplyError( "Unknown subcommand or wrong number of arguments.");
         return;
     }
 }

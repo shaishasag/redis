@@ -253,7 +253,7 @@ void sortCommand(client *c) {
                 /* If BY is specified with a real patter, we can't accept
                  * it in cluster mode. */
                 if (server.cluster_enabled) {
-                    addReplyError(c,"BY option of SORT denied in Cluster mode.");
+                    c->addReplyError("BY option of SORT denied in Cluster mode.");
                     syntax_error++;
                     break;
                 }
@@ -261,7 +261,7 @@ void sortCommand(client *c) {
             j++;
         } else if (!strcasecmp((const char*)c->m_argv[j]->ptr,"get") && leftargs >= 1) {
             if (server.cluster_enabled) {
-                addReplyError(c,"GET option of SORT denied in Cluster mode.");
+                c->addReplyError("GET option of SORT denied in Cluster mode.");
                 syntax_error++;
                 break;
             }
@@ -499,7 +499,7 @@ void sortCommand(client *c) {
      * GET/DEL/INCR/DECR operations if any. */
     outputlen = getop ? getop*(end-start+1) : end-start+1;
     if (int_convertion_error) {
-        addReplyError(c,"One or more scores can't be converted into double");
+        c->addReplyError("One or more scores can't be converted into double");
     } else if (storekey == NULL) {
         /* STORE option not specified, sent the sorting result to client */
         addReplyMultiBulkLen(c,outputlen);

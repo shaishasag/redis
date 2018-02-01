@@ -298,7 +298,7 @@ void luaReplyToRedisReply(client *c, lua_State *lua) {
         if (t == LUA_TSTRING) {
             sds err = sdsnew(lua_tostring(lua,-1));
             sdsmapchars(err,"\r\n","  ",2);
-            addReplySds(c,sdscatprintf(sdsempty(),"-%s\r\n",err));
+            c->addReplySds(sdscatprintf(sdsempty(),"-%s\r\n",err));
             sdsfree(err);
             lua_pop(lua,2);
             return;
@@ -311,11 +311,11 @@ void luaReplyToRedisReply(client *c, lua_State *lua) {
         if (t == LUA_TSTRING) {
             sds ok = sdsnew(lua_tostring(lua,-1));
             sdsmapchars(ok,"\r\n","  ",2);
-            addReplySds(c,sdscatprintf(sdsempty(),"+%s\r\n",ok));
+            c->addReplySds(sdscatprintf(sdsempty(),"+%s\r\n",ok));
             sdsfree(ok);
             lua_pop(lua,1);
         } else {
-            void *replylen = addDeferredMultiBulkLength(c);
+            void *replylen = c->addDeferredMultiBulkLength();
             int j = 1, mbulklen = 0;
 
             lua_pop(lua,1); /* Discard the 'ok' field value we popped */
@@ -1194,7 +1194,7 @@ sds luaCreateFunction(client *c, lua_State *lua, robj *body) {
 
     if (luaL_loadbuffer(lua,funcdef,sdslen(funcdef),"@user_script")) {
         if (c != NULL) {
-            addReplyErrorFormat(c,
+            c->addReplyErrorFormat(
                 "Error compiling script (new function): %s\n",
                 lua_tostring(lua,-1));
         }
@@ -1207,7 +1207,7 @@ sds luaCreateFunction(client *c, lua_State *lua, robj *body) {
 
     if (lua_pcall(lua,0,0,0)) {
         if (c != NULL) {
-            addReplyErrorFormat(c,"Error running script (new function): %s\n",
+            c->addReplyErrorFormat("Error running script (new function): %s\n",
                 lua_tostring(lua,-1));
         }
         lua_pop(lua,1);
@@ -1277,10 +1277,10 @@ void evalGenericCommand(client *c, int evalsha) {
     if (getLongLongFromObjectOrReply(c,c->m_argv[2],&numkeys,NULL) != C_OK)
         return;
     if (numkeys > (c->m_argc - 3)) {
-        addReplyError(c,"Number of keys can't be greater than number of args");
+        c->addReplyError("Number of keys can't be greater than number of args");
         return;
     } else if (numkeys < 0) {
-        addReplyError(c,"Number of keys can't be negative");
+        c->addReplyError("Number of keys can't be negative");
         return;
     }
 
@@ -1393,7 +1393,7 @@ void evalGenericCommand(client *c, int evalsha) {
     }
 
     if (err) {
-        addReplyErrorFormat(c,"Error running script (call to %s): %s\n",
+        c->addReplyErrorFormat("Error running script (call to %s): %s\n",
             funcname, lua_tostring(lua,-1));
         lua_pop(lua,2); /* Consume the Lua reply and remove error handler. */
     } else {
@@ -1462,7 +1462,7 @@ void evalShaCommand(client *c) {
     if (!(c->m_flags & CLIENT_LUA_DEBUG))
         evalGenericCommand(c,1);
     else {
-        addReplyError(c,"Please use EVAL instead of EVALSHA for debugging");
+        c->addReplyError("Please use EVAL instead of EVALSHA for debugging");
         return;
     }
 }
@@ -1490,16 +1490,16 @@ void scriptCommand(client *c) {
         forceCommandPropagation(c,PROPAGATE_REPL|PROPAGATE_AOF);
     } else if (c->m_argc == 2 && !strcasecmp((const char*)c->m_argv[1]->ptr,"kill")) {
         if (server.lua_caller == NULL) {
-            addReplySds(c,sdsnew("-NOTBUSY No scripts in execution right now.\r\n"));
+            c->addReplySds(sdsnew("-NOTBUSY No scripts in execution right now.\r\n"));
         } else if (server.lua_write_dirty) {
-            addReplySds(c,sdsnew("-UNKILLABLE Sorry the script already executed write commands against the dataset. You can either wait the script termination or kill the server in a hard way using the SHUTDOWN NOSAVE command.\r\n"));
+            c->addReplySds(sdsnew("-UNKILLABLE Sorry the script already executed write commands against the dataset. You can either wait the script termination or kill the server in a hard way using the SHUTDOWN NOSAVE command.\r\n"));
         } else {
             server.lua_kill = 1;
             c->addReply(shared.ok);
         }
     } else if (c->m_argc == 3 && !strcasecmp((const char*)c->m_argv[1]->ptr,"debug")) {
         if (clientHasPendingReplies(c)) {
-            addReplyError(c,"SCRIPT DEBUG must be called outside a pipeline");
+            c->addReplyError("SCRIPT DEBUG must be called outside a pipeline");
             return;
         }
         if (!strcasecmp((const char*)c->m_argv[2]->ptr,"no")) {
@@ -1513,10 +1513,10 @@ void scriptCommand(client *c) {
             c->addReply(shared.ok);
             c->m_flags |= CLIENT_LUA_DEBUG_SYNC;
         } else {
-            addReplyError(c,"Use SCRIPT DEBUG yes/sync/no");
+            c->addReplyError("Use SCRIPT DEBUG yes/sync/no");
         }
     } else {
-        addReplyError(c, "Unknown SCRIPT subcommand or wrong # of args.");
+        c->addReplyError( "Unknown SCRIPT subcommand or wrong # of args.");
     }
 }
 
@@ -1628,7 +1628,7 @@ int ldbStartSession(client *c) {
     if (ldb.forked) {
         pid_t cp = fork();
         if (cp == -1) {
-            addReplyError(c,"Fork() failed: can't run EVAL in debugging mode.");
+            c->addReplyError("Fork() failed: can't run EVAL in debugging mode.");
             return 0;
         } else if (cp == 0) {
             /* Child. Let's ignore important signals handled by the parent. */

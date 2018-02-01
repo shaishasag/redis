@@ -579,9 +579,9 @@ int getDoubleFromObjectOrReply(client *c, robj *o, double *target, const char *m
     double value;
     if (getDoubleFromObject(o, &value) != C_OK) {
         if (msg != NULL) {
-            addReplyError(c,(char*)msg);
+            c->addReplyError((char*)msg);
         } else {
-            addReplyError(c,"value is not a valid float");
+            c->addReplyError("value is not a valid float");
         }
         return C_ERR;
     }
@@ -621,9 +621,9 @@ int getLongDoubleFromObjectOrReply(client *c, robj *o, long double *target, cons
     long double value;
     if (getLongDoubleFromObject(o, &value) != C_OK) {
         if (msg != NULL) {
-            addReplyError(c,(char*)msg);
+            c->addReplyError((char*)msg);
         } else {
-            addReplyError(c,"value is not a valid float");
+            c->addReplyError("value is not a valid float");
         }
         return C_ERR;
     }
@@ -654,9 +654,9 @@ int getLongLongFromObjectOrReply(client *c, robj *o, long long *target, const ch
     long long value;
     if (getLongLongFromObject(o, &value) != C_OK) {
         if (msg != NULL) {
-            addReplyError(c,(char*)msg);
+            c->addReplyError((char*)msg);
         } else {
-            addReplyError(c,"value is not an integer or out of range");
+            c->addReplyError("value is not an integer or out of range");
         }
         return C_ERR;
     }
@@ -670,9 +670,9 @@ int getLongFromObjectOrReply(client *c, robj *o, long *target, const char *msg) 
     if (getLongLongFromObjectOrReply(c, o, &value, msg) != C_OK) return C_ERR;
     if (value < LONG_MIN || value > LONG_MAX) {
         if (msg != NULL) {
-            addReplyError(c,(char*)msg);
+            c->addReplyError((char*)msg);
         } else {
-            addReplyError(c,"value is out of range");
+            c->addReplyError("value is out of range");
         }
         return C_ERR;
     }
@@ -1013,17 +1013,17 @@ void objectCommand(client *c) {
     robj *o;
 
     if (!strcasecmp((const char*)c->m_argv[1]->ptr,"help") && c->m_argc == 2) {
-        void *blenp = addDeferredMultiBulkLength(c);
+        void *blenp = c->addDeferredMultiBulkLength();
         int blen = 0;
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "OBJECT <subcommand> key. Subcommands:");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "refcount -- Return the number of references of the value associated with the specified key.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "encoding -- Return the kind of internal representation used in order to store the value associated with a key.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "idletime -- Return the idle time of the key, that is the approximated number of seconds elapsed since the last access to the key.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "freq -- Return the access frequency index of the key. The returned integer is proportional to the logarithm of the recent access frequency of the key.");
         setDeferredMultiBulkLength(c,blenp,blen);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"refcount") && c->m_argc == 3) {
@@ -1038,7 +1038,7 @@ void objectCommand(client *c) {
         if ((o = objectCommandLookupOrReply(c,c->m_argv[2],shared.nullbulk))
                 == NULL) return;
         if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
-            addReplyError(c,"An LFU maxmemory policy is selected, idle time not tracked. Please note that when switching between policies at runtime LRU and LFU data will take some time to adjust.");
+            c->addReplyError("An LFU maxmemory policy is selected, idle time not tracked. Please note that when switching between policies at runtime LRU and LFU data will take some time to adjust.");
             return;
         }
         addReplyLongLong(c,estimateObjectIdleTime(o)/1000);
@@ -1046,7 +1046,7 @@ void objectCommand(client *c) {
         if ((o = objectCommandLookupOrReply(c,c->m_argv[2],shared.nullbulk))
                 == NULL) return;
         if (!(server.maxmemory_policy & MAXMEMORY_FLAG_LFU)) {
-            addReplyError(c,"An LFU maxmemory policy is not selected, access frequency not tracked. Please note that when switching between policies at runtime LRU and LFU data will take some time to adjust.");
+            c->addReplyError("An LFU maxmemory policy is not selected, access frequency not tracked. Please note that when switching between policies at runtime LRU and LFU data will take some time to adjust.");
             return;
         }
         /* LFUDecrAndReturn should be called
@@ -1055,7 +1055,7 @@ void objectCommand(client *c) {
          * when the key is read or overwritten. */
         addReplyLongLong(c,LFUDecrAndReturn(o));
     } else {
-        addReplyErrorFormat(c, "Unknown subcommand or wrong number of arguments for '%s'. Try OBJECT help",
+        c->addReplyErrorFormat( "Unknown subcommand or wrong number of arguments for '%s'. Try OBJECT help",
             (char *)c->m_argv[1]->ptr);
     }
 }
@@ -1176,7 +1176,7 @@ void memoryCommand(client *c) {
                 return;
             }
         }
-        addReplyError(c, "Error purging dirty pages");
+        c->addReplyError( "Error purging dirty pages");
 #else
         c->addReply( shared.ok);
         /* Nothing to do for other allocators. */
@@ -1194,6 +1194,6 @@ void memoryCommand(client *c) {
         addReplyBulkCString(c,
 "MEMORY MALLOC-STATS                  - Show allocator internal stats");
     } else {
-        addReplyError(c,"Syntax error. Try MEMORY HELP");
+        c->addReplyError("Syntax error. Try MEMORY HELP");
     }
 }

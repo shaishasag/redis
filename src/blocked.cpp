@@ -81,7 +81,7 @@ int getTimeoutFromObjectOrReply(client *c, robj *object, mstime_t *timeout, int 
         return C_ERR;
 
     if (tval < 0) {
-        addReplyError(c,"timeout is negative");
+        c->addReplyError("timeout is negative");
         return C_ERR;
     }
 
@@ -184,7 +184,7 @@ void disconnectAllBlockedClients() {
         client *c = (client *)ln->listNodeValue();
 
         if (c->m_flags & CLIENT_BLOCKED) {
-            addReplySds(c,sdsnew(
+            c->addReplySds(sdsnew(
                 "-UNBLOCKED force unblock from blocking operation, "
                 "instance state changed (master -> slave?)\r\n"));
             unblockClient(c);

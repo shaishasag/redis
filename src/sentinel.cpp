@@ -2619,7 +2619,7 @@ void addReplySentinelRedisInstance(client *c, sentinelRedisInstance *ri) {
     void *mbl;
     int fields = 0;
 
-    mbl = addDeferredMultiBulkLength(c);
+    mbl = c->addDeferredMultiBulkLength();
 
     addReplyBulkCString(c,"name");
     addReplyBulkCString(c,ri->name);
@@ -2827,7 +2827,7 @@ sentinelRedisInstance *sentinelGetMasterByNameOrReplyError(client *c,
 
     ri = (sentinelRedisInstance *)sentinel.masters->dictFetchValue(name->ptr);
     if (!ri) {
-        addReplyError(c,"No such master with that name");
+        c->addReplyError("No such master with that name");
         return NULL;
     }
     return ri;
@@ -2966,11 +2966,11 @@ void sentinelCommand(client *c) {
         if ((ri = sentinelGetMasterByNameOrReplyError(c,c->m_argv[2])) == NULL)
             return;
         if (ri->m_flags & SRI_FAILOVER_IN_PROGRESS) {
-            addReplySds(c,sdsnew("-INPROG Failover already in progress\r\n"));
+            c->addReplySds(sdsnew("-INPROG Failover already in progress\r\n"));
             return;
         }
         if (sentinelSelectSlave(ri) == NULL) {
-            addReplySds(c,sdsnew("-NOGOODSLAVE No suitable slave to promote\r\n"));
+            c->addReplySds(sdsnew("-NOGOODSLAVE No suitable slave to promote\r\n"));
             return;
         }
         serverLog(LL_WARNING,"Executing user requested FAILOVER of '%s'",
@@ -2996,7 +2996,7 @@ void sentinelCommand(client *c) {
             != C_OK) return;
 
         if (quorum <= 0) {
-            addReplyError(c, "Quorum must be 1 or greater.");
+            c->addReplyError( "Quorum must be 1 or greater.");
             return;
         }
 
@@ -3004,7 +3004,7 @@ void sentinelCommand(client *c) {
          * to createSentinelRedisInstance(), otherwise we may trigger a
          * DNS lookup at runtime. */
         if (anetResolveIP(NULL, (char*)c->m_argv[3]->ptr,ip,sizeof(ip)) == ANET_ERR) {
-            addReplyError(c,"Invalid IP address specified");
+            c->addReplyError("Invalid IP address specified");
             return;
         }
 
@@ -3014,13 +3014,13 @@ void sentinelCommand(client *c) {
         if (ri == NULL) {
             switch(errno) {
             case EBUSY:
-                addReplyError(c,"Duplicated master name");
+                c->addReplyError("Duplicated master name");
                 break;
             case EINVAL:
-                addReplyError(c,"Invalid port number");
+                c->addReplyError("Invalid port number");
                 break;
             default:
-                addReplyError(c,"Unspecified error adding the instance");
+                c->addReplyError("Unspecified error adding the instance");
                 break;
             }
         } else {
@@ -3054,7 +3054,7 @@ void sentinelCommand(client *c) {
             == NULL) return;
         int result = sentinelIsQuorumReachable(ri,&usable);
         if (result == SENTINEL_ISQR_OK) {
-            addReplySds(c, sdscatfmt(sdsempty(),
+            c->addReplySds( sdscatfmt(sdsempty(),
                 "+OK %i usable Sentinels. Quorum and failover authorization "
                 "can be reached\r\n",usable));
         } else {
@@ -3069,7 +3069,7 @@ void sentinelCommand(client *c) {
                               " majority and authorize a failover");
             }
             e = sdscat(e,"\r\n");
-            addReplySds(c,e);
+            c->addReplySds(e);
         }
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"set")) {
         if (c->m_argc < 3 || c->m_argc % 2 == 0) goto numargserr;
@@ -3155,19 +3155,19 @@ void sentinelCommand(client *c) {
                 addReplyBulkCString(c,"crash-after-election");
                 addReplyBulkCString(c,"crash-after-promotion");
             } else {
-                addReplyError(c,"Unknown failure simulation specified");
+                c->addReplyError("Unknown failure simulation specified");
                 return;
             }
         }
         c->addReply(shared.ok);
     } else {
-        addReplyErrorFormat(c,"Unknown sentinel subcommand '%s'",
+        c->addReplyErrorFormat("Unknown sentinel subcommand '%s'",
                                (char*)c->m_argv[1]->ptr);
     }
     return;
 
 numargserr:
-    addReplyErrorFormat(c,"Wrong number of arguments for 'sentinel %s'",
+    c->addReplyErrorFormat("Wrong number of arguments for 'sentinel %s'",
                           (char*)c->m_argv[1]->ptr);
 }
 
@@ -3298,7 +3298,7 @@ void sentinelSetCommand(client *c) {
        } else if (!strcasecmp(option,"notification-script")) {
             /* notification-script <path> */
             if (strlen(value) && access(value,X_OK) == -1) {
-                addReplyError(c,
+                c->addReplyError(
                     "Notification script seems non existing or non executable");
                 if (changes) sentinelFlushConfig();
                 return;
@@ -3309,7 +3309,7 @@ void sentinelSetCommand(client *c) {
        } else if (!strcasecmp(option,"client-reconfig-script")) {
             /* client-reconfig-script <path> */
             if (strlen(value) && access(value,X_OK) == -1) {
-                addReplyError(c,
+                c->addReplyError(
                     "Client reconfiguration script seems non existing or "
                     "non executable");
                 if (changes) sentinelFlushConfig();
@@ -3330,7 +3330,7 @@ void sentinelSetCommand(client *c) {
             ri->quorum = ll;
             changes++;
         } else {
-            addReplyErrorFormat(c,"Unknown option '%s' for SENTINEL SET",
+            c->addReplyErrorFormat("Unknown option '%s' for SENTINEL SET",
                 option);
             if (changes) sentinelFlushConfig();
             return;
@@ -3344,7 +3344,7 @@ void sentinelSetCommand(client *c) {
 
 badfmt: /* Bad format errors */
     if (changes) sentinelFlushConfig();
-    addReplyErrorFormat(c,"Invalid argument '%s' for SENTINEL SET '%s'",
+    c->addReplyErrorFormat("Invalid argument '%s' for SENTINEL SET '%s'",
             value, option);
 }
 
@@ -3356,7 +3356,7 @@ badfmt: /* Bad format errors */
  * for all the three kind of instances: masters, slaves, sentinels. */
 void sentinelPublishCommand(client *c) {
     if (strcmp((char*)c->m_argv[1]->ptr,SENTINEL_HELLO_CHANNEL)) {
-        addReplyError(c, "Only HELLO messages are accepted by Sentinel instances.");
+        c->addReplyError( "Only HELLO messages are accepted by Sentinel instances.");
         return;
     }
     sentinelProcessHelloMessage((char*)c->m_argv[2]->ptr,sdslen((sds)c->m_argv[2]->ptr));

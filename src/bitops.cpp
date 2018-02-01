@@ -419,7 +419,7 @@ int getBitOffsetFromArgument(client *c, robj *o, size_t *offset, int hash, int b
     if (p[0] == '#' && hash && bits > 0) usehash = 1;
 
     if (string2ll(p+usehash,plen-usehash,&loffset) == 0) {
-        addReplyError(c,err);
+        c->addReplyError(err);
         return C_ERR;
     }
 
@@ -429,7 +429,7 @@ int getBitOffsetFromArgument(client *c, robj *o, size_t *offset, int hash, int b
     /* Limit offset to 512MB in bytes */
     if ((loffset < 0) || ((unsigned long long)loffset >> 3) >= (512*1024*1024))
     {
-        addReplyError(c,err);
+        c->addReplyError(err);
         return C_ERR;
     }
 
@@ -454,7 +454,7 @@ int getBitfieldTypeFromArgument(client *c, robj *o, int *sign, int *bits) {
     } else if (p[0] == 'u') {
         *sign = 0;
     } else {
-        addReplyError(c,err);
+        c->addReplyError(err);
         return C_ERR;
     }
 
@@ -463,7 +463,7 @@ int getBitfieldTypeFromArgument(client *c, robj *o, int *sign, int *bits) {
         (*sign == 1 && llbits > 64) ||
         (*sign == 0 && llbits > 63))
     {
-        addReplyError(c,err);
+        c->addReplyError(err);
         return C_ERR;
     }
     *bits = llbits;
@@ -538,7 +538,7 @@ void setbitCommand(client *c) {
 
     /* Bits can only be set or cleared... */
     if (on & ~1) {
-        addReplyError(c,err);
+        c->addReplyError(err);
         return;
     }
 
@@ -615,7 +615,7 @@ void bitopCommand(client *c) {
 
     /* Sanity check: NOT accepts only a single key argument. */
     if (op == BITOP_NOT && c->m_argc != 4) {
-        addReplyError(c,"BITOP NOT must be called with a single source key.");
+        c->addReplyError("BITOP NOT must be called with a single source key.");
         return;
     }
 
@@ -827,7 +827,7 @@ void bitposCommand(client *c) {
     if (getLongFromObjectOrReply(c,c->m_argv[2],&bit,NULL) != C_OK)
         return;
     if (bit != 0 && bit != 1) {
-        addReplyError(c, "The bit argument must be 1 or 0.");
+        c->addReplyError( "The bit argument must be 1 or 0.");
         return;
     }
 
@@ -944,7 +944,7 @@ void bitfieldCommand(client *c) {
             else if (!strcasecmp(owtypename,"fail"))
                 owtype = BFOVERFLOW_FAIL;
             else {
-                addReplyError(c,"Invalid OVERFLOW type specified");
+                c->addReplyError("Invalid OVERFLOW type specified");
                 zfree(ops);
                 return;
             }

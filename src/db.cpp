@@ -484,11 +484,11 @@ void selectCommand(client *c) {
         return;
 
     if (server.cluster_enabled && id != 0) {
-        addReplyError(c,"SELECT is not allowed in cluster mode");
+        c->addReplyError("SELECT is not allowed in cluster mode");
         return;
     }
     if (c->selectDb(id) == C_ERR) {
-        addReplyError(c,"DB index is out of range");
+        c->addReplyError("DB index is out of range");
     } else {
         c->addReply(shared.ok);
     }
@@ -511,7 +511,7 @@ void keysCommand(client *c) {
     sds pattern = (sds)c->m_argv[1]->ptr;
     int plen = sdslen(pattern), allkeys;
     unsigned long numkeys = 0;
-    void *replylen = addDeferredMultiBulkLength(c);
+    void *replylen = c->addDeferredMultiBulkLength();
 
     dictIterator di(c->m_cur_selected_db->m_dict, 1);
     allkeys = (pattern[0] == '*' && pattern[1] == '\0');
@@ -576,7 +576,7 @@ int parseScanCursorOrReply(client *c, robj *o, unsigned long *cursor) {
     *cursor = strtoul((const char *)o->ptr, &eptr, 10);
     if (isspace(((char*)o->ptr)[0]) || eptr[0] != '\0' || errno == ERANGE)
     {
-        addReplyError(c, "invalid cursor");
+        c->addReplyError( "invalid cursor");
         return C_ERR;
     }
     return C_OK;
@@ -806,7 +806,7 @@ void typeCommand(client *c) {
         default: type = "unknown"; break;
         }
     }
-    addReplyStatus(c,type);
+    c->addReplyStatus(type);
 }
 
 void shutdownCommand(client *c) {
@@ -834,7 +834,7 @@ void shutdownCommand(client *c) {
     if (server.loading || server.sentinel_mode)
         flags = (flags & ~SHUTDOWN_SAVE) | SHUTDOWN_NOSAVE;
     if (prepareForShutdown(flags) == C_OK) exit(0);
-    addReplyError(c,"Errors trying to SHUTDOWN. Check logs.");
+    c->addReplyError("Errors trying to SHUTDOWN. Check logs.");
 }
 
 void renameGenericCommand(client *c, int nx) {
@@ -894,7 +894,7 @@ void moveCommand(client *c) {
     long long dbid, expire;
 
     if (server.cluster_enabled) {
-        addReplyError(c,"MOVE is not allowed in cluster mode");
+        c->addReplyError("MOVE is not allowed in cluster mode");
         return;
     }
 
@@ -1003,7 +1003,7 @@ void swapdbCommand(client *c) {
 
     /* Not allowed in cluster mode: we have just DB 0 there. */
     if (server.cluster_enabled) {
-        addReplyError(c,"SWAPDB is not allowed in cluster mode");
+        c->addReplyError("SWAPDB is not allowed in cluster mode");
         return;
     }
 
@@ -1018,7 +1018,7 @@ void swapdbCommand(client *c) {
 
     /* Swap... */
     if (dbSwapDatabases(id1,id2) == C_ERR) {
-        addReplyError(c,"DB index is out of range");
+        c->addReplyError("DB index is out of range");
         return;
     } else {
         server.dirty++;

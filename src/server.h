@@ -689,6 +689,15 @@ struct client {
     void _addReplySdsToList(sds s);
     void _addReplyStringToList(const char *s, size_t len);
     void addReply(robj *obj);
+    void addReplySds(sds s);
+    void addReplyString(const char *s, size_t len);
+    void addReplyErrorLength(const char *s, size_t len);
+    void addReplyError(const char *err);
+    void addReplyErrorFormat(const char *fmt, ...);
+    void addReplyStatusLength(const char *s, size_t len);
+    void addReplyStatus(const char *status);
+    void addReplyStatusFormat(const char *fmt, ...);
+    void *addDeferredMultiBulkLength();
 
     uint64_t m_id;            /* Client incremental unique ID. */
     int m_fd;                 /* Client socket. */
@@ -1430,7 +1439,6 @@ void freeClient(client *c);
 void freeClientAsync(client *c);
 void resetClient(client *c);
 void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask);
-void *addDeferredMultiBulkLength(client *c);
 void setDeferredMultiBulkLength(client *c, void *node, long length);
 void processInputBuffer(client *c);
 void acceptHandler(aeEventLoop *el, int fd, void *privdata, int mask);

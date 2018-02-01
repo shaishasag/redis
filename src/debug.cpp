@@ -261,52 +261,52 @@ void computeDatasetDigest(unsigned char *final) {
 
 void debugCommand(client *c) {
     if (c->m_argc == 1) {
-        addReplyError(c,"You must specify a subcommand for DEBUG. Try DEBUG HELP for info.");
+        c->addReplyError("You must specify a subcommand for DEBUG. Try DEBUG HELP for info.");
         return;
     }
 
     if (!strcasecmp((const char*)c->m_argv[1]->ptr,"help")) {
-        void *blenp = addDeferredMultiBulkLength(c);
+        void *blenp = c->addDeferredMultiBulkLength();
         int blen = 0;
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "DEBUG <subcommand> arg arg ... arg. Subcommands:");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "segfault -- Crash the server with sigsegv.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "panic -- Crash the server simulating a panic.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "restart  -- Graceful restart: save config, db, restart.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "crash-and-recovery <milliseconds> -- Hard crash and restart after <milliseconds> delay.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "assert   -- Crash by assertion failed.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "reload   -- Save the RDB on disk and reload it back in memory.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "loadaof  -- Flush the AOF buffers on disk and reload the AOF in memory.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "object <key> -- Show low level info about key and associated value.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "sdslen <key> -- Show low level SDS string info representing key and value.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "ziplist <key> -- Show low level info about the ziplist encoding.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "populate <count> [prefix] [size] -- Create <count> string keys named key:<num>. If a prefix is specified is used instead of the 'key' prefix.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "digest   -- Outputs an hex signature representing the current DB content.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "sleep <seconds> -- Stop the server for <seconds>. Decimals allowed.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "set-active-expire (0|1) -- Setting it to 0 disables expiring keys in background when they are not accessed (otherwise the Redis behavior). Setting it to 1 reenables back the default.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "lua-always-replicate-commands (0|1) -- Setting it to 1 makes Lua replication defaulting to replicating single commands, without the script having to enable effects replication.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "error <string> -- Return a Redis protocol error with <string> as message. Useful for clients unit tests to simulate Redis errors.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "structsize -- Return the size of different Redis core C structures.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "htstats <dbid> -- Return hash table statistics of the specified Redis database.");
-        blen++; addReplyStatus(c,
+        blen++; c->addReplyStatus(
         "change-repl-id -- Change the replication IDs of the instance. Dangerous, should be used only for testing the replication subsystem.");
         setDeferredMultiBulkLength(c,blenp,blen);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"segfault")) {
@@ -326,7 +326,7 @@ void debugCommand(client *c) {
             (RESTART_SERVER_GRACEFULLY|RESTART_SERVER_CONFIG_REWRITE) :
              RESTART_SERVER_NONE;
         restartServer(flags,delay);
-        addReplyError(c,"failed to restart the server. Check server logs.");
+        c->addReplyError("failed to restart the server. Check server logs.");
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"oom")) {
         void* ptr = (void*)zmalloc(ULONG_MAX); /* Should trigger an out of memory. */
         zfree(ptr);
@@ -343,7 +343,7 @@ void debugCommand(client *c) {
         }
         emptyDb(-1,EMPTYDB_NO_FLAGS,NULL);
         if (rdbLoad(server.rdb_filename,NULL) != C_OK) {
-            addReplyError(c,"Error trying to load the RDB dump");
+            c->addReplyError("Error trying to load the RDB dump");
             return;
         }
         serverLog(LL_WARNING,"DB reloaded by DEBUG RELOAD");
@@ -403,7 +403,7 @@ void debugCommand(client *c) {
             remaining -= used;
         }
 
-        addReplyStatusFormat(c,
+        c->addReplyStatusFormat(
             "Value at:%p refcount:%d "
             "encoding:%s serializedlength:%zu "
             "lru:%d lru_seconds_idle:%llu%s",
@@ -423,9 +423,9 @@ void debugCommand(client *c) {
         key = (sds)de->dictGetKey();
 
         if (val->type != OBJ_STRING || !sdsEncodedObject(val)) {
-            addReplyError(c,"Not an sds encoded string.");
+            c->addReplyError("Not an sds encoded string.");
         } else {
-            addReplyStatusFormat(c,
+            c->addReplyStatusFormat(
                 "key_sds_len:%lld, key_sds_avail:%lld, key_zmalloc: %lld, "
                 "val_sds_len:%lld, val_sds_avail:%lld, val_zmalloc: %lld",
                 (long long) sdslen(key),
@@ -442,10 +442,10 @@ void debugCommand(client *c) {
                 == NULL) return;
 
         if (o->encoding != OBJ_ENCODING_ZIPLIST) {
-            addReplyError(c,"Not an sds encoded string.");
+            c->addReplyError("Not an sds encoded string.");
         } else {
             ziplistRepr((unsigned char *)o->ptr);
-            addReplyStatus(c,"Ziplist structure printed on stdout");
+            c->addReplyStatus("Ziplist structure printed on stdout");
         }
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"populate") &&
                c->m_argc >= 3 && c->m_argc <= 5) {
@@ -489,7 +489,7 @@ void debugCommand(client *c) {
         computeDatasetDigest(digest);
         for (j = 0; j < 20; j++)
             d = sdscatprintf(d, "%02x",digest[j]);
-        addReplyStatus(c,d);
+        c->addReplyStatus(d);
         sdsfree(d);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"sleep") && c->m_argc == 3) {
         double dtime = strtod((const char *)c->m_argv[2]->ptr,NULL);
@@ -516,7 +516,7 @@ void debugCommand(client *c) {
         errstr = sdscatsds(errstr, (sds)c->m_argv[2]->ptr);
         errstr = sdsmapchars(errstr,"\n\r","  ",2); /* no newlines in errors. */
         errstr = sdscatlen(errstr,"\r\n",2);
-        addReplySds(c,errstr);
+        c->addReplySds(errstr);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"structsize") && c->m_argc == 2) {
         sds sizes = sdsempty();
         sizes = sdscatprintf(sizes,"bits:%d ",(sizeof(void*) == 8)?64:32);
@@ -536,7 +536,7 @@ void debugCommand(client *c) {
         if (getLongFromObjectOrReply(c, c->m_argv[2], &dbid, NULL) != C_OK)
             return;
         if (dbid < 0 || dbid >= server.dbnum) {
-            addReplyError(c,"Out of range database");
+            c->addReplyError("Out of range database");
             return;
         }
 
@@ -555,7 +555,7 @@ void debugCommand(client *c) {
         clearReplicationId2();
         c->addReply(shared.ok);
     } else {
-        addReplyErrorFormat(c, "Unknown DEBUG subcommand or wrong number of arguments for '%s'",
+        c->addReplyErrorFormat( "Unknown DEBUG subcommand or wrong number of arguments for '%s'",
             (char*)c->m_argv[1]->ptr);
     }
 }

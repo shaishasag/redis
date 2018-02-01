@@ -294,7 +294,7 @@ void replicationFeedSlavesFromMasterStream(list *slaves, char *buf, size_t bufle
 
         /* Don't feed slaves that are still waiting for BGSAVE to start */
         if (slave->m_replication_state == SLAVE_STATE_WAIT_BGSAVE_START) continue;
-        addReplyString(slave,buf,buflen);
+        slave->addReplyString(buf,buflen);
     }
 }
 
@@ -381,7 +381,7 @@ long long addReplyReplicationBacklog(client *c, long long offset) {
             (server.repl_backlog_size - j) : len;
 
         serverLog(LL_DEBUG, "[PSYNC] addReply() length: %lld", thislen);
-        addReplySds(c,sdsnewlen(server.repl_backlog + j, thislen));
+        c->addReplySds(sdsnewlen(server.repl_backlog + j, thislen));
         len -= thislen;
         j = 0;
     }
@@ -591,7 +591,7 @@ int startBgsaveForReplication(int mincapa) {
             if (slave->m_replication_state == SLAVE_STATE_WAIT_BGSAVE_START) {
                 slave->m_flags &= ~CLIENT_SLAVE;
                 server.slaves->listDelNode(ln);
-                addReplyError(slave,
+                slave->addReplyError(
                     "BGSAVE failed, replication can't continue");
                 slave->m_flags |= CLIENT_CLOSE_AFTER_REPLY;
             }
@@ -627,7 +627,7 @@ void syncCommand(client *c) {
     /* Refuse SYNC requests if we are a slave but the link with our master
      * is not ok... */
     if (server.masterhost && server.repl_state != REPL_STATE_CONNECTED) {
-        addReplySds(c,sdsnew("-NOMASTERLINK Can't SYNC while not connected with my master\r\n"));
+        c->addReplySds(sdsnew("-NOMASTERLINK Can't SYNC while not connected with my master\r\n"));
         return;
     }
 
@@ -636,7 +636,7 @@ void syncCommand(client *c) {
      * buffer registering the differences between the BGSAVE and the current
      * dataset, so that we can copy to other slaves if needed. */
     if (clientHasPendingReplies(c)) {
-        addReplyError(c,"SYNC and PSYNC are invalid with pending output");
+        c->addReplyError("SYNC and PSYNC are invalid with pending output");
         return;
     }
 
@@ -792,7 +792,7 @@ void replconfCommand(client *c) {
             if (sdslen(ip) < sizeof(c->m_slave_ip)) {
                 memcpy(c->m_slave_ip,ip,sdslen(ip)+1);
             } else {
-                addReplyErrorFormat(c,"REPLCONF ip-address provided by "
+                c->addReplyErrorFormat("REPLCONF ip-address provided by "
                     "slave instance is too long: %zd bytes", sdslen(ip));
                 return;
             }
@@ -827,7 +827,7 @@ void replconfCommand(client *c) {
             if (server.masterhost && server.master) replicationSendAck();
             return;
         } else {
-            addReplyErrorFormat(c,"Unrecognized REPLCONF option: %s",
+            c->addReplyErrorFormat("Unrecognized REPLCONF option: %s",
                 (char*)c->m_argv[j]->ptr);
             return;
         }
@@ -1983,7 +1983,7 @@ void slaveofCommand(client *c) {
     /* SLAVEOF is not allowed in cluster mode as replication is automatically
      * configured using the current address of the master node. */
     if (server.cluster_enabled) {
-        addReplyError(c,"SLAVEOF not allowed in cluster mode.");
+        c->addReplyError("SLAVEOF not allowed in cluster mode.");
         return;
     }
 
@@ -2008,7 +2008,7 @@ void slaveofCommand(client *c) {
         if (server.masterhost && !strcasecmp((const char*)server.masterhost, (const char*)c->m_argv[1]->ptr)
             && server.masterport == port) {
             serverLog(LL_NOTICE,"SLAVE OF would result into synchronization with the master we are already connected with. No operation performed.");
-            addReplySds(c,sdsnew("+OK Already connected to specified master\r\n"));
+            c->addReplySds(sdsnew("+OK Already connected to specified master\r\n"));
             return;
         }
         /* There was no previous master or the user specified a different one,
@@ -2034,7 +2034,7 @@ void roleCommand(client *c) {
         addReplyMultiBulkLen(c,3);
         addReplyBulkCBuffer(c,"master",6);
         addReplyLongLong(c,server.master_repl_offset);
-        mbcount = addDeferredMultiBulkLength(c);
+        mbcount = c->addDeferredMultiBulkLength();
         listIter li(server.slaves);
         while((ln = li.listNext())) {
             client *slave = (client *)ln->listNodeValue();
@@ -2384,7 +2384,7 @@ void waitCommand(client *c) {
     long long offset = c->m_last_write_global_replication_offset;
 
     if (server.masterhost) {
-        addReplyError(c,"WAIT cannot be used with slave instances. Please also note that since Redis 4.0 if a slave is configured to be writable (which is not the default) writes to slaves are just local and are not propagated.");
+        c->addReplyError("WAIT cannot be used with slave instances. Please also note that since Redis 4.0 if a slave is configured to be writable (which is not the default) writes to slaves are just local and are not propagated.");
         return;
     }
 

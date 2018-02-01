@@ -835,7 +835,7 @@ void configSetCommand(client *c) {
     /* Special fields that can't be handled with general macros. */
     config_set_special_field("dbfilename") {
         if (!pathIsBaseName((char*)o->ptr)) {
-            addReplyError(c, "dbfilename can't be a path, just a filename");
+            c->addReplyError( "dbfilename can't be a path, just a filename");
             return;
         }
         zfree(server.rdb_filename);
@@ -860,7 +860,7 @@ void configSetCommand(client *c) {
         if (ll > orig_value) {
             adjustOpenFilesLimit();
             if (server.maxclients != ll) {
-                addReplyErrorFormat(c,"The operating system is not able to handle the specified number of clients, try with %d", server.maxclients);
+                c->addReplyErrorFormat("The operating system is not able to handle the specified number of clients, try with %d", server.maxclients);
                 server.maxclients = orig_value;
                 return;
             }
@@ -870,7 +870,7 @@ void configSetCommand(client *c) {
                 if (server.el->aeResizeSetSize(
                     server.maxclients + CONFIG_FDSET_INCR) == AE_ERR)
                 {
-                    addReplyError(c,"The event loop API used by Redis is not able to handle the specified number of clients");
+                    c->addReplyError("The event loop API used by Redis is not able to handle the specified number of clients");
                     server.maxclients = orig_value;
                     return;
                 }
@@ -884,7 +884,7 @@ void configSetCommand(client *c) {
             stopAppendOnly();
         } else if (enable && server.aof_state == AOF_OFF) {
             if (startAppendOnly() == C_ERR) {
-                addReplyError(c,
+                c->addReplyError(
                     "Unable to turn on AOF. Check server logs.");
                 return;
             }
@@ -925,7 +925,7 @@ void configSetCommand(client *c) {
         sdsfreesplitres(v,vlen);
     } config_set_special_field("dir") {
         if (chdir((char*)o->ptr) == -1) {
-            addReplyErrorFormat(c,"Changing directory: %s", strerror(errno));
+            c->addReplyErrorFormat("Changing directory: %s", strerror(errno));
             return;
         }
     } config_set_special_field("client-output-buffer-limit") {
@@ -1010,7 +1010,7 @@ void configSetCommand(client *c) {
 #ifndef HAVE_DEFRAG
         if (server.active_defrag_enabled) {
             server.active_defrag_enabled = 0;
-            addReplyError(c,
+            c->addReplyError(
                 "Active defragmentation cannot be enabled: it requires a "
                 "Redis server compiled with a modified Jemalloc like the "
                 "one shipped by default with the Redis source distribution");
@@ -1148,7 +1148,7 @@ void configSetCommand(client *c) {
 
     /* Everyhing else is an error... */
     } config_set_else {
-        addReplyErrorFormat(c,"Unsupported CONFIG parameter: %s",
+        c->addReplyErrorFormat("Unsupported CONFIG parameter: %s",
             (char*)c->m_argv[2]->ptr);
         return;
     }
@@ -1158,7 +1158,7 @@ void configSetCommand(client *c) {
     return;
 
 badfmt: /* Bad format errors */
-    addReplyErrorFormat(c,"Invalid argument '%s' for CONFIG SET '%s'",
+    c->addReplyErrorFormat("Invalid argument '%s' for CONFIG SET '%s'",
             (char*)o->ptr,
             (char*)c->m_argv[2]->ptr);
 }
@@ -1202,7 +1202,7 @@ badfmt: /* Bad format errors */
 
 void configGetCommand(client *c) {
     robj *o = c->m_argv[2];
-    void *replylen = addDeferredMultiBulkLength(c);
+    void *replylen = c->addDeferredMultiBulkLength();
     char* pattern = (char*)o->ptr;
     char buf[128];
     int matches = 0;
@@ -2064,7 +2064,7 @@ int rewriteConfig(char *path) {
 void configCommand(client *c) {
     /* Only allow CONFIG GET while loading. */
     if (server.loading && strcasecmp((const char*)c->m_argv[1]->ptr,"get")) {
-        addReplyError(c,"Only CONFIG GET is allowed during loading");
+        c->addReplyError("Only CONFIG GET is allowed during loading");
         return;
     }
 
@@ -2082,23 +2082,23 @@ void configCommand(client *c) {
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"rewrite")) {
         if (c->m_argc != 2) goto badarity;
         if (server.configfile == NULL) {
-            addReplyError(c,"The server is running without a config file");
+            c->addReplyError("The server is running without a config file");
             return;
         }
         if (rewriteConfig(server.configfile) == -1) {
             serverLog(LL_WARNING,"CONFIG REWRITE failed: %s", strerror(errno));
-            addReplyErrorFormat(c,"Rewriting config file: %s", strerror(errno));
+            c->addReplyErrorFormat("Rewriting config file: %s", strerror(errno));
         } else {
             serverLog(LL_WARNING,"CONFIG REWRITE executed with success.");
             c->addReply(shared.ok);
         }
     } else {
-        addReplyError(c,
+        c->addReplyError(
             "CONFIG subcommand must be one of GET, SET, RESETSTAT, REWRITE");
     }
     return;
 
 badarity:
-    addReplyErrorFormat(c,"Wrong number of arguments for CONFIG %s",
+    c->addReplyErrorFormat("Wrong number of arguments for CONFIG %s",
         (char*) c->m_argv[1]->ptr);
 }

@@ -1146,7 +1146,7 @@ int isHLLObjectOrReply(client *c, robj *o) {
     return C_OK;
 
 invalid:
-    addReplySds(c,
+    c->addReplySds(
         sdsnew("-WRONGTYPE Key is not a valid "
                "HyperLogLog string value.\r\n"));
     return C_ERR;
@@ -1178,7 +1178,7 @@ void pfaddCommand(client *c) {
             updated++;
             break;
         case -1:
-            addReplySds(c,sdsnew(invalid_hll_err));
+            c->addReplySds(sdsnew(invalid_hll_err));
             return;
         }
     }
@@ -1220,7 +1220,7 @@ void pfcountCommand(client *c) {
             /* Merge with this HLL with our 'max' HHL by setting max[i]
              * to MAX(max[i],hll[i]). */
             if (hllMerge(registers,o) == C_ERR) {
-                addReplySds(c,sdsnew(invalid_hll_err));
+                c->addReplySds(sdsnew(invalid_hll_err));
                 return;
             }
         }
@@ -1260,7 +1260,7 @@ void pfcountCommand(client *c) {
             /* Recompute it and update the cached value. */
             card = hllCount(hdr,&invalid);
             if (invalid) {
-                addReplySds(c,sdsnew(invalid_hll_err));
+                c->addReplySds(sdsnew(invalid_hll_err));
                 return;
             }
             hdr->card[0] = card & 0xff;
@@ -1301,7 +1301,7 @@ void pfmergeCommand(client *c) {
         /* Merge with this HLL with our 'max' HHL by setting max[i]
          * to MAX(max[i],hll[i]). */
         if (hllMerge(max,o) == C_ERR) {
-            addReplySds(c,sdsnew(invalid_hll_err));
+            c->addReplySds(sdsnew(invalid_hll_err));
             return;
         }
     }
@@ -1323,7 +1323,7 @@ void pfmergeCommand(client *c) {
 
     /* Only support dense objects as destination. */
     if (hllSparseToDense(o) == C_ERR) {
-        addReplySds(c,sdsnew(invalid_hll_err));
+        c->addReplySds(sdsnew(invalid_hll_err));
         return;
     }
 
@@ -1378,7 +1378,7 @@ void pfselftestCommand(client *c) {
 
             HLL_DENSE_GET_REGISTER(val,hdr->registers,i);
             if (val != bytecounters[i]) {
-                addReplyErrorFormat(c,
+                c->addReplyErrorFormat(
                     "TESTFAILED Register %d should be %d but is %d",
                     i, (int) bytecounters[i], (int) val);
                 goto cleanup;
@@ -1409,14 +1409,14 @@ void pfselftestCommand(client *c) {
         if (j == checkpoint && j < server.hll_sparse_max_bytes/2) {
             hdr2 = (hllhdr*)o->ptr;
             if (hdr2->encoding != HLL_SPARSE) {
-                addReplyError(c, "TESTFAILED sparse encoding not used");
+                c->addReplyError( "TESTFAILED sparse encoding not used");
                 goto cleanup;
             }
         }
 
         /* Check that dense and sparse representations agree. */
         if (j == checkpoint && hllCount(hdr,NULL) != hllCount((hllhdr *)o->ptr,NULL)) {
-                addReplyError(c, "TESTFAILED dense/sparse disagree");
+                c->addReplyError( "TESTFAILED dense/sparse disagree");
                 goto cleanup;
         }
 
@@ -1433,7 +1433,7 @@ void pfselftestCommand(client *c) {
 
             if (abserr < 0) abserr = -abserr;
             if (abserr > (int64_t)maxerr) {
-                addReplyErrorFormat(c,
+                c->addReplyErrorFormat(
                     "TESTFAILED Too big error. card:%llu abserr:%llu",
                     (unsigned long long) checkpoint,
                     (unsigned long long) abserr);
@@ -1461,7 +1461,7 @@ void pfdebugCommand(client *c) {
 
     o = lookupKeyWrite(c->m_cur_selected_db,c->m_argv[2]);
     if (o == NULL) {
-        addReplyError(c,"The specified key does not exist");
+        c->addReplyError("The specified key does not exist");
         return;
     }
     if (isHLLObjectOrReply(c,o) != C_OK) return;
@@ -1474,7 +1474,7 @@ void pfdebugCommand(client *c) {
 
         if (hdr->encoding == HLL_SPARSE) {
             if (hllSparseToDense(o) == C_ERR) {
-                addReplySds(c,sdsnew(invalid_hll_err));
+                c->addReplySds(sdsnew(invalid_hll_err));
                 return;
             }
             server.dirty++; /* Force propagation on encoding change. */
@@ -1498,7 +1498,7 @@ void pfdebugCommand(client *c) {
         sds decoded = sdsempty();
 
         if (hdr->encoding != HLL_SPARSE) {
-            addReplyError(c,"HLL encoding is not sparse");
+            c->addReplyError("HLL encoding is not sparse");
             return;
         }
 
@@ -1530,7 +1530,7 @@ void pfdebugCommand(client *c) {
         char *encodingstr[2] = {"dense","sparse"};
         if (c->m_argc != 3) goto arityerr;
 
-        addReplyStatus(c,encodingstr[hdr->encoding]);
+        c->addReplyStatus(encodingstr[hdr->encoding]);
     }
     /* PFDEBUG TODENSE <key> */
     else if (!strcasecmp(cmd,"todense")) {
@@ -1539,7 +1539,7 @@ void pfdebugCommand(client *c) {
 
         if (hdr->encoding == HLL_SPARSE) {
             if (hllSparseToDense(o) == C_ERR) {
-                addReplySds(c,sdsnew(invalid_hll_err));
+                c->addReplySds(sdsnew(invalid_hll_err));
                 return;
             }
             conv = 1;
@@ -1547,12 +1547,12 @@ void pfdebugCommand(client *c) {
         }
         c->addReply(conv ? shared.cone : shared.czero);
     } else {
-        addReplyErrorFormat(c,"Unknown PFDEBUG subcommand '%s'", cmd);
+        c->addReplyErrorFormat("Unknown PFDEBUG subcommand '%s'", cmd);
     }
     return;
 
 arityerr:
-    addReplyErrorFormat(c,
+    c->addReplyErrorFormat(
         "Wrong number of arguments for the '%s' subcommand",cmd);
 }
 

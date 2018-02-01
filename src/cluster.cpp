@@ -3981,7 +3981,7 @@ int getSlotOrReply(client *c, robj *o) {
     if (getLongLongFromObject(o,&slot) != C_OK ||
         slot < 0 || slot >= CLUSTER_SLOTS)
     {
-        addReplyError(c,"Invalid or out of range slot");
+        c->addReplyError("Invalid or out of range slot");
         return -1;
     }
     return (int) slot;
@@ -4000,7 +4000,7 @@ void clusterReplyMultiBulkSlots(client *c) {
      */
 
     int num_masters = 0;
-    void *slot_replylen = addDeferredMultiBulkLength(c);
+    void *slot_replylen = c->addDeferredMultiBulkLength();
 
     dictEntry *de;
     dictIterator di(server.cluster->m_nodes, 1);
@@ -4020,7 +4020,7 @@ void clusterReplyMultiBulkSlots(client *c) {
             }
             if (start != -1 && (!bit || j == CLUSTER_SLOTS-1)) {
                 int nested_elements = 3; /* slots (2) + master addr (1). */
-                void *nested_replylen = addDeferredMultiBulkLength(c);
+                void *nested_replylen = c->addDeferredMultiBulkLength();
 
                 if (bit && j == CLUSTER_SLOTS-1) j++;
 
@@ -4063,7 +4063,7 @@ void clusterReplyMultiBulkSlots(client *c) {
 
 void clusterCommand(client *c) {
     if (server.cluster_enabled == 0) {
-        addReplyError(c,"This instance has cluster support disabled");
+        c->addReplyError("This instance has cluster support disabled");
         return;
     }
 
@@ -4072,14 +4072,14 @@ void clusterCommand(client *c) {
         long long port, cport;
 
         if (getLongLongFromObject(c->m_argv[3], &port) != C_OK) {
-            addReplyErrorFormat(c,"Invalid TCP base port specified: %s",
+            c->addReplyErrorFormat("Invalid TCP base port specified: %s",
                                 (char*)c->m_argv[3]->ptr);
             return;
         }
 
         if (c->m_argc == 5) {
             if (getLongLongFromObject(c->m_argv[4], &cport) != C_OK) {
-                addReplyErrorFormat(c,"Invalid TCP bus port specified: %s",
+                c->addReplyErrorFormat("Invalid TCP bus port specified: %s",
                                     (char*)c->m_argv[4]->ptr);
                 return;
             }
@@ -4090,7 +4090,7 @@ void clusterCommand(client *c) {
         if (clusterStartHandshake((char *)c->m_argv[2]->ptr,port,cport) == 0 &&
             errno == EINVAL)
         {
-            addReplyErrorFormat(c,"Invalid node address specified: %s:%s",
+            c->addReplyErrorFormat("Invalid node address specified: %s:%s",
                             (char*)c->m_argv[2]->ptr, (char*)c->m_argv[3]->ptr);
         } else {
             c->addReply(shared.ok);
@@ -4112,7 +4112,7 @@ void clusterCommand(client *c) {
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"flushslots") && c->m_argc == 2) {
         /* CLUSTER FLUSHSLOTS */
         if (server.db[0].m_dict->dictSize() != 0) {
-            addReplyError(c,"DB must be empty to perform CLUSTER FLUSHSLOTS.");
+            c->addReplyError("DB must be empty to perform CLUSTER FLUSHSLOTS.");
             return;
         }
         myself->clusterDelNodeSlots();
@@ -4136,16 +4136,16 @@ void clusterCommand(client *c) {
                 return;
             }
             if (del && server.cluster->m_slots[slot] == NULL) {
-                addReplyErrorFormat(c,"Slot %d is already unassigned", slot);
+                c->addReplyErrorFormat("Slot %d is already unassigned", slot);
                 zfree(slots);
                 return;
             } else if (!del && server.cluster->m_slots[slot]) {
-                addReplyErrorFormat(c,"Slot %d is already busy", slot);
+                c->addReplyErrorFormat("Slot %d is already busy", slot);
                 zfree(slots);
                 return;
             }
             if (slots[slot]++ == 1) {
-                addReplyErrorFormat(c,"Slot %d specified multiple times",
+                c->addReplyErrorFormat("Slot %d specified multiple times",
                     (int)slot);
                 zfree(slots);
                 return;
@@ -4177,7 +4177,7 @@ void clusterCommand(client *c) {
         clusterNode *n;
 
         if (myself->nodeIsSlave()) {
-            addReplyError(c,"Please use SETSLOT only with masters.");
+            c->addReplyError("Please use SETSLOT only with masters.");
             return;
         }
 
@@ -4185,23 +4185,23 @@ void clusterCommand(client *c) {
 
         if (!strcasecmp((const char*)c->m_argv[3]->ptr,"migrating") && c->m_argc == 5) {
             if (server.cluster->m_slots[slot] != myself) {
-                addReplyErrorFormat(c,"I'm not the owner of hash slot %u",slot);
+                c->addReplyErrorFormat("I'm not the owner of hash slot %u",slot);
                 return;
             }
             if ((n = clusterLookupNode((const char *)c->m_argv[4]->ptr)) == NULL) {
-                addReplyErrorFormat(c,"I don't know about node %s",
+                c->addReplyErrorFormat("I don't know about node %s",
                     (char*)c->m_argv[4]->ptr);
                 return;
             }
             server.cluster->m_migrating_slots_to[slot] = n;
         } else if (!strcasecmp((const char*)c->m_argv[3]->ptr,"importing") && c->m_argc == 5) {
             if (server.cluster->m_slots[slot] == myself) {
-                addReplyErrorFormat(c,
+                c->addReplyErrorFormat(
                     "I'm already the owner of hash slot %u",slot);
                 return;
             }
             if ((n = clusterLookupNode((const char *)c->m_argv[4]->ptr)) == NULL) {
-                addReplyErrorFormat(c,"I don't know about node %s",
+                c->addReplyErrorFormat("I don't know about node %s",
                     (char*)c->m_argv[4]->ptr);
                 return;
             }
@@ -4215,7 +4215,7 @@ void clusterCommand(client *c) {
             clusterNode *n = clusterLookupNode((const char *)c->m_argv[4]->ptr);
 
             if (!n) {
-                addReplyErrorFormat(c,"Unknown node %s",
+                c->addReplyErrorFormat("Unknown node %s",
                     (char*)c->m_argv[4]->ptr);
                 return;
             }
@@ -4223,7 +4223,7 @@ void clusterCommand(client *c) {
              * make sure there are no longer local keys for this hash slot. */
             if (server.cluster->m_slots[slot] == myself && n != myself) {
                 if (countKeysInSlot(slot) != 0) {
-                    addReplyErrorFormat(c,
+                    c->addReplyErrorFormat(
                         "Can't assign hashslot %d to a different node "
                         "while I still hold keys for this hash slot.", slot);
                     return;
@@ -4259,7 +4259,7 @@ void clusterCommand(client *c) {
             clusterDelSlot(slot);
             n->clusterAddSlot(slot);
         } else {
-            addReplyError(c,
+            c->addReplyError(
                 "Invalid CLUSTER SETSLOT action or number of arguments");
             return;
         }
@@ -4271,7 +4271,7 @@ void clusterCommand(client *c) {
         sds reply = sdscatprintf(sdsempty(),"+%s %llu\r\n",
                 (retval == C_OK) ? "BUMPED" : "STILL",
                 (unsigned long long) myself->m_configEpoch);
-        addReplySds(c,reply);
+        c->addReplySds(reply);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"info") && c->m_argc == 2) {
         /* CLUSTER INFO */
         char *statestr[] = {"ok","fail","needhelp"};
@@ -4344,9 +4344,9 @@ void clusterCommand(client *c) {
             "cluster_stats_messages_received:%lld\r\n", tot_msg_received);
 
         /* Produce the reply protocol. */
-        addReplySds(c,sdscatprintf(sdsempty(),"$%lu\r\n",
+        c->addReplySds(sdscatprintf(sdsempty(),"$%lu\r\n",
             (unsigned long)sdslen(info)));
-        addReplySds(c,info);
+        c->addReplySds(info);
         c->addReply(shared.crlf);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"saveconfig") && c->m_argc == 2) {
         int retval = clusterSaveConfig(1);
@@ -4354,7 +4354,7 @@ void clusterCommand(client *c) {
         if (retval == 0)
             c->addReply(shared.ok);
         else
-            addReplyErrorFormat(c,"error saving the cluster node config: %s",
+            c->addReplyErrorFormat("error saving the cluster node config: %s",
                 strerror(errno));
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"keyslot") && c->m_argc == 3) {
         /* CLUSTER KEYSLOT <key> */
@@ -4368,7 +4368,7 @@ void clusterCommand(client *c) {
         if (getLongLongFromObjectOrReply(c,c->m_argv[2],&slot,NULL) != C_OK)
             return;
         if (slot < 0 || slot >= CLUSTER_SLOTS) {
-            addReplyError(c,"Invalid slot");
+            c->addReplyError("Invalid slot");
             return;
         }
         addReplyLongLong(c,countKeysInSlot(slot));
@@ -4384,7 +4384,7 @@ void clusterCommand(client *c) {
             != C_OK)
             return;
         if (slot < 0 || slot >= CLUSTER_SLOTS || maxkeys < 0) {
-            addReplyError(c,"Invalid slot or number of keys");
+            c->addReplyError("Invalid slot or number of keys");
             return;
         }
 
@@ -4406,13 +4406,13 @@ void clusterCommand(client *c) {
         clusterNode *n = clusterLookupNode((const char *)c->m_argv[2]->ptr);
 
         if (!n) {
-            addReplyErrorFormat(c,"Unknown node %s", (char*)c->m_argv[2]->ptr);
+            c->addReplyErrorFormat("Unknown node %s", (char*)c->m_argv[2]->ptr);
             return;
         } else if (n == myself) {
-            addReplyError(c,"I tried hard but I can't forget myself...");
+            c->addReplyError("I tried hard but I can't forget myself...");
             return;
         } else if (myself->nodeIsSlave() && myself->m_slaveof == n) {
-            addReplyError(c,"Can't forget my master!");
+            c->addReplyError("Can't forget my master!");
             return;
         }
         clusterBlacklistAddNode(n);
@@ -4426,19 +4426,19 @@ void clusterCommand(client *c) {
 
         /* Lookup the specified node in our table. */
         if (!n) {
-            addReplyErrorFormat(c,"Unknown node %s", (char*)c->m_argv[2]->ptr);
+            c->addReplyErrorFormat("Unknown node %s", (char*)c->m_argv[2]->ptr);
             return;
         }
 
         /* I can't replicate myself. */
         if (n == myself) {
-            addReplyError(c,"Can't replicate myself");
+            c->addReplyError("Can't replicate myself");
             return;
         }
 
         /* Can't replicate a slave. */
         if (n->nodeIsSlave()) {
-            addReplyError(c,"I can only replicate a master, not a slave.");
+            c->addReplyError("I can only replicate a master, not a slave.");
             return;
         }
 
@@ -4447,7 +4447,7 @@ void clusterCommand(client *c) {
          * Slaves can switch to another master without issues. */
         if (myself->nodeIsMaster() &&
             (myself->m_numslots != 0 || server.db[0].m_dict->dictSize() != 0)) {
-            addReplyError(c,
+            c->addReplyError(
                 "To set a master the node must be empty and "
                 "without assigned slots.");
             return;
@@ -4464,12 +4464,12 @@ void clusterCommand(client *c) {
 
         /* Lookup the specified node in our table. */
         if (!n) {
-            addReplyErrorFormat(c,"Unknown node %s", (char*)c->m_argv[2]->ptr);
+            c->addReplyErrorFormat("Unknown node %s", (char*)c->m_argv[2]->ptr);
             return;
         }
 
         if (n->nodeIsSlave()) {
-            addReplyError(c,"The specified node is not a master");
+            c->addReplyError("The specified node is not a master");
             return;
         }
 
@@ -4486,7 +4486,7 @@ void clusterCommand(client *c) {
         clusterNode *n = clusterLookupNode((const char *)c->m_argv[2]->ptr);
 
         if (!n) {
-            addReplyErrorFormat(c,"Unknown node %s", (char*)c->m_argv[2]->ptr);
+            c->addReplyErrorFormat("Unknown node %s", (char*)c->m_argv[2]->ptr);
             return;
         } else {
             addReplyLongLong(c,clusterNodeFailureReportsCount(n));
@@ -4511,16 +4511,16 @@ void clusterCommand(client *c) {
 
         /* Check preconditions. */
         if (myself->nodeIsMaster()) {
-            addReplyError(c,"You should send CLUSTER FAILOVER to a slave");
+            c->addReplyError("You should send CLUSTER FAILOVER to a slave");
             return;
         } else if (myself->m_slaveof == NULL) {
-            addReplyError(c,"I'm a slave but my master is unknown to me");
+            c->addReplyError("I'm a slave but my master is unknown to me");
             return;
         } else if (!force &&
                    (myself->m_slaveof->nodeFailed() ||
                     myself->m_slaveof->m_link == NULL))
         {
-            addReplyError(c,"Master is down or failed, "
+            c->addReplyError("Master is down or failed, "
                             "please use CLUSTER FAILOVER FORCE");
             return;
         }
@@ -4561,12 +4561,12 @@ void clusterCommand(client *c) {
             return;
 
         if (epoch < 0) {
-            addReplyErrorFormat(c,"Invalid config epoch specified: %lld",epoch);
+            c->addReplyErrorFormat("Invalid config epoch specified: %lld",epoch);
         } else if (server.cluster->m_nodes->dictSize() > 1) {
-            addReplyError(c,"The user can assign a config epoch only when the "
+            c->addReplyError("The user can assign a config epoch only when the "
                             "node does not know any other node.");
         } else if (myself->m_configEpoch != 0) {
-            addReplyError(c,"Node config epoch is already non-zero");
+            c->addReplyError("Node config epoch is already non-zero");
         } else {
             myself->m_configEpoch = epoch;
             serverLog(LL_WARNING,
@@ -4603,14 +4603,14 @@ void clusterCommand(client *c) {
         /* Slaves can be reset while containing data, but not master nodes
          * that must be empty. */
         if (myself->nodeIsMaster() && c->m_cur_selected_db->m_dict->dictSize() != 0) {
-            addReplyError(c,"CLUSTER RESET can't be called with "
+            c->addReplyError("CLUSTER RESET can't be called with "
                             "master nodes containing keys");
             return;
         }
         clusterReset(hard);
         c->addReply(shared.ok);
     } else {
-        addReplyError(c,"Wrong CLUSTER subcommand or number of arguments");
+        c->addReplyError("Wrong CLUSTER subcommand or number of arguments");
     }
 }
 
@@ -4720,14 +4720,14 @@ void restoreCommand(client *c) {
     if (getLongLongFromObjectOrReply(c,c->m_argv[2],&ttl,NULL) != C_OK) {
         return;
     } else if (ttl < 0) {
-        addReplyError(c,"Invalid TTL value, must be >= 0");
+        c->addReplyError("Invalid TTL value, must be >= 0");
         return;
     }
 
     /* Verify RDB version and data checksum. */
     if (verifyDumpPayload((unsigned char *)c->m_argv[3]->ptr,sdslen((sds)c->m_argv[3]->ptr)) == C_ERR)
     {
-        addReplyError(c,"DUMP payload version or checksum are wrong");
+        c->addReplyError("DUMP payload version or checksum are wrong");
         return;
     }
 
@@ -4736,7 +4736,7 @@ void restoreCommand(client *c) {
     if (((type = rdbLoadObjectType(&payload)) == -1) ||
         ((obj = rdbLoadObject(type,&payload)) == NULL))
     {
-        addReplyError(c,"Bad data format");
+        c->addReplyError("Bad data format");
         return;
     }
 
@@ -4808,7 +4808,7 @@ migrateCachedSocket* migrateGetSocket(client *c, robj *host, robj *port, long ti
                                 atoi((const char*)c->m_argv[2]->ptr));
     if (fd == -1) {
         sdsfree(name);
-        addReplyErrorFormat(c,"Can't connect to target node: %s",
+        c->addReplyErrorFormat("Can't connect to target node: %s",
             server.neterr);
         return NULL;
     }
@@ -4817,7 +4817,7 @@ migrateCachedSocket* migrateGetSocket(client *c, robj *host, robj *port, long ti
     /* Check if it connects within the specified timeout. */
     if ((aeWait(fd,AE_WRITABLE,timeout) & AE_WRITABLE) == 0) {
         sdsfree(name);
-        addReplySds(c,
+        c->addReplySds(
             sdsnew("-IOERR error or timeout connecting to the client\r\n"));
         close(fd);
         return NULL;
@@ -4904,7 +4904,7 @@ void migrateCommand(client *c) {
             replace = 1;
         } else if (!strcasecmp((const char*)c->m_argv[j]->ptr,"keys")) {
             if (sdslen((sds)c->m_argv[3]->ptr) != 0) {
-                addReplyError(c,
+                c->addReplyError(
                     "When using MIGRATE KEYS option, the key argument"
                     " must be set to the empty string");
                 return;
@@ -4944,7 +4944,7 @@ void migrateCommand(client *c) {
     num_keys = oi;
     if (num_keys == 0) {
         zfree(ov); zfree(kv);
-        addReplySds(c,sdsnew("+NOKEY\r\n"));
+        c->addReplySds(sdsnew("+NOKEY\r\n"));
         return;
     }
 
@@ -5041,7 +5041,7 @@ try_again:
             /* On error assume that last_dbid is no longer valid. */
             if (!error_from_target) {
                 cs->last_dbid = -1;
-                addReplyErrorFormat(c,"Target instance replied with error: %s",
+                c->addReplyErrorFormat("Target instance replied with error: %s",
                     (select && buf1[0] == '-') ? buf1+1 : buf2+1);
                 error_from_target = 1;
             }
@@ -5140,7 +5140,7 @@ socket_err:
 
     /* Cleanup we want to do if no retry is attempted. */
     zfree(ov); zfree(kv);
-    addReplySds(c,
+    c->addReplySds(
         sdscatprintf(sdsempty(),
             "-IOERR error or timeout %s to target instance\r\n",
             write_error ? "writing" : "reading"));
@@ -5157,7 +5157,7 @@ socket_err:
  * information. */
 void askingCommand(client *c) {
     if (server.cluster_enabled == 0) {
-        addReplyError(c,"This instance has cluster support disabled");
+        c->addReplyError("This instance has cluster support disabled");
         return;
     }
     c->m_flags |= CLIENT_ASKING;
@@ -5169,7 +5169,7 @@ void askingCommand(client *c) {
  * with read-only commands to keys that are served by the slave's master. */
 void readonlyCommand(client *c) {
     if (server.cluster_enabled == 0) {
-        addReplyError(c,"This instance has cluster support disabled");
+        c->addReplyError("This instance has cluster support disabled");
         return;
     }
     c->m_flags |= CLIENT_READONLY;
@@ -5386,20 +5386,20 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
  * be set to the hash slot that caused the redirection. */
 void clusterRedirectClient(client *c, clusterNode *n, int hashslot, int error_code) {
     if (error_code == CLUSTER_REDIR_CROSS_SLOT) {
-        addReplySds(c,sdsnew("-CROSSSLOT Keys in request don't hash to the same slot\r\n"));
+        c->addReplySds(sdsnew("-CROSSSLOT Keys in request don't hash to the same slot\r\n"));
     } else if (error_code == CLUSTER_REDIR_UNSTABLE) {
         /* The request spawns mutliple keys in the same slot,
          * but the slot is not "stable" currently as there is
          * a migration or import in progress. */
-        addReplySds(c,sdsnew("-TRYAGAIN Multiple keys request during rehashing of slot\r\n"));
+        c->addReplySds(sdsnew("-TRYAGAIN Multiple keys request during rehashing of slot\r\n"));
     } else if (error_code == CLUSTER_REDIR_DOWN_STATE) {
-        addReplySds(c,sdsnew("-CLUSTERDOWN The cluster is down\r\n"));
+        c->addReplySds(sdsnew("-CLUSTERDOWN The cluster is down\r\n"));
     } else if (error_code == CLUSTER_REDIR_DOWN_UNBOUND) {
-        addReplySds(c,sdsnew("-CLUSTERDOWN Hash slot not served\r\n"));
+        c->addReplySds(sdsnew("-CLUSTERDOWN Hash slot not served\r\n"));
     } else if (error_code == CLUSTER_REDIR_MOVED ||
                error_code == CLUSTER_REDIR_ASK)
     {
-        addReplySds(c,sdscatprintf(sdsempty(),
+        c->addReplySds(sdscatprintf(sdsempty(),
             "-%s %d %s:%d\r\n",
             (error_code == CLUSTER_REDIR_ASK) ? "ASK" : "MOVED",
             hashslot,n->m_ip,n->m_port));

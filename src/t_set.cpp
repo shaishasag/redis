@@ -849,7 +849,7 @@ void sinterGenericCommand(client *c, robj **setkeys,
      * to the output list and save the pointer to later modify it with the
      * right length */
     if (!dstkey) {
-        replylen = addDeferredMultiBulkLength(c);
+        replylen = c->addDeferredMultiBulkLength();
     } else {
         /* If we have a target key where to store the resulting set
          * create this key with an empty set inside */

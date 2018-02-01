@@ -955,7 +955,7 @@ int RM_StringAppendBuffer(RedisModuleCtx *ctx, RedisModuleString *str, const cha
  *     if (argc != 3) return RedisModule_WrongArity(ctx);
  */
 int RM_WrongArity(RedisModuleCtx *ctx) {
-    addReplyErrorFormat(ctx->_client,
+    ctx->_client->addReplyErrorFormat(
         "wrong number of arguments for '%s' command",
         (char*)ctx->_client->m_argv[0]->ptr);
     return REDISMODULE_OK;
@@ -1000,7 +1000,7 @@ int replyWithStatus(RedisModuleCtx *ctx, const char *msg, char *prefix) {
     sds strmsg = sdsnewlen(prefix,1);
     strmsg = sdscat(strmsg,msg);
     strmsg = sdscatlen(strmsg,"\r\n",2);
-    addReplySds(c,strmsg);
+    c->addReplySds(strmsg);
     return REDISMODULE_OK;
 }
 
@@ -1049,7 +1049,7 @@ int RM_ReplyWithArray(RedisModuleCtx *ctx, long len) {
         ctx->postponed_arrays = (void **)zrealloc(ctx->postponed_arrays,sizeof(void*)*
                 (ctx->postponed_arrays_count+1));
         ctx->postponed_arrays[ctx->postponed_arrays_count] =
-            addDeferredMultiBulkLength(c);
+            c->addDeferredMultiBulkLength();
         ctx->postponed_arrays_count++;
     } else {
         addReplyMultiBulkLen(c,len);
@@ -1145,7 +1145,7 @@ int RM_ReplyWithCallReply(RedisModuleCtx *ctx, RedisModuleCallReply *reply) {
     client *c = moduleGetReplyClient(ctx);
     if (c == NULL) return REDISMODULE_OK;
     sds proto = sdsnewlen(reply->proto, reply->protolen);
-    addReplySds(c,proto);
+    c->addReplySds(proto);
     return REDISMODULE_OK;
 }
 
@@ -3438,7 +3438,7 @@ RedisModuleBlockedClient *RM_BlockClient(RedisModuleCtx *ctx, RedisModuleCmdFunc
 
     if (islua || ismulti) {
         c->m_blocking_state.module_blocked_handle = NULL;
-        addReplyError(c, islua ?
+        c->addReplyError( islua ?
             "Blocking module command called from Lua script" :
             "Blocking module command called from transaction");
     } else {
@@ -3526,7 +3526,7 @@ void moduleHandleBlockedClients() {
          * free the temporary client we just used for the replies. */
         if (c) {
             if (bc->reply_client->m_response_buff_pos)
-                addReplyString(c,bc->reply_client->m_response_buff,
+                c->addReplyString(bc->reply_client->m_response_buff,
                                  bc->reply_client->m_response_buff_pos);
             if (bc->reply_client->m_reply->listLength())
                 c->m_reply->listJoin(bc->reply_client->m_reply);
@@ -3865,7 +3865,7 @@ void moduleCommand(client *c) {
         if (moduleLoad((const char *)c->m_argv[2]->ptr,(void **)argv,argc) == C_OK)
             c->addReply(shared.ok);
         else
-            addReplyError(c,
+            c->addReplyError(
                 "Error loading the extension. Please check the server logs.");
     } else if (!strcasecmp(subcmd,"unload") && c->m_argc == 3) {
         if (moduleUnload((sds)c->m_argv[2]->ptr) == C_OK)
@@ -3883,7 +3883,7 @@ void moduleCommand(client *c) {
                 errmsg = "operation not possible.";
                 break;
             }
-            addReplyErrorFormat(c,"Error unloading module: %s",errmsg);
+            c->addReplyErrorFormat("Error unloading module: %s",errmsg);
         }
     } else if (!strcasecmp(subcmd,"list") && c->m_argc == 2) {
         dictIterator di(modules);

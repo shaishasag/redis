@@ -36,7 +36,7 @@
 
 static int checkStringLength(client *c, long long size) {
     if (size > 512*1024*1024) {
-        addReplyError(c,"string exceeds maximum allowed size (512MB)");
+        c->addReplyError("string exceeds maximum allowed size (512MB)");
         return C_ERR;
     }
     return C_OK;
@@ -71,7 +71,7 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
         if (getLongLongFromObjectOrReply(c, expire, &milliseconds, NULL) != C_OK)
             return;
         if (milliseconds <= 0) {
-            addReplyErrorFormat(c,"invalid expire time in %s",c->m_cmd->name);
+            c->addReplyErrorFormat("invalid expire time in %s",c->m_cmd->name);
             return;
         }
         if (unit == UNIT_SECONDS) milliseconds *= 1000;
@@ -190,7 +190,7 @@ void setrangeCommand(client *c) {
         return;
 
     if (offset < 0) {
-        addReplyError(c,"offset is out of range");
+        c->addReplyError("offset is out of range");
         return;
     }
 
@@ -304,7 +304,7 @@ void msetGenericCommand(client *c, int nx) {
     int j, busykeys = 0;
 
     if ((c->m_argc % 2) == 0) {
-        addReplyError(c,"wrong number of arguments for MSET");
+        c->addReplyError("wrong number of arguments for MSET");
         return;
     }
     /* Handle the NX flag. The MSETNX semantic is to return zero and don't
@@ -349,7 +349,7 @@ void incrDecrCommand(client *c, long long incr) {
     oldvalue = value;
     if ((incr < 0 && oldvalue < 0 && incr < (LLONG_MIN-oldvalue)) ||
         (incr > 0 && oldvalue > 0 && incr > (LLONG_MAX-oldvalue))) {
-        addReplyError(c,"increment or decrement would overflow");
+        c->addReplyError("increment or decrement would overflow");
         return;
     }
     value += incr;
@@ -410,7 +410,7 @@ void incrbyfloatCommand(client *c) {
 
     value += incr;
     if (isnan(value) || isinf(value)) {
-        addReplyError(c,"increment would produce NaN or Infinity");
+        c->addReplyError("increment would produce NaN or Infinity");
         return;
     }
     _new = createStringObjectFromLongDouble(value,1);

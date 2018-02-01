@@ -1565,13 +1565,13 @@ void zaddGenericCommand(client *c, int flags) {
 
     /* Check for incompatible options. */
     if (nx && xx) {
-        addReplyError(c,
+        c->addReplyError(
             "XX and NX options at the same time are not compatible");
         return;
     }
 
     if (incr && elements > 1) {
-        addReplyError(c,
+        c->addReplyError(
             "INCR option supports a single increment-element pair");
         return;
     }
@@ -1612,7 +1612,7 @@ void zaddGenericCommand(client *c, int flags) {
         ele = (sds)c->m_argv[scoreidx+1+j*2]->ptr;
         int retval = zsetAdd(zobj, score, ele, &retflags, &newscore);
         if (retval == 0) {
-            addReplyError(c,nanerr);
+            c->addReplyError(nanerr);
             goto cleanup;
         }
         if (retflags & ZADD_ADDED) added++;
@@ -1696,12 +1696,12 @@ void zremrangeGenericCommand(client *c, int rangetype) {
             return;
     } else if (rangetype == ZRANGE_SCORE) {
         if (zslParseRange(c->m_argv[2],c->m_argv[3],&range) != C_OK) {
-            addReplyError(c,"min or max is not a float");
+            c->addReplyError("min or max is not a float");
             return;
         }
     } else if (rangetype == ZRANGE_LEX) {
         if (zslParseLexRange(c->m_argv[2],c->m_argv[3],&lexrange) != C_OK) {
-            addReplyError(c,"min or max not valid string range item");
+            c->addReplyError("min or max not valid string range item");
             return;
         }
     }
@@ -2187,7 +2187,7 @@ void zunionInterGenericCommand(client *c, robj *dstkey, int op) {
         return;
 
     if (setnum < 1) {
-        addReplyError(c,
+        c->addReplyError(
             "at least 1 input key is needed for ZUNIONSTORE/ZINTERSTORE");
         return;
     }
@@ -2537,7 +2537,7 @@ void genericZrangebyscoreCommand(client *c, int reverse) {
     }
 
     if (zslParseRange(c->m_argv[minidx],c->m_argv[maxidx],&range) != C_OK) {
-        addReplyError(c,"min or max is not a float");
+        c->addReplyError("min or max is not a float");
         return;
     }
 
@@ -2599,7 +2599,7 @@ void genericZrangebyscoreCommand(client *c, int reverse) {
         /* We don't know in advance how many matching elements there are in the
          * list, so we push this object that will represent the multi-bulk
          * length in the output buffer, and will "fix" it later */
-        replylen = addDeferredMultiBulkLength(c);
+        replylen = c->addDeferredMultiBulkLength();
 
         /* If there is an offset, just traverse the number of elements without
          * checking the score because that is done in the next loop. */
@@ -2663,7 +2663,7 @@ void genericZrangebyscoreCommand(client *c, int reverse) {
         /* We don't know in advance how many matching elements there are in the
          * list, so we push this object that will represent the multi-bulk
          * length in the output buffer, and will "fix" it later */
-        replylen = addDeferredMultiBulkLength(c);
+        replylen = c->addDeferredMultiBulkLength();
 
         /* If there is an offset, just traverse the number of elements without
          * checking the score because that is done in the next loop. */
@@ -2724,7 +2724,7 @@ void zcountCommand(client *c) {
 
     /* Parse the range arguments */
     if (zslParseRange(c->m_argv[2],c->m_argv[3],&range) != C_OK) {
-        addReplyError(c,"min or max is not a float");
+        c->addReplyError("min or max is not a float");
         return;
     }
 
@@ -2801,7 +2801,7 @@ void zlexcountCommand(client *c) {
 
     /* Parse the range arguments */
     if (zslParseLexRange(c->m_argv[2],c->m_argv[3],&range) != C_OK) {
-        addReplyError(c,"min or max not valid string range item");
+        c->addReplyError("min or max not valid string range item");
         return;
     }
 
@@ -2892,7 +2892,7 @@ void genericZrangebylexCommand(client *c, int reverse) {
     }
 
     if (zslParseLexRange(c->m_argv[minidx],c->m_argv[maxidx],&range) != C_OK) {
-        addReplyError(c,"min or max not valid string range item");
+        c->addReplyError("min or max not valid string range item");
         return;
     }
 
@@ -2951,7 +2951,7 @@ void genericZrangebylexCommand(client *c, int reverse) {
         /* We don't know in advance how many matching elements there are in the
          * list, so we push this object that will represent the multi-bulk
          * length in the output buffer, and will "fix" it later */
-        replylen = addDeferredMultiBulkLength(c);
+        replylen = c->addDeferredMultiBulkLength();
 
         /* If there is an offset, just traverse the number of elements without
          * checking the score because that is done in the next loop. */
@@ -3011,7 +3011,7 @@ void genericZrangebylexCommand(client *c, int reverse) {
         /* We don't know in advance how many matching elements there are in the
          * list, so we push this object that will represent the multi-bulk
          * length in the output buffer, and will "fix" it later */
-        replylen = addDeferredMultiBulkLength(c);
+        replylen = c->addDeferredMultiBulkLength();
 
         /* If there is an offset, just traverse the number of elements without
          * checking the score because that is done in the next loop. */

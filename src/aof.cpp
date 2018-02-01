@@ -1385,12 +1385,12 @@ int rewriteAppendOnlyFileBackground() {
 
 void bgrewriteaofCommand(client *c) {
     if (server.aof_child_pid != -1) {
-        addReplyError(c,"Background append only file rewriting already in progress");
+        c->addReplyError("Background append only file rewriting already in progress");
     } else if (server.rdb_child_pid != -1) {
         server.aof_rewrite_scheduled = 1;
-        addReplyStatus(c,"Background append only file rewriting scheduled");
+        c->addReplyStatus("Background append only file rewriting scheduled");
     } else if (rewriteAppendOnlyFileBackground() == C_OK) {
-        addReplyStatus(c,"Background append only file rewriting started");
+        c->addReplyStatus("Background append only file rewriting started");
     } else {
         c->addReply(shared.err);
     }
