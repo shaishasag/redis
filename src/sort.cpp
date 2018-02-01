@@ -350,33 +350,32 @@ void sortCommand(client *c) {
          * Note that in this case we also handle LIMIT here in a direct
          * way, just getting the required range, as an optimization. */
         if (end >= start) {
-            listTypeIterator *li;
             listTypeEntry entry;
-            li = listTypeInitIterator(sortval,
+            listTypeIterator li(sortval,
                     desc ? (long)(listTypeLength(sortval) - start - 1) : start,
                     desc ? LIST_HEAD : LIST_TAIL);
 
-            while(j < vectorlen && listTypeNext(li,&entry)) {
+            while(j < vectorlen && li.listTypeNext(&entry)) {
                 vector[j].obj = listTypeGet(&entry);
                 vector[j].u.score = 0;
                 vector[j].u.cmpobj = NULL;
                 j++;
             }
-            listTypeReleaseIterator(li);
+
             /* Fix start/end: output code is not aware of this optimization. */
             end -= start;
             start = 0;
         }
     } else if (sortval->type == OBJ_LIST) {
-        listTypeIterator *li = listTypeInitIterator(sortval,0,LIST_TAIL);
+        listTypeIterator li(sortval,0,LIST_TAIL);
         listTypeEntry entry;
-        while(listTypeNext(li,&entry)) {
+        while(li.listTypeNext(&entry)) {
             vector[j].obj = listTypeGet(&entry);
             vector[j].u.score = 0;
             vector[j].u.cmpobj = NULL;
             j++;
         }
-        listTypeReleaseIterator(li);
+
     } else if (sortval->type == OBJ_SET) {
         setTypeIterator *si = setTypeInitIterator(sortval);
         sds sdsele;

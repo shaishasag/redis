@@ -156,14 +156,13 @@ void computeDatasetDigest(unsigned char *final) {
             if (o->type == OBJ_STRING) {
                 mixObjectDigest(digest,o);
             } else if (o->type == OBJ_LIST) {
-                listTypeIterator *li = listTypeInitIterator(o,0,LIST_TAIL);
+                listTypeIterator li(o,0,LIST_TAIL);
                 listTypeEntry entry;
-                while(listTypeNext(li,&entry)) {
+                while(li.listTypeNext(&entry)) {
                     robj *eleobj = listTypeGet(&entry);
                     mixObjectDigest(digest,eleobj);
                     decrRefCount(eleobj);
                 }
-                listTypeReleaseIterator(li);
             } else if (o->type == OBJ_SET) {
                 setTypeIterator *si = setTypeInitIterator(o);
                 sds sdsele;

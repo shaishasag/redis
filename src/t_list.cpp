@@ -84,7 +84,6 @@ listTypeIterator *listTypeInitIterator(robj *subject, long index,
                                        unsigned char direction) {
     listTypeIterator* li = new (zmalloc(sizeof(listTypeIterator))) listTypeIterator(subject, index, direction);
 
-
     return li;
 }
 
@@ -450,12 +449,14 @@ void lrangeCommand(client *c) {
 
     /* Return the result in form of a multi-bulk reply */
     addReplyMultiBulkLen(c,rangelen);
-    if (o->encoding == OBJ_ENCODING_QUICKLIST) {
-        listTypeIterator *iter = listTypeInitIterator(o, start, LIST_TAIL);
+    if (o->encoding == OBJ_ENCODING_QUICKLIST)
+    {
+        listTypeIterator iter(o, start, LIST_TAIL);
 
-        while(rangelen--) {
+        while(rangelen--)
+        {
             listTypeEntry entry;
-            listTypeNext(iter, &entry);
+            iter.listTypeNext(&entry);
             quicklistEntry *qe = &entry.m_ql_entry;
             if (qe->m_value) {
                 addReplyBulkCBuffer(c,qe->m_value,qe->m_size);
@@ -463,7 +464,7 @@ void lrangeCommand(client *c) {
                 addReplyBulkLongLong(c,qe->m_longval);
             }
         }
-        listTypeReleaseIterator(iter);
+
     } else {
         serverPanic("List encoding is not QUICKLIST!");
     }
@@ -527,24 +528,28 @@ void lremCommand(client *c) {
     subject = lookupKeyWriteOrReply(c,c->argv[1],shared.czero);
     if (subject == NULL || checkType(c,subject,OBJ_LIST)) return;
 
-    listTypeIterator *li;
-    if (toremove < 0) {
+    long index = 0; // default when toremove >= 0
+    unsigned char direction = LIST_TAIL;// default when toremove >= 0
+    if (toremove < 0)
+    {
         toremove = -toremove;
-        li = listTypeInitIterator(subject,-1,LIST_HEAD);
-    } else {
-        li = listTypeInitIterator(subject,0,LIST_TAIL);
+        index = -1;
+        direction = LIST_HEAD;
     }
 
+    listTypeIterator li(subject, index, direction);
     listTypeEntry entry;
-    while (listTypeNext(li,&entry)) {
-        if (listTypeEqual(&entry,obj)) {
-            listTypeDelete(li, &entry);
+    while (li.listTypeNext(&entry))
+    {
+        if (listTypeEqual(&entry,obj))
+        {
+            listTypeDelete(&li, &entry);
             server.dirty++;
             removed++;
-            if (toremove && removed == toremove) break;
+            if (toremove && removed == toremove)
+                break;
         }
     }
-    listTypeReleaseIterator(li);
 
     if (removed) {
         signalModifiedKey(c->db,c->argv[1]);
