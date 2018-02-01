@@ -120,6 +120,22 @@ listTypeIterator::~listTypeIterator()
 /* Stores pointer to current the entry in the provided entry structure
  * and advances the position of the iterator. Returns 1 when the current
  * entry is in fact an entry, 0 otherwise. */
+int listTypeIterator::listTypeNext(listTypeEntry *entry) {
+    /* Protect from converting when iterating */
+    serverAssert(m_subject->encoding == m_encoding);
+
+    entry->li = this;
+    if (m_encoding == OBJ_ENCODING_QUICKLIST) {
+        if (m_ql_iter)
+            return m_ql_iter->quicklistNext(entry->m_ql_entry);
+        else
+            return 0;
+    } else {
+        serverPanic("Unknown list encoding");
+    }
+    return 0;
+}
+
 int listTypeNext(listTypeIterator *li, listTypeEntry *entry) {
     /* Protect from converting when iterating */
     serverAssert(li->m_subject->encoding == li->m_encoding);
@@ -278,7 +294,6 @@ void rpushxCommand(client *c) {
 void linsertCommand(client *c) {
     int where;
     robj *subject;
-    listTypeIterator *iter;
     listTypeEntry entry;
     int inserted = 0;
 
@@ -295,15 +310,14 @@ void linsertCommand(client *c) {
         checkType(c,subject,OBJ_LIST)) return;
 
     /* Seek pivot from head to tail */
-    iter = listTypeInitIterator(subject,0,LIST_TAIL);
-    while (listTypeNext(iter,&entry)) {
+    listTypeIterator iter(subject,0,LIST_TAIL);
+    while (iter.listTypeNext(&entry)) {
         if (listTypeEqual(&entry,c->argv[3])) {
             listTypeInsert(&entry,c->argv[4],where);
             inserted = 1;
             break;
         }
     }
-    listTypeReleaseIterator(iter);
 
     if (inserted) {
         signalModifiedKey(c->db,c->argv[1]);

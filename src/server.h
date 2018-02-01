@@ -1296,12 +1296,16 @@ public:
     robj* m_subject;
     int m_encoding;
 };
+
+struct listTypeEntry;
+
 /* Structure to hold list iteration abstraction. */
 class listTypeIterator : public genericIterator
 {
 public:
     listTypeIterator(robj* in_subject, long index, unsigned char direction);
     ~listTypeIterator();
+    int listTypeNext(listTypeEntry *entry);
 
     unsigned char m_direction; /* Iteration direction */
     quicklistIter *m_ql_iter;
