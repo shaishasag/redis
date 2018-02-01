@@ -1329,6 +1329,7 @@ public:
     int setTypeNext(sds *sdsele, int64_t *llele);
     sds setTypeNextObject();
 
+private:
     int m_intset_iter; /* intset iterator */
     dictIterator *m_dict_iter;
 };

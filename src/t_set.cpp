@@ -250,24 +250,25 @@ unsigned long setTypeSize(const robj *subject) {
  * to a hash table) is presized to hold the number of elements in the original
  * set. */
 void setTypeConvert(robj *setobj, int enc) {
-    setTypeIterator *si;
+    ;
     serverAssertWithInfo(NULL,setobj,setobj->type == OBJ_SET &&
                              setobj->encoding == OBJ_ENCODING_INTSET);
     if (enc == OBJ_ENCODING_HT) {
-        int64_t intele;
-        dict *d = dictCreate(&setDictType,NULL);
-        sds element;
+        dict *d = dictCreate(&setDictType, NULL);
 
         /* Presize the dict to avoid rehashing */
 
         /* To add the elements we extract integers and create redis objects */
-        si = setTypeInitIterator(setobj);
-        while (si->setTypeNext(&element,&intele) != -1) {
-            element = sdsfromlonglong(intele);
-            int ret = d->dictAdd(element,NULL);
-            serverAssert(ret == DICT_OK);
+        {
+            setTypeIterator si(setobj);
+            int64_t int_element;
+            sds element;
+            while (si.setTypeNext(&element, &int_element) != -1) {
+                element = sdsfromlonglong(int_element);
+                int ret = d->dictAdd(element, NULL);
+                serverAssert(ret == DICT_OK);
+            }
         }
-        setTypeReleaseIterator(si);
 
         setobj->encoding = OBJ_ENCODING_HT;
         zfree(setobj->ptr);
@@ -507,53 +508,53 @@ void spopWithCountCommand(client *c) {
             decrRefCount(objele);
         }
     } else {
-    /* CASE 3: The number of elements to return is very big, approaching
-     * the size of the set itself. After some time extracting random elements
-     * from such a set becomes computationally expensive, so we use
-     * a different strategy, we extract random elements that we don't
-     * want to return (the elements that will remain part of the set),
-     * creating a new set as we do this (that will be stored as the original
-     * set). Then we return the elements left in the original set and
-     * release it. */
+        /* CASE 3: The number of elements to return is very big, approaching
+         * the size of the set itself. After some time extracting random elements
+         * from such a set becomes computationally expensive, so we use
+         * a different strategy, we extract random elements that we don't
+         * want to return (the elements that will remain part of the set),
+         * creating a new set as we do this (that will be stored as the original
+         * set). Then we return the elements left in the original set and
+         * release it. */
         robj *newset = NULL;
 
         /* Create a new set with just the remaining elements. */
-        while(remaining--) {
-            encoding = setTypeRandomElement(set,&sdsele,&llele);
+        while (remaining--) {
+            encoding = setTypeRandomElement(set, &sdsele, &llele);
             if (encoding == OBJ_ENCODING_INTSET) {
                 sdsele = sdsfromlonglong(llele);
             } else {
                 sdsele = sdsdup(sdsele);
             }
             if (!newset) newset = setTypeCreate(sdsele);
-            setTypeAdd(newset,sdsele);
-            setTypeRemove(set,sdsele);
+            setTypeAdd(newset, sdsele);
+            setTypeRemove(set, sdsele);
             sdsfree(sdsele);
         }
 
         /* Assign the new set as the key value. */
         incrRefCount(set); /* Protect the old set value. */
-        dbOverwrite(c->db,c->argv[1],newset);
+        dbOverwrite(c->db, c->argv[1], newset);
 
         /* Tranfer the old set to the client and release it. */
-        setTypeIterator *si;
-        si = setTypeInitIterator(set);
-        while((encoding = si->setTypeNext(&sdsele,&llele)) != -1) {
-            if (encoding == OBJ_ENCODING_INTSET) {
-                addReplyBulkLongLong(c,llele);
-                objele = createStringObjectFromLongLong(llele);
-            } else {
-                addReplyBulkCBuffer(c,sdsele,sdslen(sdsele));
-                objele = createStringObject(sdsele,sdslen(sdsele));
-            }
+        {
+            setTypeIterator si(set);
+            while ((encoding = si.setTypeNext(&sdsele, &llele)) != -1) {
+                if (encoding == OBJ_ENCODING_INTSET) {
+                    addReplyBulkLongLong(c, llele);
+                    objele = createStringObjectFromLongLong(llele);
+                } else {
+                    addReplyBulkCBuffer(c, sdsele, sdslen(sdsele));
+                    objele = createStringObject(sdsele, sdslen(sdsele));
+                }
 
-            /* Replicate/AOF this command as an SREM operation */
-            propargv[2] = objele;
-            alsoPropagate(server.sremCommand,c->db->m_id,propargv,3,
-                PROPAGATE_AOF|PROPAGATE_REPL);
-            decrRefCount(objele);
+                /* Replicate/AOF this command as an SREM operation */
+                propargv[2] = objele;
+                alsoPropagate(server.sremCommand, c->db->m_id, propargv, 3,
+                              PROPAGATE_AOF | PROPAGATE_REPL);
+                decrRefCount(objele);
+            }
         }
-        setTypeReleaseIterator(si);
         decrRefCount(set);
     }
 
@@ -697,21 +698,20 @@ void srandmemberWithCountCommand(client *c) {
      * a bit less than the number of elements in the set, the natural approach
      * used into CASE 3 is highly inefficient. */
     if (count*SRANDMEMBER_SUB_STRATEGY_MUL > size) {
-        setTypeIterator *si;
-
         /* Add all the elements into the temporary dictionary. */
-        si = setTypeInitIterator(set);
-        while((encoding = si->setTypeNext(&ele,&llele)) != -1) {
-            int retval = DICT_ERR;
+        {
+            setTypeIterator si(set);
+            while ((encoding = si.setTypeNext(&ele, &llele)) != -1) {
+                int retval = DICT_ERR;
 
-            if (encoding == OBJ_ENCODING_INTSET) {
-                retval = d->dictAdd(createStringObjectFromLongLong(llele),NULL);
-            } else {
-                retval = d->dictAdd(createStringObject(ele,sdslen(ele)),NULL);
+                if (encoding == OBJ_ENCODING_INTSET) {
+                    retval = d->dictAdd(createStringObjectFromLongLong(llele), NULL);
+                } else {
+                    retval = d->dictAdd(createStringObject(ele, sdslen(ele)), NULL);
+                }
+                serverAssert(retval == DICT_OK);
             }
-            serverAssert(retval == DICT_OK);
         }
-        setTypeReleaseIterator(si);
         serverAssert(d->dictSize() == size);
 
         /* Remove random elements to reach the right count. */
@@ -808,8 +808,7 @@ int qsortCompareSetsByRevCardinality(const void *s1, const void *s2) {
 
 void sinterGenericCommand(client *c, robj **setkeys,
                           unsigned long setnum, robj *dstkey) {
-    robj **sets = (robj **)zmalloc(sizeof(robj*)*setnum);
-    setTypeIterator *si;
+    robj **sets = (robj **) zmalloc(sizeof(robj *) * setnum);
     robj *dstset = NULL;
     sds elesds;
     int64_t intobj;
@@ -819,22 +818,22 @@ void sinterGenericCommand(client *c, robj **setkeys,
 
     for (j = 0; j < setnum; j++) {
         robj *setobj = dstkey ?
-            lookupKeyWrite(c->db,setkeys[j]) :
-            lookupKeyRead(c->db,setkeys[j]);
+                       lookupKeyWrite(c->db, setkeys[j]) :
+                       lookupKeyRead(c->db, setkeys[j]);
         if (!setobj) {
             zfree(sets);
             if (dstkey) {
-                if (dbDelete(c->db,dstkey)) {
-                    signalModifiedKey(c->db,dstkey);
+                if (dbDelete(c->db, dstkey)) {
+                    signalModifiedKey(c->db, dstkey);
                     server.dirty++;
                 }
-                addReply(c,shared.czero);
+                addReply(c, shared.czero);
             } else {
-                addReply(c,shared.emptymultibulk);
+                addReply(c, shared.emptymultibulk);
             }
             return;
         }
-        if (checkType(c,setobj,OBJ_SET)) {
+        if (checkType(c, setobj, OBJ_SET)) {
             zfree(sets);
             return;
         }
@@ -842,7 +841,7 @@ void sinterGenericCommand(client *c, robj **setkeys,
     }
     /* Sort sets from the smallest to largest, this will improve our
      * algorithm's performance */
-    qsort(sets,setnum,sizeof(robj*),qsortCompareSetsByCardinality);
+    qsort(sets, setnum, sizeof(robj *), qsortCompareSetsByCardinality);
 
     /* The first thing we should output is the total number of elements...
      * since this is a multi-bulk write, but at this stage we don't know
@@ -860,54 +859,54 @@ void sinterGenericCommand(client *c, robj **setkeys,
     /* Iterate all the elements of the first (smallest) set, and test
      * the element against all the other sets, if at least one set does
      * not include the element it is discarded */
-    si = setTypeInitIterator(sets[0]);
-    while((encoding = si->setTypeNext(&elesds,&intobj)) != -1) {
-        for (j = 1; j < setnum; j++) {
-            if (sets[j] == sets[0]) continue;
-            if (encoding == OBJ_ENCODING_INTSET) {
-                /* intset with intset is simple... and fast */
-                if (sets[j]->encoding == OBJ_ENCODING_INTSET &&
-                    !((intset*)sets[j]->ptr)->intsetFind(intobj))
-                {
-                    break;
-                /* in order to compare an integer with an object we
-                 * have to use the generic function, creating an object
-                 * for this */
-                } else if (sets[j]->encoding == OBJ_ENCODING_HT) {
-                    elesds = sdsfromlonglong(intobj);
-                    if (!setTypeIsMember(sets[j],elesds)) {
+    {
+        setTypeIterator si(sets[0]);
+        while ((encoding = si.setTypeNext(&elesds, &intobj)) != -1) {
+            for (j = 1; j < setnum; j++) {
+                if (sets[j] == sets[0]) continue;
+                if (encoding == OBJ_ENCODING_INTSET) {
+                    /* intset with intset is simple... and fast */
+                    if (sets[j]->encoding == OBJ_ENCODING_INTSET &&
+                        !((intset *) sets[j]->ptr)->intsetFind(intobj)) {
+                        break;
+                        /* in order to compare an integer with an object we
+                         * have to use the generic function, creating an object
+                         * for this */
+                    } else if (sets[j]->encoding == OBJ_ENCODING_HT) {
+                        elesds = sdsfromlonglong(intobj);
+                        if (!setTypeIsMember(sets[j], elesds)) {
+                            sdsfree(elesds);
+                            break;
+                        }
                         sdsfree(elesds);
+                    }
+                } else if (encoding == OBJ_ENCODING_HT) {
+                    if (!setTypeIsMember(sets[j], elesds)) {
                         break;
                     }
-                    sdsfree(elesds);
-                }
-            } else if (encoding == OBJ_ENCODING_HT) {
-                if (!setTypeIsMember(sets[j],elesds)) {
-                    break;
                 }
             }
-        }
 
-        /* Only take action when all sets contain the member */
-        if (j == setnum) {
-            if (!dstkey) {
-                if (encoding == OBJ_ENCODING_HT)
-                    addReplyBulkCBuffer(c,elesds,sdslen(elesds));
-                else
-                    addReplyBulkLongLong(c,intobj);
-                cardinality++;
-            } else {
-                if (encoding == OBJ_ENCODING_INTSET) {
-                    elesds = sdsfromlonglong(intobj);
-                    setTypeAdd(dstset,elesds);
-                    sdsfree(elesds);
+            /* Only take action when all sets contain the member */
+            if (j == setnum) {
+                if (!dstkey) {
+                    if (encoding == OBJ_ENCODING_HT)
+                        addReplyBulkCBuffer(c, elesds, sdslen(elesds));
+                    else
+                        addReplyBulkLongLong(c, intobj);
+                    cardinality++;
                 } else {
-                    setTypeAdd(dstset,elesds);
+                    if (encoding == OBJ_ENCODING_INTSET) {
+                        elesds = sdsfromlonglong(intobj);
+                        setTypeAdd(dstset, elesds);
+                        sdsfree(elesds);
+                    } else {
+                        setTypeAdd(dstset, elesds);
+                    }
                 }
             }
         }
     }
-    setTypeReleaseIterator(si);
 
     if (dstkey) {
         /* Store the resulting set into the target, if the intersection
@@ -1012,12 +1011,11 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
         for (j = 0; j < setnum; j++) {
             if (!sets[j]) continue; /* non existing keys are like empty sets */
 
-            setTypeIterator* si = setTypeInitIterator(sets[j]);
-            while((ele = si->setTypeNextObject()) != NULL) {
+            setTypeIterator si(sets[j]);
+            while((ele = si.setTypeNextObject()) != NULL) {
                 if (setTypeAdd(dstset,ele)) cardinality++;
                 sdsfree(ele);
             }
-            setTypeReleaseIterator(si);
         }
     } else if (op == SET_OP_DIFF && sets[0] && diff_algo == 1) {
         /* DIFF Algorithm 1:
@@ -1028,8 +1026,8 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
          *
          * This way we perform at max N*M operations, where N is the size of
          * the first set, and M the number of sets. */
-        setTypeIterator* si = setTypeInitIterator(sets[0]);
-        while((ele = si->setTypeNextObject()) != NULL) {
+        setTypeIterator si(sets[0]);
+        while((ele = si.setTypeNextObject()) != NULL) {
             for (j = 1; j < setnum; j++) {
                 if (!sets[j]) continue; /* no key is an empty set. */
                 if (sets[j] == sets[0]) break; /* same set! */
@@ -1042,7 +1040,7 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
             }
             sdsfree(ele);
         }
-        setTypeReleaseIterator(si);
+
     } else if (op == SET_OP_DIFF && sets[0] && diff_algo == 2) {
         /* DIFF Algorithm 2:
          *
@@ -1054,8 +1052,8 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
         for (j = 0; j < setnum; j++) {
             if (!sets[j]) continue; /* non existing keys are like empty sets */
 
-            setTypeIterator* si = setTypeInitIterator(sets[j]);
-            while((ele = si->setTypeNextObject()) != NULL) {
+            setTypeIterator si(sets[j]);
+            while((ele = si.setTypeNextObject()) != NULL) {
                 if (j == 0) {
                     if (setTypeAdd(dstset,ele)) cardinality++;
                 } else {
@@ -1063,23 +1061,25 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
                 }
                 sdsfree(ele);
             }
-            setTypeReleaseIterator(si);
 
             /* Exit if result set is empty as any additional removal
              * of elements will have no effect. */
-            if (cardinality == 0) break;
+            if (cardinality == 0)
+                break;
         }
     }
 
     /* Output the content of the resulting set, if not in STORE mode */
     if (!dstkey) {
-        addReplyMultiBulkLen(c,cardinality);
-        setTypeIterator* si = setTypeInitIterator(dstset);
-        while((ele = si->setTypeNextObject()) != NULL) {
-            addReplyBulkCBuffer(c,ele,sdslen(ele));
-            sdsfree(ele);
-        }
-        setTypeReleaseIterator(si);
+        addReplyMultiBulkLen(c, cardinality);
+        {
+            setTypeIterator si(dstset);
+            while ((ele = si.setTypeNextObject()) != NULL) {
+                addReplyBulkCBuffer(c, ele, sdslen(ele));
+                sdsfree(ele);
+            }
+        }   // the braces make sure si is destructed before decrRefCount might dispose of
+            // dstset. si might contain a dictIterator that points to dstset
         decrRefCount(dstset);
     } else {
         /* If we have a target key where to store the resulting set

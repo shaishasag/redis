@@ -164,13 +164,12 @@ void computeDatasetDigest(unsigned char *final) {
                     decrRefCount(eleobj);
                 }
             } else if (o->type == OBJ_SET) {
-                setTypeIterator *si = setTypeInitIterator(o);
+                setTypeIterator si(o);
                 sds sdsele;
-                while((sdsele = si->setTypeNextObject()) != NULL) {
+                while((sdsele = si.setTypeNextObject()) != NULL) {
                     xorDigest(digest,sdsele,sdslen(sdsele));
                     sdsfree(sdsele);
                 }
-                setTypeReleaseIterator(si);
             } else if (o->type == OBJ_ZSET) {
                 unsigned char eledigest[20];
 

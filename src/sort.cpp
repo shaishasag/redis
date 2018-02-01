@@ -377,15 +377,14 @@ void sortCommand(client *c) {
         }
 
     } else if (sortval->type == OBJ_SET) {
-        setTypeIterator *si = setTypeInitIterator(sortval);
+        setTypeIterator si(sortval);
         sds sdsele;
-        while((sdsele = si->setTypeNextObject()) != NULL) {
+        while((sdsele = si.setTypeNextObject()) != NULL) {
             vector[j].obj = createObject(OBJ_STRING,sdsele);
             vector[j].u.score = 0;
             vector[j].u.cmpobj = NULL;
             j++;
         }
-        setTypeReleaseIterator(si);
     } else if (sortval->type == OBJ_ZSET && dontsort) {
         /* Special handling for a sorted set, if 'dontsort' is true.
          * This makes sure we return elements in the sorted set original
