@@ -82,28 +82,39 @@ unsigned long listTypeLength(const robj *subject) {
 /* Initialize an iterator at the specified index. */
 listTypeIterator *listTypeInitIterator(robj *subject, long index,
                                        unsigned char direction) {
-    listTypeIterator* li = (listTypeIterator*)zmalloc(sizeof(listTypeIterator));
-    li->subject = subject;
-    li->encoding = subject->encoding;
-    li->direction = direction;
-    li->iter = NULL;
+    listTypeIterator* li = new (zmalloc(sizeof(listTypeIterator))) listTypeIterator(subject, index, direction);
+
+
+    return li;
+}
+
+listTypeIterator::listTypeIterator(robj* in_subject, long index, unsigned char direction)
+: genericIterator(in_subject)
+, m_direction(direction)
+, m_ql_iter(NULL)
+{
     /* LIST_HEAD means start at TAIL and move *towards* head.
      * LIST_TAIL means start at HEAD and move *towards tail. */
     int iter_direction =
-        direction == LIST_HEAD ? AL_START_TAIL : AL_START_HEAD;
-    if (li->encoding == OBJ_ENCODING_QUICKLIST) {
-        li->iter = quicklistGetIteratorAtIdx((quicklist *)li->subject->ptr,
+        m_direction == LIST_HEAD ? AL_START_TAIL : AL_START_HEAD;
+    if (m_encoding == OBJ_ENCODING_QUICKLIST) {
+        m_ql_iter = quicklistGetIteratorAtIdx((quicklist *)m_subject->ptr,
                                              iter_direction, index);
     } else {
         serverPanic("Unknown list encoding");
     }
-    return li;
 }
 
 /* Clean up the iterator. */
 void listTypeReleaseIterator(listTypeIterator *li) {
-    zfree(li->iter);
+    li->~listTypeIterator();
     zfree(li);
+}
+
+listTypeIterator::~listTypeIterator()
+{
+    if (NULL != m_ql_iter)
+        zfree(m_ql_iter);
 }
 
 /* Stores pointer to current the entry in the provided entry structure
@@ -111,12 +122,12 @@ void listTypeReleaseIterator(listTypeIterator *li) {
  * entry is in fact an entry, 0 otherwise. */
 int listTypeNext(listTypeIterator *li, listTypeEntry *entry) {
     /* Protect from converting when iterating */
-    serverAssert(li->subject->encoding == li->encoding);
+    serverAssert(li->m_subject->encoding == li->m_encoding);
 
     entry->li = li;
-    if (li->encoding == OBJ_ENCODING_QUICKLIST) {
-        if (li->iter)
-            return li->iter->quicklistNext(entry->m_ql_entry);
+    if (li->m_encoding == OBJ_ENCODING_QUICKLIST) {
+        if (li->m_ql_iter)
+            return li->m_ql_iter->quicklistNext(entry->m_ql_entry);
         else
             return 0;
     } else {
@@ -128,7 +139,7 @@ int listTypeNext(listTypeIterator *li, listTypeEntry *entry) {
 /* Return entry or NULL at the current position of the iterator. */
 robj *listTypeGet(listTypeEntry *entry) {
     robj *value = NULL;
-    if (entry->li->encoding == OBJ_ENCODING_QUICKLIST) {
+    if (entry->li->m_encoding == OBJ_ENCODING_QUICKLIST) {
         if (entry->m_ql_entry.m_value) {
             value = createStringObject((char *)entry->m_ql_entry.m_value,
                                        entry->m_ql_entry.m_size);
@@ -142,7 +153,7 @@ robj *listTypeGet(listTypeEntry *entry) {
 }
 
 void listTypeInsert(listTypeEntry *entry, robj *value, int where) {
-    if (entry->li->encoding == OBJ_ENCODING_QUICKLIST) {
+    if (entry->li->m_encoding == OBJ_ENCODING_QUICKLIST) {
         value = getDecodedObject(value);
         sds str = (sds)value->ptr;
         size_t len = sdslen(str);
@@ -161,7 +172,7 @@ void listTypeInsert(listTypeEntry *entry, robj *value, int where) {
 
 /* Compare the given object with the entry at the current position. */
 int listTypeEqual(listTypeEntry *entry, robj *o) {
-    if (entry->li->encoding == OBJ_ENCODING_QUICKLIST) {
+    if (entry->li->m_encoding == OBJ_ENCODING_QUICKLIST) {
         serverAssertWithInfo(NULL,o,sdsEncodedObject(o));
         return quicklistCompare((unsigned char *)entry->m_ql_entry.m_zip_list,(unsigned char *)o->ptr,sdslen((sds)o->ptr));
     } else {
@@ -171,8 +182,8 @@ int listTypeEqual(listTypeEntry *entry, robj *o) {
 
 /* Delete the element pointed to. */
 void listTypeDelete(listTypeIterator *iter, listTypeEntry *entry) {
-    if (entry->li->encoding == OBJ_ENCODING_QUICKLIST) {
-        iter->iter->quicklistDelEntry(&entry->m_ql_entry);
+    if (entry->li->m_encoding == OBJ_ENCODING_QUICKLIST) {
+        iter->m_ql_iter->quicklistDelEntry(&entry->m_ql_entry);
     } else {
         serverPanic("Unknown list encoding");
     }

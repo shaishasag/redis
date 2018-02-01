@@ -1283,12 +1283,28 @@ struct redisSortOperation {
     robj *pattern;
 } ;
 
+class genericIterator
+{
+public:
+    genericIterator(robj* in_subject)
+            : m_subject(in_subject)
+            , m_encoding(in_subject->encoding)
+    {}
+    ~genericIterator() {}
+
+//protected:
+    robj* m_subject;
+    int m_encoding;
+};
 /* Structure to hold list iteration abstraction. */
-struct listTypeIterator {
-    robj *subject;
-    unsigned char encoding;
-    unsigned char direction; /* Iteration direction */
-    quicklistIter *iter;
+class listTypeIterator : public genericIterator
+{
+public:
+    listTypeIterator(robj* in_subject, long index, unsigned char direction);
+    ~listTypeIterator();
+
+    unsigned char m_direction; /* Iteration direction */
+    quicklistIter *m_ql_iter;
 };
 
 /* Structure for an entry while iterating over a list. */
