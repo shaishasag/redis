@@ -427,9 +427,9 @@ void incrbyfloatCommand(client *c) {
      * in order to make sure that differences in float precision or formatting
      * will not create differences in replicas or after an AOF restart. */
     aux = createStringObject("SET",3);
-    rewriteClientCommandArgument(c,0,aux);
+    c->rewriteClientCommandArgument(0,aux);
     decrRefCount(aux);
-    rewriteClientCommandArgument(c,2,_new);
+    c->rewriteClientCommandArgument(2,_new);
 }
 
 void appendCommand(client *c) {

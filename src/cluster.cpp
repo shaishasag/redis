@@ -4036,20 +4036,20 @@ void clusterReplyMultiBulkSlots(client *c) {
                 start = -1;
 
                 /* First node reply position is always the master */
-                c->addReplyMultiBulkLen( 3);
-                addReplyBulkCString(c, node->m_ip);
-                c->addReplyLongLong( node->m_port);
-                c->addReplyBulkCBuffer( node->m_name, CLUSTER_NAMELEN);
+                c->addReplyMultiBulkLen(3);
+                c->addReplyBulkCString(node->m_ip);
+                c->addReplyLongLong(node->m_port);
+                c->addReplyBulkCBuffer(node->m_name, CLUSTER_NAMELEN);
 
                 /* Remaining nodes in reply are replicas for slot range */
                 for (i = 0; i < node->m_numslaves; i++) {
                     /* This loop is copy/pasted from clusterGenNodeDescription()
                      * with modifications for per-slot node aggregation */
                     if (node->m_slaves[i]->nodeFailed()) continue;
-                    c->addReplyMultiBulkLen( 3);
-                    addReplyBulkCString(c, node->m_slaves[i]->m_ip);
-                    c->addReplyLongLong( node->m_slaves[i]->m_port);
-                    c->addReplyBulkCBuffer( node->m_slaves[i]->m_name, CLUSTER_NAMELEN);
+                    c->addReplyMultiBulkLen(3);
+                    c->addReplyBulkCString(node->m_slaves[i]->m_ip);
+                    c->addReplyLongLong(node->m_slaves[i]->m_port);
+                    c->addReplyBulkCBuffer(node->m_slaves[i]->m_name, CLUSTER_NAMELEN);
                     nested_elements++;
                 }
                 c->setDeferredMultiBulkLength( nested_replylen, nested_elements);
@@ -4476,7 +4476,7 @@ void clusterCommand(client *c) {
         c->addReplyMultiBulkLen(n->m_numslaves);
         for (j = 0; j < n->m_numslaves; j++) {
             sds ni = clusterGenNodeDescription(n->m_slaves[j]);
-            addReplyBulkCString(c,ni);
+            c->addReplyBulkCString(ni);
             sdsfree(ni);
         }
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"count-failure-reports") &&
@@ -5080,7 +5080,7 @@ try_again:
         if (del_idx > 1) {
             newargv[0] = createStringObject("DEL",3);
             /* Note that the following call takes ownership of newargv. */
-            replaceClientCommandVector(c,del_idx,newargv);
+            c->replaceClientCommandVector(del_idx,newargv);
             argv_rewritten = 1;
         } else {
             /* No key transfer acknowledged, no need to rewrite as DEL. */

@@ -679,34 +679,44 @@ struct readyList {
 
 /* With multiplexing we need to take per-client state.
  * Clients are taken in a linked list. */
-struct client {
+class client {
+public:
     int selectDb(int id);
 
     // implemented in networking.cpp
-    int prepareClientToWrite();
-    int  _addReplyToBuffer(const char *s, size_t len);
-    void _addReplyObjectToList(robj *o);
-    void _addReplySdsToList(sds s);
-    void _addReplyStringToList(const char *s, size_t len);
     void addReply(robj *obj);
     void addReplySds(sds s);
     void addReplyString(const char *s, size_t len);
-    void addReplyErrorLength(const char *s, size_t len);
     void addReplyError(const char *err);
     void addReplyErrorFormat(const char *fmt, ...);
-    void addReplyStatusLength(const char *s, size_t len);
     void addReplyStatus(const char *status);
     void addReplyStatusFormat(const char *fmt, ...);
-    void *addDeferredMultiBulkLength();
+    void* addDeferredMultiBulkLength();
     void setDeferredMultiBulkLength(void *node, long length);
     void addReplyDouble(double d);
     void addReplyHumanLongDouble(long double d);
-    void addReplyLongLongWithPrefix(long long ll, char prefix);
     void addReplyLongLong(long long ll);
     void addReplyMultiBulkLen(long length);
-    void addReplyBulkLen(robj *obj);
     void addReplyBulk(robj *obj);
     void addReplyBulkCBuffer(const void *p, size_t len);
+    void addReplyBulkSds(sds s);
+    void addReplyBulkCString(const char *s);
+    void addReplyBulkLongLong(long long ll);
+    int  clientHasPendingReplies();
+
+    void processInputBuffer();
+    char *getClientPeerId();
+    sds catClientInfoString(sds s);
+    void rewriteClientCommandVector(int argc, ...);
+    void replaceClientCommandVector(int argc, robj **argv);
+
+    static int   getClientTypeByName(char *name);
+    static char* getClientTypeName(int client_name);
+
+    void rewriteClientCommandArgument(int i, robj *newval);
+    unsigned long getClientOutputBufferMemoryUsage();
+    int getClientType();
+    int checkClientOutputBufferLimits();
 
     uint64_t m_id;            /* Client incremental unique ID. */
     int m_fd;                 /* Client socket. */
@@ -762,7 +772,21 @@ struct client {
     /* Response buffer */
     int m_response_buff_pos;
     char m_response_buff[PROTO_REPLY_CHUNK_BYTES];
-} ;
+private:
+    // implemented in networking.cpp
+    int processInlineBuffer();
+    int processMultibulkBuffer();
+    void genClientPeerId(char *peerid, size_t peerid_len);
+    int  prepareClientToWrite();
+    int  _addReplyToBuffer(const char *s, size_t len);
+    void _addReplyObjectToList(robj *o);
+    void _addReplySdsToList(sds s);
+    void _addReplyStringToList(const char *s, size_t len);
+    void addReplyErrorLength(const char *s, size_t len);
+    void addReplyStatusLength(const char *s, size_t len);
+    void addReplyLongLongWithPrefix(long long ll, char prefix);
+    void addReplyBulkLen(robj *obj);
+};
 
 struct saveparam {
     time_t seconds;
@@ -1448,41 +1472,20 @@ void freeClient(client *c);
 void freeClientAsync(client *c);
 void resetClient(client *c);
 void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask);
-void processInputBuffer(client *c);
 void acceptHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 void acceptUnixHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask);
-void addReplyBulkCString(client *c, const char *s);
-void addReplyBulkCBuffer(client *c, const void *p, size_t len);
-void addReplyBulkLongLong(client *c, long long ll);
-void addReply(client *c, robj *obj);
-void addReplySds(client *c, sds s);
-void addReplyBulkSds(client *c, sds s);
-void addReplyError(client *c, const char *err);
-void addReplyStatus(client *c, const char *status);
-void addReplyDouble(client *c, double d);
-void addReplyHumanLongDouble(client *c, long double d);
-void addReplyLongLong(client *c, long long ll);
-void addReplyMultiBulkLen(client *c, long length);
 void copyClientOutputBuffer(client *dst, client *src);
 size_t sdsZmallocSize(sds s);
 size_t getStringObjectSdsUsedMemory(robj *o);
 void *dupClientReplyValue(void *o);
 void getClientsMaxBuffers(unsigned long *longest_output_list,
                           unsigned long *biggest_input_buffer);
-char *getClientPeerId(client *client);
-sds catClientInfoString(sds s, client *client);
 sds getAllClientsInfoString();
-void rewriteClientCommandVector(client *c, int argc, ...);
-void rewriteClientCommandArgument(client *c, int i, robj *newval);
-void replaceClientCommandVector(client *c, int argc, robj **argv);
 unsigned long getClientOutputBufferMemoryUsage(client *c);
 void freeClientsInAsyncFreeQueue();
 void asyncCloseClientOnOutputBufferLimitReached(client *c);
-int getClientType(client *c);
-int getClientTypeByName(char *name);
-char *getClientTypeName(int client_name);
 void flushSlavesOutputBuffers();
 void disconnectSlaves();
 int listenToPort(int port, int *fds, int *count);
@@ -1490,7 +1493,6 @@ void pauseClients(mstime_t duration);
 int clientsArePaused();
 int processEventsWhileBlocked();
 int handleClientsWithPendingWrites();
-int clientHasPendingReplies(client *c);
 void unlinkClient(client *c);
 int writeToClient(int fd, client *c, int handler_installed);
 

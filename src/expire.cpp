@@ -415,7 +415,7 @@ void expireGenericCommand(client *c, long long basetime, int unit) {
 
         /* Replicate/AOF this as an explicit DEL or UNLINK. */
         aux = server.lazyfree_lazy_expire ? shared.unlink : shared.del;
-        rewriteClientCommandVector(c,2,aux,key);
+        c->rewriteClientCommandVector(2,aux,key);
         signalModifiedKey(c->m_cur_selected_db,key);
         notifyKeyspaceEvent(NOTIFY_GENERIC,"del",key,c->m_cur_selected_db->m_id);
         c->addReply( shared.cone);

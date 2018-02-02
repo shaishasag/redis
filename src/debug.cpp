@@ -527,7 +527,7 @@ void debugCommand(client *c) {
         sizes = sdscatprintf(sizes,"sdshdr16:%d ",(int)sizeof(struct sdshdr16));
         sizes = sdscatprintf(sizes,"sdshdr32:%d ",(int)sizeof(struct sdshdr32));
         sizes = sdscatprintf(sizes,"sdshdr64:%d ",(int)sizeof(struct sdshdr64));
-        addReplyBulkSds(c,sizes);
+        c->addReplyBulkSds(sizes);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"htstats") && c->m_argc == 3) {
         long dbid;
         sds stats = sdsempty();
@@ -548,7 +548,7 @@ void debugCommand(client *c) {
         server.db[dbid].m_expires->dictGetStats(buf,sizeof(buf));
         stats = sdscat(stats,buf);
 
-        addReplyBulkSds(c,stats);
+        c->addReplyBulkSds(stats);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"change-repl-id") && c->m_argc == 2) {
         serverLog(LL_WARNING,"Changing replication IDs after receiving DEBUG change-repl-id");
         changeReplicationId();
@@ -895,7 +895,7 @@ void logCurrentClient() {
     int j;
 
     serverLogRaw(LL_WARNING|LL_RAW, "\n------ CURRENT CLIENT INFO ------\n");
-    client = catClientInfoString(sdsempty(),cc);
+    client = cc->catClientInfoString(sdsempty());
     serverLog(LL_WARNING|LL_RAW,"%s\n", client);
     sdsfree(client);
     for (j = 0; j < cc->m_argc; j++) {

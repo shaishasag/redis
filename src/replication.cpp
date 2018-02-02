@@ -312,7 +312,7 @@ void replicationFeedMonitors(client *c, list *monitors, int dictid, robj **argv,
     } else if (c->m_flags & CLIENT_UNIX_SOCKET) {
         cmdrepr = sdscatprintf(cmdrepr,"[%d unix:%s] ",dictid,server.unixsocket);
     } else {
-        cmdrepr = sdscatprintf(cmdrepr,"[%d %s] ",dictid,getClientPeerId(c));
+        cmdrepr = sdscatprintf(cmdrepr,"[%d %s] ",dictid, c->getClientPeerId());
     }
 
     for (j = 0; j < argc; j++) {
@@ -635,7 +635,7 @@ void syncCommand(client *c) {
      * the client about already issued commands. We need a fresh reply
      * buffer registering the differences between the BGSAVE and the current
      * dataset, so that we can copy to other slaves if needed. */
-    if (clientHasPendingReplies(c)) {
+    if (c->clientHasPendingReplies()) {
         c->addReplyError("SYNC and PSYNC are invalid with pending output");
         return;
     }
@@ -714,7 +714,7 @@ void syncCommand(client *c) {
         if (ln && ((c->m_slave_capabilities & slave->m_slave_capabilities) == slave->m_slave_capabilities)) {
             /* Perfect, the server is already registering differences for
              * another slave. Set the right state, and copy the buffer. */
-            copyClientOutputBuffer(c,slave);
+            copyClientOutputBuffer(c, slave);
             replicationSetupSlaveForFullResync(c,slave->m_psync_initial_offset);
             serverLog(LL_NOTICE,"Waiting for end of BGSAVE for SYNC");
         } else {
@@ -1993,7 +1993,7 @@ void slaveofCommand(client *c) {
         !strcasecmp((const char*)c->m_argv[2]->ptr,"one")) {
         if (server.masterhost) {
             replicationUnsetMaster();
-            sds client = catClientInfoString(sdsempty(),c);
+            sds client = c->catClientInfoString(sdsempty());
             serverLog(LL_NOTICE,"MASTER MODE enabled (user request from '%s')",
                 client);
             sdsfree(client);
@@ -2014,7 +2014,7 @@ void slaveofCommand(client *c) {
         /* There was no previous master or the user specified a different one,
          * we can continue. */
         replicationSetMaster((char *)c->m_argv[1]->ptr, port);
-        sds client = catClientInfoString(sdsempty(),c);
+        sds client = c->catClientInfoString(sdsempty());
         serverLog(LL_NOTICE,"SLAVE OF %s:%d enabled (user request from '%s')",
             server.masterhost, server.masterport, client);
         sdsfree(client);
@@ -2047,9 +2047,9 @@ void roleCommand(client *c) {
             }
             if (slave->m_replication_state != SLAVE_STATE_ONLINE) continue;
             c->addReplyMultiBulkLen(3);
-            addReplyBulkCString(c,slaveip);
-            addReplyBulkLongLong(c,slave->m_slave_listening_port);
-            addReplyBulkLongLong(c,slave->m_replication_ack_off);
+            c->addReplyBulkCString(slaveip);
+            c->addReplyBulkLongLong(slave->m_slave_listening_port);
+            c->addReplyBulkLongLong(slave->m_replication_ack_off);
             slaves++;
         }
         c->setDeferredMultiBulkLength(mbcount,slaves);
@@ -2058,7 +2058,7 @@ void roleCommand(client *c) {
 
         c->addReplyMultiBulkLen(5);
         c->addReplyBulkCBuffer("slave",5);
-        addReplyBulkCString(c,server.masterhost);
+        c->addReplyBulkCString(server.masterhost);
         c->addReplyLongLong(server.masterport);
         if (slaveIsInHandshakeState()) {
             slavestate = "handshake";
@@ -2072,7 +2072,7 @@ void roleCommand(client *c) {
             default: slavestate = "unknown"; break;
             }
         }
-        addReplyBulkCString(c,slavestate);
+        c->addReplyBulkCString(slavestate);
         c->addReplyLongLong(server.master ? server.master->m_applied_replication_offset : -1);
     }
 }
@@ -2086,9 +2086,9 @@ void replicationSendAck() {
     if (c != NULL) {
         c->m_flags |= CLIENT_MASTER_FORCE_REPLY;
         c->addReplyMultiBulkLen(3);
-        addReplyBulkCString(c,"REPLCONF");
-        addReplyBulkCString(c,"ACK");
-        addReplyBulkLongLong(c,c->m_applied_replication_offset);
+        c->addReplyBulkCString("REPLCONF");
+        c->addReplyBulkCString("ACK");
+        c->addReplyBulkLongLong(c->m_applied_replication_offset);
         c->m_flags &= ~CLIENT_MASTER_FORCE_REPLY;
     }
 }
@@ -2209,7 +2209,7 @@ void replicationResurrectCachedMaster(int newfd) {
 
     /* We may also need to install the write handler as well if there is
      * pending data in the write buffers. */
-    if (clientHasPendingReplies(server.master)) {
+    if (server.master->clientHasPendingReplies()) {
         if (server.el->aeCreateFileEvent(newfd, AE_WRITABLE,
                           sendReplyToClient, server.master)) {
             serverLog(LL_WARNING,"Error resurrecting the cached master, impossible to add the writable handler: %s", strerror(errno));

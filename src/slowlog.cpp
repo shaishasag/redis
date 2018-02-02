@@ -88,7 +88,7 @@ slowlogEntry *slowlogCreateEntry(client *c, robj **argv, int argc, long long dur
     se->time = time(NULL);
     se->duration = duration;
     se->id = server.slowlog_entry_id++;
-    se->peerid = sdsnew(getClientPeerId(c));
+    se->peerid = sdsnew(c->getClientPeerId());
     se->cname = c->m_client_name ? sdsnew((const char *)c->m_client_name->ptr) : sdsempty();
     return se;
 }

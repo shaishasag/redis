@@ -446,7 +446,7 @@ void lrangeCommand(client *c) {
             if (qe->m_value) {
                 c->addReplyBulkCBuffer(qe->m_value,qe->m_size);
             } else {
-                addReplyBulkLongLong(c,qe->m_longval);
+                c->addReplyBulkLongLong(qe->m_longval);
             }
         }
 
@@ -929,7 +929,7 @@ void blockingPopGenericCommand(client *c, int where) {
                     server.dirty++;
 
                     /* Replicate it as an [LR]POP instead of B[LR]POP. */
-                    rewriteClientCommandVector(c,2,
+                    c->rewriteClientCommandVector(2,
                         (where == LIST_HEAD) ? shared.lpop : shared.rpop,
                         c->m_argv[j]);
                     return;

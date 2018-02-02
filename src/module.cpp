@@ -3539,7 +3539,7 @@ void moduleHandleBlockedClients() {
             /* Put the client in the list of clients that need to write
              * if there are pending replies here. This is needed since
              * during a non blocking command the client may receive output. */
-            if (clientHasPendingReplies(c) &&
+            if (c->clientHasPendingReplies() &&
                 !(c->m_flags & CLIENT_PENDING_WRITE))
             {
                 c->m_flags |= CLIENT_PENDING_WRITE;
@@ -3894,9 +3894,9 @@ void moduleCommand(client *c) {
             sds name = (sds)de->dictGetKey();
             struct RedisModule* module = (RedisModule*)de->dictGetVal();
             c->addReplyMultiBulkLen(4);
-            addReplyBulkCString(c,"name");
+            c->addReplyBulkCString("name");
             c->addReplyBulkCBuffer(name,sdslen(name));
-            addReplyBulkCString(c,"ver");
+            c->addReplyBulkCString("ver");
             c->addReplyLongLong(module->m_ver);
         }
     } else {

@@ -123,7 +123,7 @@ void processUnblockedClients() {
          * the code is conceptually more correct this way. */
         if (!(c->m_flags & CLIENT_BLOCKED)) {
             if (c->m_query_buf && sdslen(c->m_query_buf) > 0) {
-                processInputBuffer(c);
+                c->processInputBuffer();
             }
         }
     }

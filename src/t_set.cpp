@@ -459,7 +459,7 @@ void spopWithCountCommand(client *c) {
         notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->m_argv[1],c->m_cur_selected_db->m_id);
 
         /* Propagate this command as an DEL operation */
-        rewriteClientCommandVector(c,2,shared.del,c->m_argv[1]);
+        c->rewriteClientCommandVector(2,shared.del,c->m_argv[1]);
         signalModifiedKey(c->m_cur_selected_db,c->m_argv[1]);
         server.dirty++;
         return;
@@ -492,7 +492,7 @@ void spopWithCountCommand(client *c) {
             /* Emit and remove. */
             encoding = setTypeRandomElement(set,&sdsele,&llele);
             if (encoding == OBJ_ENCODING_INTSET) {
-                addReplyBulkLongLong(c,llele);
+                c->addReplyBulkLongLong(llele);
                 objele = createStringObjectFromLongLong(llele);
                 set->ptr = intset::intsetRemove((intset *)set->ptr,llele,NULL);
             } else {
@@ -541,7 +541,7 @@ void spopWithCountCommand(client *c) {
             setTypeIterator si(set);
             while ((encoding = si.setTypeNext(&sdsele, &llele)) != -1) {
                 if (encoding == OBJ_ENCODING_INTSET) {
-                    addReplyBulkLongLong(c, llele);
+                    c->addReplyBulkLongLong(llele);
                     objele = createStringObjectFromLongLong(llele);
                 } else {
                     c->addReplyBulkCBuffer( sdsele, sdslen(sdsele));
@@ -603,7 +603,7 @@ void spopCommand(client *c) {
 
     /* Replicate/AOF this command as an SREM operation */
     aux = createStringObject("SREM",4);
-    rewriteClientCommandVector(c,3,aux,c->m_argv[1],ele);
+    c->rewriteClientCommandVector(3,aux,c->m_argv[1],ele);
     decrRefCount(aux);
 
     /* Add the element to the reply */
@@ -669,7 +669,7 @@ void srandmemberWithCountCommand(client *c) {
         while(count--) {
             encoding = setTypeRandomElement(set,&ele,&llele);
             if (encoding == OBJ_ENCODING_INTSET) {
-                addReplyBulkLongLong(c,llele);
+                c->addReplyBulkLongLong(llele);
             } else {
                 c->addReplyBulkCBuffer(ele,sdslen(ele));
             }
@@ -782,7 +782,7 @@ void srandmemberCommand(client *c) {
 
     encoding = setTypeRandomElement(set,&ele,&llele);
     if (encoding == OBJ_ENCODING_INTSET) {
-        addReplyBulkLongLong(c,llele);
+        c->addReplyBulkLongLong(llele);
     } else {
         c->addReplyBulkCBuffer(ele,sdslen(ele));
     }
@@ -893,7 +893,7 @@ void sinterGenericCommand(client *c, robj **setkeys,
                     if (encoding == OBJ_ENCODING_HT)
                         c->addReplyBulkCBuffer( elesds, sdslen(elesds));
                     else
-                        addReplyBulkLongLong(c, intobj);
+                        c->addReplyBulkLongLong(intobj);
                     cardinality++;
                 } else {
                     if (encoding == OBJ_ENCODING_INTSET) {

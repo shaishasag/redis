@@ -755,7 +755,7 @@ void scanGenericCommand(client *c, robj *o, unsigned long cursor) {
 
     /* Step 4: Reply to the client. */
     c->addReplyMultiBulkLen( 2);
-    addReplyBulkLongLong(c,cursor);
+    c->addReplyBulkLongLong(cursor);
 
     c->addReplyMultiBulkLen( keys->listLength());
     while ((node = keys->listFirst()) != NULL) {

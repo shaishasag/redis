@@ -358,7 +358,7 @@ size_t freeMemoryGetNotCountedMemory() {
         listIter li(server.slaves);
         while((ln = li.listNext())) {
             client *slave = (client *)ln->listNodeValue();
-            overhead += getClientOutputBufferMemoryUsage(slave);
+            overhead += slave->getClientOutputBufferMemoryUsage();
         }
     }
     if (server.aof_state != AOF_OFF) {

@@ -2465,7 +2465,7 @@ void zrangeGenericCommand(client *c, int reverse) {
             serverAssertWithInfo(c,zobj,eptr != NULL && sptr != NULL);
             serverAssertWithInfo(c,zobj,ziplistGet(eptr,&vstr,&vlen,&vlong));
             if (vstr == NULL)
-                addReplyBulkLongLong(c,vlong);
+                c->addReplyBulkLongLong(vlong);
             else
                 c->addReplyBulkCBuffer(vstr,vlen);
 
@@ -2626,7 +2626,7 @@ void genericZrangebyscoreCommand(client *c, int reverse) {
 
             rangelen++;
             if (vstr == NULL) {
-                addReplyBulkLongLong(c,vlong);
+                c->addReplyBulkLongLong(vlong);
             } else {
                 c->addReplyBulkCBuffer(vstr,vlen);
             }
@@ -2977,7 +2977,7 @@ void genericZrangebylexCommand(client *c, int reverse) {
 
             rangelen++;
             if (vstr == NULL) {
-                addReplyBulkLongLong(c,vlong);
+                c->addReplyBulkLongLong(vlong);
             } else {
                 c->addReplyBulkCBuffer(vstr,vlen);
             }

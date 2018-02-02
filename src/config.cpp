@@ -650,7 +650,7 @@ void loadServerConfigFromString(char *config) {
         } else if (!strcasecmp(argv[0],"client-output-buffer-limit") &&
                    argc == 5)
         {
-            int _class = getClientTypeByName(argv[1]);
+            int _class = client::getClientTypeByName(argv[1]);
             unsigned long long hard, soft;
             int soft_seconds;
 
@@ -945,7 +945,7 @@ void configSetCommand(client *c) {
             long val;
 
             if ((j % 4) == 0) {
-                int _class = getClientTypeByName(v[j]);
+                int _class = client::getClientTypeByName(v[j]);
                 if (_class == -1 || _class == CLIENT_TYPE_MASTER) {
                     sdsfreesplitres(v,vlen);
                     goto badfmt;
@@ -964,7 +964,7 @@ void configSetCommand(client *c) {
             unsigned long long hard, soft;
             int soft_seconds;
 
-            _class = getClientTypeByName(v[j]);
+            _class = client::getClientTypeByName(v[j]);
             hard = strtoll(v[j+1],NULL,10);
             soft = strtoll(v[j+2],NULL,10);
             soft_seconds = strtoll(v[j+3],NULL,10);
@@ -1169,16 +1169,16 @@ badfmt: /* Bad format errors */
 
 #define config_get_string_field(_name,_var) do { \
     if (stringmatch(pattern,_name,1)) { \
-        addReplyBulkCString(c,_name); \
-        addReplyBulkCString(c,_var ? _var : ""); \
+        c->addReplyBulkCString(_name); \
+        c->addReplyBulkCString(_var ? _var : ""); \
         matches++; \
     } \
 } while(0);
 
 #define config_get_bool_field(_name,_var) do { \
     if (stringmatch(pattern,_name,1)) { \
-        addReplyBulkCString(c,_name); \
-        addReplyBulkCString(c,_var ? "yes" : "no"); \
+        c->addReplyBulkCString(_name); \
+        c->addReplyBulkCString(_var ? "yes" : "no"); \
         matches++; \
     } \
 } while(0);
@@ -1186,16 +1186,16 @@ badfmt: /* Bad format errors */
 #define config_get_numerical_field(_name,_var) do { \
     if (stringmatch(pattern,_name,1)) { \
         ll2string(buf,sizeof(buf),_var); \
-        addReplyBulkCString(c,_name); \
-        addReplyBulkCString(c,buf); \
+        c->addReplyBulkCString(_name); \
+        c->addReplyBulkCString(buf); \
         matches++; \
     } \
 } while(0);
 
 #define config_get_enum_field(_name,_var,_enumvar) do { \
     if (stringmatch(pattern,_name,1)) { \
-        addReplyBulkCString(c,_name); \
-        addReplyBulkCString(c,configEnumGetNameOrUnknown(_enumvar,_var)); \
+        c->addReplyBulkCString(_name); \
+        c->addReplyBulkCString(configEnumGetNameOrUnknown(_enumvar,_var)); \
         matches++; \
     } \
 } while(0);
@@ -1329,8 +1329,8 @@ void configGetCommand(client *c) {
     /* Everything we can't handle with macros follows. */
 
     if (stringmatch(pattern,"appendonly",1)) {
-        addReplyBulkCString(c,"appendonly");
-        addReplyBulkCString(c,server.aof_state == AOF_OFF ? "no" : "yes");
+        c->addReplyBulkCString("appendonly");
+        c->addReplyBulkCString(server.aof_state == AOF_OFF ? "no" : "yes");
         matches++;
     }
     if (stringmatch(pattern,"dir",1)) {
@@ -1339,8 +1339,8 @@ void configGetCommand(client *c) {
         if (getcwd(buf,sizeof(buf)) == NULL)
             buf[0] = '\0';
 
-        addReplyBulkCString(c,"dir");
-        addReplyBulkCString(c,buf);
+        c->addReplyBulkCString("dir");
+        c->addReplyBulkCString(buf);
         matches++;
     }
     if (stringmatch(pattern,"save",1)) {
@@ -1354,8 +1354,8 @@ void configGetCommand(client *c) {
             if (j != server.saveparamslen-1)
                 buf = sdscatlen(buf," ",1);
         }
-        addReplyBulkCString(c,"save");
-        addReplyBulkCString(c,buf);
+        c->addReplyBulkCString("save");
+        c->addReplyBulkCString(buf);
         sdsfree(buf);
         matches++;
     }
@@ -1365,42 +1365,42 @@ void configGetCommand(client *c) {
 
         for (j = 0; j < CLIENT_TYPE_OBUF_COUNT; j++) {
             buf = sdscatprintf(buf,"%s %llu %llu %ld",
-                    getClientTypeName(j),
+                    client::getClientTypeName(j),
                     server.client_obuf_limits[j].hard_limit_bytes,
                     server.client_obuf_limits[j].soft_limit_bytes,
                     (long) server.client_obuf_limits[j].soft_limit_seconds);
             if (j != CLIENT_TYPE_OBUF_COUNT-1)
                 buf = sdscatlen(buf," ",1);
         }
-        addReplyBulkCString(c,"client-output-buffer-limit");
-        addReplyBulkCString(c,buf);
+        c->addReplyBulkCString("client-output-buffer-limit");
+        c->addReplyBulkCString(buf);
         sdsfree(buf);
         matches++;
     }
     if (stringmatch(pattern,"unixsocketperm",1)) {
         char buf[32];
         snprintf(buf,sizeof(buf),"%o",server.unixsocketperm);
-        addReplyBulkCString(c,"unixsocketperm");
-        addReplyBulkCString(c,buf);
+        c->addReplyBulkCString("unixsocketperm");
+        c->addReplyBulkCString(buf);
         matches++;
     }
     if (stringmatch(pattern,"slaveof",1)) {
         char buf[256];
 
-        addReplyBulkCString(c,"slaveof");
+        c->addReplyBulkCString("slaveof");
         if (server.masterhost)
             snprintf(buf,sizeof(buf),"%s %d",
                 server.masterhost, server.masterport);
         else
             buf[0] = '\0';
-        addReplyBulkCString(c,buf);
+        c->addReplyBulkCString(buf);
         matches++;
     }
     if (stringmatch(pattern,"notify-keyspace-events",1)) {
         robj *flagsobj = createObject(OBJ_STRING,
             keyspaceEventsFlagsToString(server.notify_keyspace_events));
 
-        addReplyBulkCString(c,"notify-keyspace-events");
+        c->addReplyBulkCString("notify-keyspace-events");
         c->addReplyBulk(flagsobj);
         decrRefCount(flagsobj);
         matches++;
@@ -1408,8 +1408,8 @@ void configGetCommand(client *c) {
     if (stringmatch(pattern,"bind",1)) {
         sds aux = sdsjoin(server.bindaddr,server.bindaddr_count," ");
 
-        addReplyBulkCString(c,"bind");
-        addReplyBulkCString(c,aux);
+        c->addReplyBulkCString("bind");
+        c->addReplyBulkCString(aux);
         sdsfree(aux);
         matches++;
     }
@@ -1782,7 +1782,7 @@ void rewriteConfigClientoutputbufferlimitOption(struct rewriteConfigState *state
                 server.client_obuf_limits[j].soft_limit_bytes);
 
         line = sdscatprintf(sdsempty(),"%s %s %s %s %ld",
-                option, getClientTypeName(j), hard, soft,
+                option, client::getClientTypeName(j), hard, soft,
                 (long) server.client_obuf_limits[j].soft_limit_seconds);
         rewriteConfigRewriteLine(state,option,line,force);
     }

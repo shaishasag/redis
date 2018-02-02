@@ -864,31 +864,31 @@ void sentinelPendingScriptsCommand(client *c) {
 
         c->addReplyMultiBulkLen(10);
 
-        addReplyBulkCString(c,"argv");
+        c->addReplyBulkCString("argv");
         while (sj->argv[j]) j++;
         c->addReplyMultiBulkLen(j);
         j = 0;
-        while (sj->argv[j]) addReplyBulkCString(c,sj->argv[j++]);
+        while (sj->argv[j]) c->addReplyBulkCString(sj->argv[j++]);
 
-        addReplyBulkCString(c,"flags");
-        addReplyBulkCString(c,
+        c->addReplyBulkCString("flags");
+        c->addReplyBulkCString(
             (sj->flags & SENTINEL_SCRIPT_RUNNING) ? "running" : "scheduled");
 
-        addReplyBulkCString(c,"pid");
-        addReplyBulkLongLong(c,sj->pid);
+        c->addReplyBulkCString("pid");
+        c->addReplyBulkLongLong(sj->pid);
 
         if (sj->flags & SENTINEL_SCRIPT_RUNNING) {
-            addReplyBulkCString(c,"run-time");
-            addReplyBulkLongLong(c,mstime() - sj->start_time);
+            c->addReplyBulkCString("run-time");
+            c->addReplyBulkLongLong(mstime() - sj->start_time);
         } else {
             mstime_t delay = sj->start_time ? (sj->start_time-mstime()) : 0;
             if (delay < 0) delay = 0;
-            addReplyBulkCString(c,"run-delay");
-            addReplyBulkLongLong(c,delay);
+            c->addReplyBulkCString("run-delay");
+            c->addReplyBulkLongLong(delay);
         }
 
-        addReplyBulkCString(c,"retry-num");
-        addReplyBulkLongLong(c,sj->retry_num);
+        c->addReplyBulkCString("retry-num");
+        c->addReplyBulkLongLong(sj->retry_num);
     }
 }
 
@@ -2621,23 +2621,23 @@ void addReplySentinelRedisInstance(client *c, sentinelRedisInstance *ri) {
 
     mbl = c->addDeferredMultiBulkLength();
 
-    addReplyBulkCString(c,"name");
-    addReplyBulkCString(c,ri->name);
+    c->addReplyBulkCString("name");
+    c->addReplyBulkCString(ri->name);
     fields++;
 
-    addReplyBulkCString(c,"ip");
-    addReplyBulkCString(c,ri->addr->ip);
+    c->addReplyBulkCString("ip");
+    c->addReplyBulkCString(ri->addr->ip);
     fields++;
 
-    addReplyBulkCString(c,"port");
-    addReplyBulkLongLong(c,ri->addr->port);
+    c->addReplyBulkCString("port");
+    c->addReplyBulkLongLong(ri->addr->port);
     fields++;
 
-    addReplyBulkCString(c,"runid");
-    addReplyBulkCString(c,ri->runid ? ri->runid : "");
+    c->addReplyBulkCString("runid");
+    c->addReplyBulkCString(ri->runid ? ri->runid : "");
     fields++;
 
-    addReplyBulkCString(c,"flags");
+    c->addReplyBulkCString("flags");
     if (ri->m_flags & SRI_S_DOWN) flags = sdscat(flags,"s_down,");
     if (ri->m_flags & SRI_O_DOWN) flags = sdscat(flags,"o_down,");
     if (ri->m_flags & SRI_MASTER) flags = sdscat(flags,"master,");
@@ -2653,150 +2653,149 @@ void addReplySentinelRedisInstance(client *c, sentinelRedisInstance *ri) {
     if (ri->m_flags & SRI_RECONF_DONE) flags = sdscat(flags,"reconf_done,");
 
     if (sdslen(flags) != 0) sdsrange(flags,0,-2); /* remove last "," */
-    addReplyBulkCString(c,flags);
+    c->addReplyBulkCString(flags);
     sdsfree(flags);
     fields++;
 
-    addReplyBulkCString(c,"link-pending-commands");
-    addReplyBulkLongLong(c,ri->link->pending_commands);
+    c->addReplyBulkCString("link-pending-commands");
+    c->addReplyBulkLongLong(ri->link->pending_commands);
     fields++;
 
-    addReplyBulkCString(c,"link-refcount");
-    addReplyBulkLongLong(c,ri->link->refcount);
+    c->addReplyBulkCString("link-refcount");
+    c->addReplyBulkLongLong(ri->link->refcount);
     fields++;
 
     if (ri->m_flags & SRI_FAILOVER_IN_PROGRESS) {
-        addReplyBulkCString(c,"failover-state");
-        addReplyBulkCString(c,(char*)sentinelFailoverStateStr(ri->failover_state));
+        c->addReplyBulkCString("failover-state");
+        c->addReplyBulkCString((char*)sentinelFailoverStateStr(ri->failover_state));
         fields++;
     }
 
-    addReplyBulkCString(c,"last-ping-sent");
-    addReplyBulkLongLong(c,
-        ri->link->act_ping_time ? (mstime() - ri->link->act_ping_time) : 0);
+    c->addReplyBulkCString("last-ping-sent");
+    c->addReplyBulkLongLong(ri->link->act_ping_time ? (mstime() - ri->link->act_ping_time) : 0);
     fields++;
 
-    addReplyBulkCString(c,"last-ok-ping-reply");
-    addReplyBulkLongLong(c,mstime() - ri->link->last_avail_time);
+    c->addReplyBulkCString("last-ok-ping-reply");
+    c->addReplyBulkLongLong(mstime() - ri->link->last_avail_time);
     fields++;
 
-    addReplyBulkCString(c,"last-ping-reply");
-    addReplyBulkLongLong(c,mstime() - ri->link->last_pong_time);
+    c->addReplyBulkCString("last-ping-reply");
+    c->addReplyBulkLongLong(mstime() - ri->link->last_pong_time);
     fields++;
 
     if (ri->m_flags & SRI_S_DOWN) {
-        addReplyBulkCString(c,"s-down-time");
-        addReplyBulkLongLong(c,mstime()-ri->s_down_since_time);
+        c->addReplyBulkCString("s-down-time");
+        c->addReplyBulkLongLong(mstime()-ri->s_down_since_time);
         fields++;
     }
 
     if (ri->m_flags & SRI_O_DOWN) {
-        addReplyBulkCString(c,"o-down-time");
-        addReplyBulkLongLong(c,mstime()-ri->o_down_since_time);
+        c->addReplyBulkCString("o-down-time");
+        c->addReplyBulkLongLong(mstime()-ri->o_down_since_time);
         fields++;
     }
 
-    addReplyBulkCString(c,"down-after-milliseconds");
-    addReplyBulkLongLong(c,ri->down_after_period);
+    c->addReplyBulkCString("down-after-milliseconds");
+    c->addReplyBulkLongLong(ri->down_after_period);
     fields++;
 
     /* Masters and Slaves */
     if (ri->m_flags & (SRI_MASTER|SRI_SLAVE)) {
-        addReplyBulkCString(c,"info-refresh");
-        addReplyBulkLongLong(c,mstime() - ri->info_refresh);
+        c->addReplyBulkCString("info-refresh");
+        c->addReplyBulkLongLong(mstime() - ri->info_refresh);
         fields++;
 
-        addReplyBulkCString(c,"role-reported");
-        addReplyBulkCString(c, (ri->role_reported == SRI_MASTER) ? "master" :
+        c->addReplyBulkCString("role-reported");
+        c->addReplyBulkCString( (ri->role_reported == SRI_MASTER) ? "master" :
                                                                    "slave");
         fields++;
 
-        addReplyBulkCString(c,"role-reported-time");
-        addReplyBulkLongLong(c,mstime() - ri->role_reported_time);
+        c->addReplyBulkCString("role-reported-time");
+        c->addReplyBulkLongLong(mstime() - ri->role_reported_time);
         fields++;
     }
 
     /* Only masters */
     if (ri->m_flags & SRI_MASTER) {
-        addReplyBulkCString(c,"config-epoch");
-        addReplyBulkLongLong(c,ri->config_epoch);
+        c->addReplyBulkCString("config-epoch");
+        c->addReplyBulkLongLong(ri->config_epoch);
         fields++;
 
-        addReplyBulkCString(c,"num-slaves");
-        addReplyBulkLongLong(c,ri->slaves->dictSize());
+        c->addReplyBulkCString("num-slaves");
+        c->addReplyBulkLongLong(ri->slaves->dictSize());
         fields++;
 
-        addReplyBulkCString(c,"num-other-sentinels");
-        addReplyBulkLongLong(c,ri->sentinels->dictSize());
+        c->addReplyBulkCString("num-other-sentinels");
+        c->addReplyBulkLongLong(ri->sentinels->dictSize());
         fields++;
 
-        addReplyBulkCString(c,"quorum");
-        addReplyBulkLongLong(c,ri->quorum);
+        c->addReplyBulkCString("quorum");
+        c->addReplyBulkLongLong(ri->quorum);
         fields++;
 
-        addReplyBulkCString(c,"failover-timeout");
-        addReplyBulkLongLong(c,ri->failover_timeout);
+        c->addReplyBulkCString("failover-timeout");
+        c->addReplyBulkLongLong(ri->failover_timeout);
         fields++;
 
-        addReplyBulkCString(c,"parallel-syncs");
-        addReplyBulkLongLong(c,ri->parallel_syncs);
+        c->addReplyBulkCString("parallel-syncs");
+        c->addReplyBulkLongLong(ri->parallel_syncs);
         fields++;
 
         if (ri->notification_script) {
-            addReplyBulkCString(c,"notification-script");
-            addReplyBulkCString(c,ri->notification_script);
+            c->addReplyBulkCString("notification-script");
+            c->addReplyBulkCString(ri->notification_script);
             fields++;
         }
 
         if (ri->client_reconfig_script) {
-            addReplyBulkCString(c,"client-reconfig-script");
-            addReplyBulkCString(c,ri->client_reconfig_script);
+            c->addReplyBulkCString("client-reconfig-script");
+            c->addReplyBulkCString(ri->client_reconfig_script);
             fields++;
         }
     }
 
     /* Only slaves */
     if (ri->m_flags & SRI_SLAVE) {
-        addReplyBulkCString(c,"master-link-down-time");
-        addReplyBulkLongLong(c,ri->master_link_down_time);
+        c->addReplyBulkCString("master-link-down-time");
+        c->addReplyBulkLongLong(ri->master_link_down_time);
         fields++;
 
-        addReplyBulkCString(c,"master-link-status");
-        addReplyBulkCString(c,
+        c->addReplyBulkCString("master-link-status");
+        c->addReplyBulkCString(
             (ri->slave_master_link_status == SENTINEL_MASTER_LINK_STATUS_UP) ?
             "ok" : "err");
         fields++;
 
-        addReplyBulkCString(c,"master-host");
-        addReplyBulkCString(c,
+        c->addReplyBulkCString("master-host");
+        c->addReplyBulkCString(
             ri->slave_master_host ? ri->slave_master_host : "?");
         fields++;
 
-        addReplyBulkCString(c,"master-port");
-        addReplyBulkLongLong(c,ri->slave_master_port);
+        c->addReplyBulkCString("master-port");
+        c->addReplyBulkLongLong(ri->slave_master_port);
         fields++;
 
-        addReplyBulkCString(c,"slave-priority");
-        addReplyBulkLongLong(c,ri->slave_priority);
+        c->addReplyBulkCString("slave-priority");
+        c->addReplyBulkLongLong(ri->slave_priority);
         fields++;
 
-        addReplyBulkCString(c,"slave-repl-offset");
-        addReplyBulkLongLong(c,ri->slave_repl_offset);
+        c->addReplyBulkCString("slave-repl-offset");
+        c->addReplyBulkLongLong(ri->slave_repl_offset);
         fields++;
     }
 
     /* Only sentinels */
     if (ri->m_flags & SRI_SENTINEL) {
-        addReplyBulkCString(c,"last-hello-message");
-        addReplyBulkLongLong(c,mstime() - ri->last_hello_time);
+        c->addReplyBulkCString("last-hello-message");
+        c->addReplyBulkLongLong(mstime() - ri->last_hello_time);
         fields++;
 
-        addReplyBulkCString(c,"voted-leader");
-        addReplyBulkCString(c,ri->leader ? ri->leader : "?");
+        c->addReplyBulkCString("voted-leader");
+        c->addReplyBulkCString(ri->leader ? ri->leader : "?");
         fields++;
 
-        addReplyBulkCString(c,"voted-leader-epoch");
-        addReplyBulkLongLong(c,ri->leader_epoch);
+        c->addReplyBulkCString("voted-leader-epoch");
+        c->addReplyBulkLongLong(ri->leader_epoch);
         fields++;
     }
 
@@ -2936,7 +2935,7 @@ void sentinelCommand(client *c) {
          * down state, leader, vote epoch. */
         c->addReplyMultiBulkLen(3);
         c->addReply( isdown ? shared.cone : shared.czero);
-        addReplyBulkCString(c, leader ? leader : "*");
+        c->addReplyBulkCString( leader ? leader : "*");
         c->addReplyLongLong( (long long)leader_epoch);
         if (leader) sdsfree(leader);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"reset")) {
@@ -2955,8 +2954,8 @@ void sentinelCommand(client *c) {
             sentinelAddr *addr = sentinelGetCurrentMasterAddress(ri);
 
             c->addReplyMultiBulkLen(2);
-            addReplyBulkCString(c,addr->ip);
-            addReplyBulkLongLong(c,addr->port);
+            c->addReplyBulkCString(addr->ip);
+            c->addReplyBulkLongLong(addr->port);
         }
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"failover")) {
         /* SENTINEL FAILOVER <master-name> */
@@ -3152,8 +3151,8 @@ void sentinelCommand(client *c) {
                     "will crash after promoting the selected slave to master");
             } else if (!strcasecmp((const char*)c->m_argv[j]->ptr,"help")) {
                 c->addReplyMultiBulkLen(2);
-                addReplyBulkCString(c,"crash-after-election");
-                addReplyBulkCString(c,"crash-after-promotion");
+                c->addReplyBulkCString("crash-after-election");
+                c->addReplyBulkCString("crash-after-promotion");
             } else {
                 c->addReplyError("Unknown failure simulation specified");
                 return;
@@ -3240,7 +3239,7 @@ void sentinelInfoCommand(client *c) {
         }
     }
 
-    addReplyBulkSds(c, info);
+    c->addReplyBulkSds( info);
 }
 
 /* Implements Sentinel verison of the ROLE command. The output is
@@ -3256,7 +3255,7 @@ void sentinelRoleCommand(client *c) {
     while((de = di.dictNext()) != NULL) {
         sentinelRedisInstance* ri = (sentinelRedisInstance*)de->dictGetVal();
 
-        addReplyBulkCString(c,ri->name);
+        c->addReplyBulkCString(ri->name);
     }
 }
 

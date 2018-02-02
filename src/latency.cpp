@@ -499,7 +499,7 @@ void latencyCommandReplyWithLatestEvents(client *c) {
         int last = (ts->idx + LATENCY_TS_LEN - 1) % LATENCY_TS_LEN;
 
         c->addReplyMultiBulkLen(4);
-        addReplyBulkCString(c,event);
+        c->addReplyBulkCString(event);
         c->addReplyLongLong(ts->samples[last].time);
         c->addReplyLongLong(ts->samples[last].latency);
         c->addReplyLongLong(ts->max);
@@ -578,7 +578,7 @@ void latencyCommand(client *c) {
         char *event = (char *)de->dictGetKey();
 
         sds graph = latencyCommandGenSparkeline(event,ts);
-        addReplyBulkCString(c,graph);
+        c->addReplyBulkCString(graph);
         sdsfree(graph);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"latest") && c->m_argc == 2) {
         /* LATENCY LATEST */

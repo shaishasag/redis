@@ -650,9 +650,9 @@ void hincrbyfloatCommand(client *c) {
     robj *aux, *newobj;
     aux = createStringObject("HSET",4);
     newobj = createRawStringObject(buf,len);
-    rewriteClientCommandArgument(c,0,aux);
+    c->rewriteClientCommandArgument(0,aux);
     decrRefCount(aux);
-    rewriteClientCommandArgument(c,3,newobj);
+    c->rewriteClientCommandArgument(3,newobj);
     decrRefCount(newobj);
 }
 
@@ -676,7 +676,7 @@ static void addHashFieldToReply(client *c, robj *o, sds field) {
             if (vstr) {
                 c->addReplyBulkCBuffer( vstr, vlen);
             } else {
-                addReplyBulkLongLong(c, vll);
+                c->addReplyBulkLongLong(vll);
             }
         }
 
@@ -774,7 +774,7 @@ static void addHashIteratorCursorToReply(client *c, hashTypeIterator *hi, int wh
         if (vstr)
             c->addReplyBulkCBuffer( vstr, vlen);
         else
-            addReplyBulkLongLong(c, vll);
+            c->addReplyBulkLongLong(vll);
     } else if (hi->encoding() == OBJ_ENCODING_HT) {
         sds value = hi->hashTypeCurrentFromHashTable(what);
         c->addReplyBulkCBuffer( value, sdslen(value));

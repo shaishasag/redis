@@ -836,7 +836,7 @@ struct redisMemOverhead *getMemoryOverheadData() {
         listIter li(server.slaves);
         while((ln = li.listNext())) {
             client *c = (client *)ln->listNodeValue();
-            mem += getClientOutputBufferMemoryUsage(c);
+            mem += c->getClientOutputBufferMemoryUsage();
             mem += sdsAllocSize(c->m_query_buf);
             mem += sizeof(client);
         }
@@ -853,7 +853,7 @@ struct redisMemOverhead *getMemoryOverheadData() {
             client *c = (client *)ln->listNodeValue();
             if (c->m_flags & CLIENT_SLAVE)
                 continue;
-            mem += getClientOutputBufferMemoryUsage(c);
+            mem += c->getClientOutputBufferMemoryUsage();
             mem += sdsAllocSize(c->m_query_buf);
             mem += sizeof(client);
         }
@@ -1033,7 +1033,7 @@ void objectCommand(client *c) {
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"encoding") && c->m_argc == 3) {
         if ((o = objectCommandLookupOrReply(c,c->m_argv[2],shared.nullbulk))
                 == NULL) return;
-        addReplyBulkCString(c,strEncoding(o->encoding));
+        c->addReplyBulkCString(strEncoding(o->encoding));
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"idletime") && c->m_argc == 3) {
         if ((o = objectCommandLookupOrReply(c,c->m_argv[2],shared.nullbulk))
                 == NULL) return;
@@ -1097,59 +1097,59 @@ void memoryCommand(client *c) {
 
         c->addReplyMultiBulkLen((14+mh->num_dbs)*2);
 
-        addReplyBulkCString(c,"peak.allocated");
+        c->addReplyBulkCString("peak.allocated");
         c->addReplyLongLong(mh->peak_allocated);
 
-        addReplyBulkCString(c,"total.allocated");
+        c->addReplyBulkCString("total.allocated");
         c->addReplyLongLong(mh->total_allocated);
 
-        addReplyBulkCString(c,"startup.allocated");
+        c->addReplyBulkCString("startup.allocated");
         c->addReplyLongLong(mh->startup_allocated);
 
-        addReplyBulkCString(c,"replication.backlog");
+        c->addReplyBulkCString("replication.backlog");
         c->addReplyLongLong(mh->repl_backlog);
 
-        addReplyBulkCString(c,"clients.slaves");
+        c->addReplyBulkCString("clients.slaves");
         c->addReplyLongLong(mh->clients_slaves);
 
-        addReplyBulkCString(c,"clients.normal");
+        c->addReplyBulkCString("clients.normal");
         c->addReplyLongLong(mh->clients_normal);
 
-        addReplyBulkCString(c,"aof.buffer");
+        c->addReplyBulkCString("aof.buffer");
         c->addReplyLongLong(mh->aof_buffer);
 
         for (size_t j = 0; j < mh->num_dbs; j++) {
             char dbname[32];
             snprintf(dbname,sizeof(dbname),"db.%zd",mh->db[j].dbid);
-            addReplyBulkCString(c,dbname);
+            c->addReplyBulkCString(dbname);
             c->addReplyMultiBulkLen(4);
 
-            addReplyBulkCString(c,"overhead.hashtable.main");
+            c->addReplyBulkCString("overhead.hashtable.main");
             c->addReplyLongLong(mh->db[j].overhead_ht_main);
 
-            addReplyBulkCString(c,"overhead.hashtable.expires");
+            c->addReplyBulkCString("overhead.hashtable.expires");
             c->addReplyLongLong(mh->db[j].overhead_ht_expires);
         }
 
-        addReplyBulkCString(c,"overhead.total");
+        c->addReplyBulkCString("overhead.total");
         c->addReplyLongLong(mh->overhead_total);
 
-        addReplyBulkCString(c,"keys.count");
+        c->addReplyBulkCString("keys.count");
         c->addReplyLongLong(mh->total_keys);
 
-        addReplyBulkCString(c,"keys.bytes-per-key");
+        c->addReplyBulkCString("keys.bytes-per-key");
         c->addReplyLongLong(mh->bytes_per_key);
 
-        addReplyBulkCString(c,"dataset.bytes");
+        c->addReplyBulkCString("dataset.bytes");
         c->addReplyLongLong(mh->dataset);
 
-        addReplyBulkCString(c,"dataset.percentage");
+        c->addReplyBulkCString("dataset.percentage");
         c->addReplyDouble(mh->dataset_perc);
 
-        addReplyBulkCString(c,"peak.percentage");
+        c->addReplyBulkCString("peak.percentage");
         c->addReplyDouble(mh->peak_perc);
 
-        addReplyBulkCString(c,"fragmentation");
+        c->addReplyBulkCString("fragmentation");
         c->addReplyDouble(mh->fragmentation);
 
         freeMemoryOverheadData(mh);
@@ -1157,13 +1157,13 @@ void memoryCommand(client *c) {
 #if defined(USE_JEMALLOC)
         sds info = sdsempty();
         je_malloc_stats_print(inputCatSds, &info, NULL);
-        addReplyBulkSds(c, info);
+        c->addReplyBulkSds( info);
 #else
-        addReplyBulkCString(c,"Stats not supported for the current allocator");
+        c->addReplyBulkCString("Stats not supported for the current allocator");
 #endif
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"doctor") && c->m_argc == 2) {
         sds report = getMemoryDoctorReport();
-        addReplyBulkSds(c,report);
+        c->addReplyBulkSds(report);
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"purge") && c->m_argc == 2) {
 #if defined(USE_JEMALLOC)
         char tmp[32];
@@ -1183,15 +1183,15 @@ void memoryCommand(client *c) {
 #endif
     } else if (!strcasecmp((const char*)c->m_argv[1]->ptr,"help") && c->m_argc == 2) {
         c->addReplyMultiBulkLen(5);
-        addReplyBulkCString(c,
+        c->addReplyBulkCString(
 "MEMORY DOCTOR                        - Outputs memory problems report");
-        addReplyBulkCString(c,
+        c->addReplyBulkCString(
 "MEMORY USAGE <key> [SAMPLES <count>] - Estimate memory usage of key");
-        addReplyBulkCString(c,
+        c->addReplyBulkCString(
 "MEMORY STATS                         - Show memory usage details");
-        addReplyBulkCString(c,
+        c->addReplyBulkCString(
 "MEMORY PURGE                         - Ask the allocator to release memory");
-        addReplyBulkCString(c,
+        c->addReplyBulkCString(
 "MEMORY MALLOC-STATS                  - Show allocator internal stats");
     } else {
         c->addReplyError("Syntax error. Try MEMORY HELP");

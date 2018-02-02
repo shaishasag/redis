@@ -2683,8 +2683,8 @@ void timeCommand(client *c) {
      * don't check for errors. */
     gettimeofday(&tv,NULL);
     c->addReplyMultiBulkLen(2);
-    addReplyBulkLongLong(c,tv.tv_sec);
-    addReplyBulkLongLong(c,tv.tv_usec);
+    c->addReplyBulkLongLong(tv.tv_sec);
+    c->addReplyBulkLongLong(tv.tv_usec);
 }
 
 /* Helper function for addReplyCommand() to output flags. */
@@ -2703,7 +2703,7 @@ void addReplyCommand(client *c, struct redisCommand *cmd) {
     } else {
         /* We are adding: command name, arg count, flags, first, last, offset */
         c->addReplyMultiBulkLen( 6);
-        addReplyBulkCString(c, cmd->name);
+        c->addReplyBulkCString( cmd->name);
         c->addReplyLongLong( cmd->arity);
 
         int flagcount = 0;
@@ -3327,7 +3327,7 @@ void infoCommand(client *c) {
         c->addReply(shared.syntaxerr);
         return;
     }
-    addReplyBulkSds(c, genRedisInfoString(section));
+    c->addReplyBulkSds( genRedisInfoString(section));
 }
 
 void monitorCommand(client *c) {

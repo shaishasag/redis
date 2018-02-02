@@ -1435,9 +1435,9 @@ void evalGenericCommand(client *c, int evalsha) {
 
             replicationScriptCacheAdd((sds)c->m_argv[1]->ptr);
             serverAssertWithInfo(c,NULL,script != NULL);
-            rewriteClientCommandArgument(c,0,
+            c->rewriteClientCommandArgument(0,
                 resetRefCount(createStringObject("EVAL",4)));
-            rewriteClientCommandArgument(c,1,script);
+            c->rewriteClientCommandArgument(1,script);
             forceCommandPropagation(c,PROPAGATE_REPL|PROPAGATE_AOF);
         }
     }
@@ -1498,7 +1498,7 @@ void scriptCommand(client *c) {
             c->addReply(shared.ok);
         }
     } else if (c->m_argc == 3 && !strcasecmp((const char*)c->m_argv[1]->ptr,"debug")) {
-        if (clientHasPendingReplies(c)) {
+        if (c->clientHasPendingReplies()) {
             c->addReplyError("SCRIPT DEBUG must be called outside a pipeline");
             return;
         }

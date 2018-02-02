@@ -470,7 +470,7 @@ void geoaddCommand(client *c) {
     }
 
     /* Finally call ZADD that will do the work for us. */
-    replaceClientCommandVector(c,argc,argv);
+    c->replaceClientCommandVector(argc,argv);
     zaddCommand(c);
 }
 
@@ -630,7 +630,7 @@ void georadiusGeneric(client *c, int flags) {
             if (option_length)
                 c->addReplyMultiBulkLen( option_length + 1);
 
-            addReplyBulkSds(c,gp.pop_member());
+            c->addReplyBulkSds(gp.pop_member());
 
             if (withdist)
                 addReplyDoubleDistance(c, gp.m_dist);
