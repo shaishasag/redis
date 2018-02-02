@@ -773,7 +773,8 @@ cleanup:
 /* The SCAN command completely relies on scanGenericCommand. */
 void scanCommand(client *c) {
     unsigned long cursor;
-    if (parseScanCursorOrReply(c,c->m_argv[1],&cursor) == C_ERR) return;
+    if (parseScanCursorOrReply(c,c->m_argv[1],&cursor) == C_ERR)
+        return;
     scanGenericCommand(c,NULL,cursor);
 }
 

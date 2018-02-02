@@ -1801,7 +1801,7 @@ void backgroundSaveDoneHandlerSocket(int exitcode, int bysignal) {
              * continue the replication process, we need to find it in the list,
              * and it must have an error code set to 0 (which means success). */
             for (j = 0; j < ok_slaves[0]; j++) {
-                if (slave->m_id == ok_slaves[2*j+1]) {
+                if (slave->m_client_id == ok_slaves[2*j+1]) {
                     errorcode = ok_slaves[2*j+2];
                     break; /* Found in slaves list. */
                 }
@@ -1877,7 +1877,7 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
         client *slave = (client *)ln->listNodeValue();
 
         if (slave->m_replication_state == SLAVE_STATE_WAIT_BGSAVE_START) {
-            clientids[numfds] = slave->m_id;
+            clientids[numfds] = slave->m_client_id;
             fds[numfds++] = slave->m_fd;
             replicationSetupSlaveForFullResync(slave,getPsyncInitialOffset());
             /* Put the socket in blocking mode to simplify RDB transfer.
@@ -1974,7 +1974,7 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
                 int j;
 
                 for (j = 0; j < numfds; j++) {
-                    if (slave->m_id == clientids[j]) {
+                    if (slave->m_client_id == clientids[j]) {
                         slave->m_replication_state = SLAVE_STATE_WAIT_BGSAVE_START;
                         break;
                     }

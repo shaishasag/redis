@@ -640,23 +640,26 @@ struct multiState {
 
 /* This structure holds the blocking operation state for a client.
  * The fields used depend on client->btype. */
-struct blockingState {
+struct blockingState
+{
+    blockingState();
+
     /* Generic fields. */
-    mstime_t timeout;       /* Blocking operation timeout. If UNIX current time
+    mstime_t m_timeout;       /* Blocking operation timeout. If UNIX current time
                              * is > timeout then the operation timed out. */
 
     /* BLOCKED_LIST */
-    dict *keys;             /* The keys we are waiting to terminate a blocking
+    dict *m_keys;             /* The keys we are waiting to terminate a blocking
                              * operation such as BLPOP. Otherwise NULL. */
-    robj *target;           /* The key that should receive the element,
+    robj *m_target;           /* The key that should receive the element,
                              * for BRPOPLPUSH. */
 
     /* BLOCKED_WAIT */
-    int numreplicas;        /* Number of replicas we are waiting for ACK. */
-    long long reploffset;   /* Replication offset to reach. */
+    int m_num_replicas;        /* Number of replicas we are waiting for ACK. */
+    long long m_replication_offset;   /* Replication offset to reach. */
 
     /* BLOCKED_MODULE */
-    void *module_blocked_handle; /* RedisModuleBlockedClient structure.
+    void *m_module_blocked_handle; /* RedisModuleBlockedClient structure.
                                     which is opaque for the Redis core, only
                                     handled in module.c. */
 };
@@ -681,6 +684,9 @@ struct readyList {
  * Clients are taken in a linked list. */
 class client {
 public:
+    client(uint64_t in_client_id, int in_fd);
+    ~client();
+
     int selectDb(int id);
 
     // implemented in networking.cpp
@@ -704,6 +710,7 @@ public:
     void addReplyBulkLongLong(long long ll);
     int  clientHasPendingReplies();
 
+    void freeClientArgv();
     void processInputBuffer();
     char *getClientPeerId();
     sds catClientInfoString(sds s);
@@ -718,7 +725,7 @@ public:
     int getClientType();
     int checkClientOutputBufferLimits();
 
-    uint64_t m_id;            /* Client incremental unique ID. */
+    uint64_t m_client_id;            /* Client incremental unique ID. */
     int m_fd;                 /* Client socket. */
     redisDb *m_cur_selected_db;            /* Pointer to currently SELECTed DB. */
     robj *m_client_name;             /* As set by CLIENT SETNAME. */
@@ -774,6 +781,8 @@ public:
     char m_response_buff[PROTO_REPLY_CHUNK_BYTES];
 private:
     // implemented in networking.cpp
+    void asyncCloseClientOnOutputBufferLimitReached();
+    void setProtocolError(const char *errstr, int pos);
     int processInlineBuffer();
     int processMultibulkBuffer();
     void genClientPeerId(char *peerid, size_t peerid_len);
@@ -1485,7 +1494,6 @@ void getClientsMaxBuffers(unsigned long *longest_output_list,
 sds getAllClientsInfoString();
 unsigned long getClientOutputBufferMemoryUsage(client *c);
 void freeClientsInAsyncFreeQueue();
-void asyncCloseClientOnOutputBufferLimitReached(client *c);
 void flushSlavesOutputBuffers();
 void disconnectSlaves();
 int listenToPort(int port, int *fds, int *count);

@@ -1265,7 +1265,7 @@ int RM_ReplicateVerbatim(RedisModuleCtx *ctx) {
  * to fetch the ID in the context the function was currently called. */
 unsigned long long RM_GetClientId(RedisModuleCtx *ctx) {
     if (ctx->_client == NULL) return 0;
-    return ctx->_client->m_id;
+    return ctx->_client->m_client_id;
 }
 
 /* Return the currently selected DB. */
@@ -3388,7 +3388,7 @@ void moduleBlockedClientPipeReadable(aeEventLoop *el, int fd, void *privdata, in
  * The structure RedisModuleBlockedClient will be always deallocated when
  * running the list of clients blocked by a module that need to be unblocked. */
 void unblockClientFromModule(client *c) {
-    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->m_blocking_state.module_blocked_handle;
+    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->m_blocking_state.m_module_blocked_handle;
     bc->_client = NULL;
     /* Reset the client for a new query since, for blocking commands implemented
      * into modules, we do not it immediately after the command returns (and
@@ -3418,8 +3418,8 @@ RedisModuleBlockedClient *RM_BlockClient(RedisModuleCtx *ctx, RedisModuleCmdFunc
     int islua = c->m_flags & CLIENT_LUA;
     int ismulti = c->m_flags & CLIENT_MULTI;
 
-    c->m_blocking_state.module_blocked_handle = (RedisModuleBlockedClient*)zmalloc(sizeof(RedisModuleBlockedClient));
-    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->m_blocking_state.module_blocked_handle;
+    c->m_blocking_state.m_module_blocked_handle = (RedisModuleBlockedClient*)zmalloc(sizeof(RedisModuleBlockedClient));
+    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->m_blocking_state.m_module_blocked_handle;
 
     /* We need to handle the invalid operation of calling modules blocking
      * commands from Lua or MULTI. We actually create an already aborted
@@ -3434,10 +3434,10 @@ RedisModuleBlockedClient *RM_BlockClient(RedisModuleCtx *ctx, RedisModuleCmdFunc
     bc->reply_client = createClient(-1);
     bc->reply_client->m_flags |= CLIENT_MODULE;
     bc->dbid = c->m_cur_selected_db->m_id;
-    c->m_blocking_state.timeout = timeout_ms ? (mstime()+timeout_ms) : 0;
+    c->m_blocking_state.m_timeout = timeout_ms ? (mstime()+timeout_ms) : 0;
 
     if (islua || ismulti) {
-        c->m_blocking_state.module_blocked_handle = NULL;
+        c->m_blocking_state.m_module_blocked_handle = NULL;
         c->addReplyError( islua ?
             "Blocking module command called from Lua script" :
             "Blocking module command called from transaction");
@@ -3563,7 +3563,7 @@ void moduleHandleBlockedClients() {
  * does not need to do any cleanup. Eventually the module will call the
  * API to unblock the client and the memory will be released. */
 void moduleBlockedClientTimedOut(client *c) {
-    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->m_blocking_state.module_blocked_handle;
+    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->m_blocking_state.m_module_blocked_handle;
     RedisModuleCtx ctx = REDISMODULE_CTX_INIT;
     ctx.flags |= REDISMODULE_CTX_BLOCKED_TIMEOUT;
     ctx.module = bc->module;

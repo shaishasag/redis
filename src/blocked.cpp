@@ -161,7 +161,7 @@ void replyToBlockedClientTimedOut(client *c) {
     if (c->m_blocking_op_type == BLOCKED_LIST) {
         c->addReply(shared.nullmultibulk);
     } else if (c->m_blocking_op_type == BLOCKED_WAIT) {
-        c->addReplyLongLong(replicationCountAcksByOffset(c->m_blocking_state.reploffset));
+        c->addReplyLongLong(replicationCountAcksByOffset(c->m_blocking_state.m_replication_offset));
     } else if (c->m_blocking_op_type == BLOCKED_MODULE) {
         moduleBlockedClientTimedOut(c);
     } else {

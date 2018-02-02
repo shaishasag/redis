@@ -33,8 +33,6 @@
 #include <math.h>
 #include <ctype.h>
 
-static void setProtocolError(const char *errstr, client *c, int pos);
-
 /* Return the size consumed from the allocator, for the specified SDS string,
  * including internal fragmentation. This function is used in order to compute
  * the client output buffer size. */
@@ -66,9 +64,17 @@ void freeClientReplyValue(void *o) {
 int listMatchObjects(void *a, void *b) {
     return equalStringObjects((robj *)a,(robj *)b);
 }
+blockingState::blockingState()
+: m_timeout(0)
+, m_keys(dictCreate(&objectKeyPointerValueDictType,NULL))
+, m_target(NULL)
+, m_num_replicas(0)
+, m_replication_offset()
+, m_module_blocked_handle()
+{}
 
 client *createClient(int fd) {
-    client *c = (client *)zmalloc(sizeof(client));
+    void* client_mem = zmalloc(sizeof(client));
 
     /* passing -1 as fd it is possible to create a non connected client.
      * This is useful since all the commands needs to be executed
@@ -80,66 +86,69 @@ client *createClient(int fd) {
         if (server.tcpkeepalive)
             anetKeepAlive(NULL,fd,server.tcpkeepalive);
         if (server.el->aeCreateFileEvent(fd,AE_READABLE,
-            readQueryFromClient, c) == AE_ERR)
+            readQueryFromClient, client_mem) == AE_ERR)
         {
             close(fd);
-            zfree(c);
+            zfree(client_mem);
             return NULL;
         }
     }
 
-    c->selectDb(0);
     uint64_t client_id;
-    atomicGetIncr(server.next_client_id,client_id,1);
-    c->m_id = client_id;
-    c->m_fd = fd;
-    c->m_client_name = NULL;
-    c->m_response_buff_pos = 0;
-    c->m_query_buf = sdsempty();
-    c->m_pending_query_buf = sdsempty();
-    c->m_query_buf_peak = 0;
-    c->m_req_protocol_type = 0;
-    c->m_argc = 0;
-    c->m_argv = NULL;
-    c->m_cmd = c->m_last_cmd = NULL;
-    c->m_multi_bulk_len = 0;
-    c->m_bulk_len = -1;
-    c->m_already_sent_len = 0;
-    c->m_flags = 0;
-    c->m_ctime = c->m_last_interaction_time = server.unixtime;
-    c->m_authenticated = 0;
-    c->m_replication_state = REPL_STATE_NONE;
-    c->m_repl_put_online_on_ack = 0;
-    c->m_applied_replication_offset = 0;
-    c->m_read_replication_offset = 0;
-    c->m_replication_ack_off = 0;
-    c->m_replication_ack_time = 0;
-    c->m_slave_listening_port = 0;
-    c->m_slave_ip[0] = '\0';
-    c->m_slave_capabilities = SLAVE_CAPA_NONE;
-    c->m_reply = listCreate();
-    c->m_reply_bytes = 0;
-    c->m_obuf_soft_limit_reached_time = 0;
-    c->m_reply->listSetFreeMethod(freeClientReplyValue);
-    c->m_reply->listSetDupMethod(dupClientReplyValue);
-    c->m_blocking_op_type = BLOCKED_NONE;
-    c->m_blocking_state.timeout = 0;
-    c->m_blocking_state.keys = dictCreate(&objectKeyPointerValueDictType,NULL);
-    c->m_blocking_state.target = NULL;
-    c->m_blocking_state.numreplicas = 0;
-    c->m_blocking_state.reploffset = 0;
-    c->m_last_write_global_replication_offset = 0;
-    c->m_watched_keys = listCreate();
-    c->m_pubsub_channels = dictCreate(&objectKeyPointerValueDictType,NULL);
-    c->m_pubsub_patterns = listCreate();
-    c->m_cached_peer_id = NULL;
-    c->m_pubsub_patterns->listSetFreeMethod(decrRefCountVoid);
-    c->m_pubsub_patterns->listSetMatchMethod(listMatchObjects);
-    if (fd != -1) server.clients->listAddNodeTail(c);
-    initClientMultiState(c);
+    atomicGetIncr(server.next_client_id, client_id, 1);
+    client *c = new (client_mem) client(client_id, fd);
+    c->selectDb(0);
+    if (fd != -1)
+        server.clients->listAddNodeTail(c);
     return c;
 }
 
+client::client(uint64_t in_client_id, int in_fd)
+ : m_client_id(in_client_id)
+ , m_fd(in_fd)
+ , m_client_name(NULL)
+ , m_response_buff_pos(0)
+ , m_query_buf(sdsempty())
+ , m_pending_query_buf(sdsempty())
+ , m_query_buf_peak(0)
+ , m_req_protocol_type(0)
+ , m_argc(0)
+ , m_argv(NULL)
+ , m_cmd(NULL)
+ , m_last_cmd(NULL)
+ , m_multi_bulk_len(0)
+ , m_bulk_len(-1)
+ , m_already_sent_len(0)
+ , m_flags(0)
+ , m_ctime(server.unixtime)
+ , m_last_interaction_time(m_ctime)
+ , m_authenticated(0)
+ , m_replication_state(REPL_STATE_NONE)
+ , m_repl_put_online_on_ack(0)
+ , m_applied_replication_offset(0)
+ , m_read_replication_offset(0)
+ , m_replication_ack_off(0)
+ , m_replication_ack_time(0)
+ , m_slave_listening_port(0)
+ , m_slave_capabilities(SLAVE_CAPA_NONE)
+ , m_reply(listCreate())
+ , m_reply_bytes(0)
+ , m_obuf_soft_limit_reached_time(0)
+ , m_blocking_op_type(BLOCKED_NONE)
+ , m_blocking_state()
+ , m_last_write_global_replication_offset(0)
+ , m_watched_keys(listCreate())
+ , m_pubsub_channels(dictCreate(&objectKeyPointerValueDictType,NULL))
+ , m_pubsub_patterns(listCreate())
+ , m_cached_peer_id(NULL)
+{
+    m_reply->listSetFreeMethod(freeClientReplyValue);
+    m_reply->listSetDupMethod(dupClientReplyValue);
+    m_slave_ip[0] = '\0';
+    m_pubsub_patterns->listSetFreeMethod(decrRefCountVoid);
+    m_pubsub_patterns->listSetMatchMethod(listMatchObjects);
+   initClientMultiState(this);
+}
 /* This function is called every time we are going to transmit new data
  * to the client. The behavior is the following:
  *
@@ -248,7 +257,7 @@ void client::_addReplyObjectToList(robj *o) {
             m_reply_bytes += sdslen(s);
         }
     }
-    asyncCloseClientOnOutputBufferLimitReached(this);
+    asyncCloseClientOnOutputBufferLimitReached();
 }
 
 /* This method takes responsibility over the sds. When it is no longer
@@ -278,7 +287,7 @@ void client::_addReplySdsToList(sds s) {
             m_reply_bytes += sdslen(s);
         }
     }
-    asyncCloseClientOnOutputBufferLimitReached(this);
+    asyncCloseClientOnOutputBufferLimitReached();
 }
 
 void client::_addReplyStringToList(const char *s, size_t len) {
@@ -304,7 +313,7 @@ void client::_addReplyStringToList(const char *s, size_t len) {
             m_reply_bytes += len;
         }
     }
-    asyncCloseClientOnOutputBufferLimitReached(this);
+    asyncCloseClientOnOutputBufferLimitReached();
 }
 
 /* -----------------------------------------------------------------------------
@@ -460,7 +469,7 @@ void client::setDeferredMultiBulkLength(void *node, long length) {
              * amount of bytes from one node to another. */
         }
     }
-    asyncCloseClientOnOutputBufferLimitReached(this);
+    asyncCloseClientOnOutputBufferLimitReached();
 }
 
 /* Add a double as a bulk reply */
@@ -719,12 +728,12 @@ void acceptUnixHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 }
 
-static void freeClientArgv(client *c) {
+void client::freeClientArgv() {
     int j;
-    for (j = 0; j < c->m_argc; j++)
-        decrRefCount(c->m_argv[j]);
-    c->m_argc = 0;
-    c->m_cmd = NULL;
+    for (j = 0; j < m_argc; j++)
+        decrRefCount(m_argv[j]);
+    m_argc = 0;
+    m_cmd = NULL;
 }
 
 /* Close all the slaves connections. This is useful in chained replication
@@ -813,7 +822,7 @@ void freeClient(client *c) {
 
     /* Deallocate structures used to block on blocking ops. */
     if (c->m_flags & CLIENT_BLOCKED) unblockClient(c);
-    dictRelease(c->m_blocking_state.keys);
+    dictRelease(c->m_blocking_state.m_keys);
 
     /* UNWATCH all the keys */
     unwatchAllKeys(c);
@@ -827,7 +836,7 @@ void freeClient(client *c) {
 
     /* Free data structures. */
     listRelease(c->m_reply);
-    freeClientArgv(c);
+    c->freeClientArgv();
 
     /* Unlink the client: this will close the socket, remove the I/O
      * handlers, and remove references of the client from different
@@ -879,7 +888,8 @@ void freeClient(client *c) {
  * a context where calling freeClient() is not possible, because the client
  * should be valid for the continuation of the flow of the program. */
 void freeClientAsync(client *c) {
-    if (c->m_flags & CLIENT_CLOSE_ASAP || c->m_flags & CLIENT_LUA) return;
+    if (c->m_flags & CLIENT_CLOSE_ASAP || c->m_flags & CLIENT_LUA)
+        return;
     c->m_flags |= CLIENT_CLOSE_ASAP;
     server.clients_to_close->listAddNodeTail(c);
 }
@@ -1023,7 +1033,7 @@ int handleClientsWithPendingWrites() {
 void resetClient(client *c) {
     redisCommandProc *prevcmd = c->m_cmd ? c->m_cmd->proc : NULL;
 
-    freeClientArgv(c);
+    c->freeClientArgv();
     c->m_req_protocol_type = 0;
     c->m_multi_bulk_len = 0;
     c->m_bulk_len = -1;
@@ -1063,7 +1073,7 @@ int client::processInlineBuffer() {
     if (newline == NULL) {
         if (sdslen((sds)m_query_buf) > PROTO_INLINE_MAX_SIZE) {
             addReplyError("Protocol error: too big inline request");
-            setProtocolError("too big inline request",this,0);
+            setProtocolError("too big inline request", 0);
         }
         return C_ERR;
     }
@@ -1079,7 +1089,7 @@ int client::processInlineBuffer() {
     sdsfree(aux);
     if (argv == NULL) {
         addReplyError("Protocol error: unbalanced quotes in request");
-        setProtocolError("unbalanced quotes in inline request",this,0);
+        setProtocolError("unbalanced quotes in inline request", 0);
         return C_ERR;
     }
 
@@ -1114,16 +1124,15 @@ int client::processInlineBuffer() {
 /* Helper function. Trims query buffer to make the function that processes
  * multi bulk requests idempotent. */
 #define PROTO_DUMP_LEN 128
-static void setProtocolError(const char *errstr, client *c, int pos) {
+void client::setProtocolError(const char *errstr, int pos) {
     if (server.verbosity <= LL_VERBOSE) {
-        sds client = c->catClientInfoString(sdsempty());
-
+        sds client_info = catClientInfoString(sdsempty());
         /* Sample some protocol to given an idea about what was inside. */
         char buf[256];
-        if (sdslen((sds)c->m_query_buf) < PROTO_DUMP_LEN) {
-            snprintf(buf,sizeof(buf),"Query buffer during protocol error: '%s'", c->m_query_buf);
+        if (sdslen((sds)m_query_buf) < PROTO_DUMP_LEN) {
+            snprintf(buf,sizeof(buf),"Query buffer during protocol error: '%s'", m_query_buf);
         } else {
-            snprintf(buf,sizeof(buf),"Query buffer during protocol error: '%.*s' (... more %zu bytes ...) '%.*s'", PROTO_DUMP_LEN/2, c->m_query_buf, sdslen((sds)c->m_query_buf)-PROTO_DUMP_LEN, PROTO_DUMP_LEN/2, c->m_query_buf+sdslen((sds)c->m_query_buf)-PROTO_DUMP_LEN/2);
+            snprintf(buf,sizeof(buf),"Query buffer during protocol error: '%.*s' (... more %zu bytes ...) '%.*s'", PROTO_DUMP_LEN/2, m_query_buf, sdslen((sds)m_query_buf)-PROTO_DUMP_LEN, PROTO_DUMP_LEN/2, m_query_buf+sdslen((sds)m_query_buf)-PROTO_DUMP_LEN/2);
         }
 
         /* Remove non printable chars. */
@@ -1135,11 +1144,11 @@ static void setProtocolError(const char *errstr, client *c, int pos) {
 
         /* Log all the client and protocol info. */
         serverLog(LL_VERBOSE,
-            "Protocol error (%s) from client: %s. %s", errstr, client, buf);
-        sdsfree(client);
+            "Protocol error (%s) from client: %s. %s", errstr, client_info, buf);
+        sdsfree(client_info);
     }
-    c->m_flags |= CLIENT_CLOSE_AFTER_REPLY;
-    sdsrange(c->m_query_buf,pos,-1);
+    m_flags |= CLIENT_CLOSE_AFTER_REPLY;
+    sdsrange(m_query_buf,pos,-1);
 }
 
 /* Process the query buffer for client 'c', setting up the client argument
@@ -1167,13 +1176,13 @@ int client::processMultibulkBuffer() {
         if (newline == NULL) {
             if (sdslen((sds)m_query_buf) > PROTO_INLINE_MAX_SIZE) {
                 addReplyError("Protocol error: too big mbulk count string");
-                setProtocolError("too big mbulk count string",this,0);
+                setProtocolError("too big mbulk count string",0);
             }
             return C_ERR;
         }
 
         /* Buffer should also contain \n */
-        if (newline-(m_query_buf) > ((signed)sdslen((sds)m_query_buf)-2))
+        if (newline-m_query_buf > ((signed)sdslen((sds)m_query_buf)-2))
             return C_ERR;
 
         /* We know for sure there is a whole line since newline != NULL,
@@ -1182,7 +1191,7 @@ int client::processMultibulkBuffer() {
         ok = string2ll(m_query_buf+1,newline-(m_query_buf+1),&ll);
         if (!ok || ll > 1024*1024) {
             addReplyError("Protocol error: invalid multibulk length");
-            setProtocolError("invalid mbulk count",this,pos);
+            setProtocolError("invalid mbulk count", pos);
             return C_ERR;
         }
 
@@ -1195,7 +1204,8 @@ int client::processMultibulkBuffer() {
         m_multi_bulk_len = ll;
 
         /* Setup argv array on client structure */
-        if (m_argv) zfree(m_argv);
+        if (m_argv)
+            zfree(m_argv);
         m_argv = (robj **)zmalloc(sizeof(robj*)*m_multi_bulk_len);
     }
 
@@ -1208,28 +1218,28 @@ int client::processMultibulkBuffer() {
                 if (sdslen((sds)m_query_buf) > PROTO_INLINE_MAX_SIZE) {
                     addReplyError(
                         "Protocol error: too big bulk count string");
-                    setProtocolError("too big bulk count string",this,0);
+                    setProtocolError("too big bulk count string", 0);
                     return C_ERR;
                 }
                 break;
             }
 
             /* Buffer should also contain \n */
-            if (newline-(m_query_buf) > ((signed)sdslen((sds)m_query_buf)-2))
+            if (newline-m_query_buf > ((signed)sdslen((sds)m_query_buf)-2))
                 break;
 
             if (m_query_buf[pos] != '$') {
                 addReplyErrorFormat(
                     "Protocol error: expected '$', got '%c'",
                     m_query_buf[pos]);
-                setProtocolError("expected $ but got something else",this,pos);
+                setProtocolError("expected $ but got something else", pos);
                 return C_ERR;
             }
 
             ok = string2ll(m_query_buf+pos+1,newline-(m_query_buf+pos+1),&ll);
             if (!ok || ll < 0 || ll > 512*1024*1024) {
                 addReplyError("Protocol error: invalid bulk length");
-                setProtocolError("invalid bulk length",this,pos);
+                setProtocolError("invalid bulk length", pos);
                 return C_ERR;
             }
 
@@ -1488,7 +1498,7 @@ char* client::getClientPeerId() {
     char peerid[NET_PEER_ID_LEN];
 
     if (m_cached_peer_id == NULL) {
-        genClientPeerId(peerid,sizeof(peerid));
+        genClientPeerId(peerid, sizeof(peerid));
         m_cached_peer_id = sdsnew(peerid);
     }
     return m_cached_peer_id;
@@ -1526,7 +1536,7 @@ sds client::catClientInfoString(sds s) {
     *p = '\0';
     return sdscatfmt(s,
         "id=%U addr=%s fd=%i name=%s age=%I idle=%I flags=%s db=%i sub=%i psub=%i multi=%i qbuf=%U qbuf-free=%U obl=%U oll=%U omem=%U events=%s cmd=%s",
-        (unsigned long long) m_id,
+        (unsigned long long) m_client_id,
         getClientPeerId(),
         m_fd,
         m_client_name ? (char*)m_client_name->ptr : "",
@@ -1643,7 +1653,7 @@ void clientCommand(client *c) {
             _client = (client *)ln->listNodeValue();
             if (addr && strcmp(_client->getClientPeerId(),addr) != 0) continue;
             if (type != -1 && _client->getClientType() != type) continue;
-            if (id != 0 && _client->m_id != id) continue;
+            if (id != 0 && _client->m_client_id != id) continue;
             if (c == _client && skipme) continue;
 
             /* Kill it. */
@@ -1766,7 +1776,7 @@ void client::rewriteClientCommandVector(int argc, ...) {
 
 /* Completely replace the client command vector with the provided one. */
 void client::replaceClientCommandVector(int argc, robj **argv) {
-    freeClientArgv(this);
+    freeClientArgv();
     zfree(m_argv);
     m_argv = argv;
     m_argc = argc;
@@ -1918,14 +1928,14 @@ int client::checkClientOutputBufferLimits() {
  * Note: we need to close the client asynchronously because this function is
  * called from contexts where the client can't be freed safely, i.e. from the
  * lower level functions pushing data inside the client output buffers. */
-void asyncCloseClientOnOutputBufferLimitReached(client *c) {
-    serverAssert(c->m_reply_bytes < SIZE_MAX-(1024*64));
-    if (c->m_reply_bytes == 0 || c->m_flags & CLIENT_CLOSE_ASAP)
+void client::asyncCloseClientOnOutputBufferLimitReached() {
+    serverAssert(m_reply_bytes < SIZE_MAX-(1024*64));
+    if (m_reply_bytes == 0 || m_flags & CLIENT_CLOSE_ASAP)
         return;
-    if (c->checkClientOutputBufferLimits()) {
-        sds client = c->catClientInfoString(sdsempty());
+    if (checkClientOutputBufferLimits()) {
+        sds client = catClientInfoString(sdsempty());
 
-        freeClientAsync(c);
+        freeClientAsync(this);
         serverLog(LL_WARNING,"Client %s scheduled to be closed ASAP for overcoming of output buffer limits.", client);
         sdsfree(client);
     }

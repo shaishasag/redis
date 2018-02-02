@@ -67,7 +67,7 @@ char *replicationGetSlaveName(client *c) {
             snprintf(buf,sizeof(buf),"%s:<unknown-slave-port>",ip);
     } else {
         snprintf(buf,sizeof(buf),"client id #%llu",
-            (unsigned long long) c->m_id);
+            (unsigned long long) c->m_client_id);
     }
     return buf;
 }
@@ -2403,9 +2403,9 @@ void waitCommand(client *c) {
 
     /* Otherwise block the client and put it into our list of clients
      * waiting for ack from slaves. */
-    c->m_blocking_state.timeout = timeout;
-    c->m_blocking_state.reploffset = offset;
-    c->m_blocking_state.numreplicas = numreplicas;
+    c->m_blocking_state.m_timeout = timeout;
+    c->m_blocking_state.m_replication_offset = offset;
+    c->m_blocking_state.m_num_replicas = numreplicas;
     server.clients_waiting_acks->listAddNodeTail(c);
     blockClient(c,BLOCKED_WAIT);
 
@@ -2440,16 +2440,16 @@ void processClientsWaitingReplicas() {
          * offset and number of replicas, we remember it so the next client
          * may be unblocked without calling replicationCountAcksByOffset()
          * if the requested offset / replicas were equal or less. */
-        if (last_offset && last_offset > c->m_blocking_state.reploffset &&
-                           last_numreplicas > c->m_blocking_state.numreplicas)
+        if (last_offset && last_offset > c->m_blocking_state.m_replication_offset &&
+                           last_numreplicas > c->m_blocking_state.m_num_replicas)
         {
             unblockClient(c);
             c->addReplyLongLong(last_numreplicas);
         } else {
-            int numreplicas = replicationCountAcksByOffset(c->m_blocking_state.reploffset);
+            int numreplicas = replicationCountAcksByOffset(c->m_blocking_state.m_replication_offset);
 
-            if (numreplicas >= c->m_blocking_state.numreplicas) {
-                last_offset = c->m_blocking_state.reploffset;
+            if (numreplicas >= c->m_blocking_state.m_num_replicas) {
+                last_offset = c->m_blocking_state.m_replication_offset;
                 last_numreplicas = numreplicas;
                 unblockClient(c);
                 c->addReplyLongLong(numreplicas);

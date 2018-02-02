@@ -798,7 +798,7 @@ int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
          * However note that the actual resolution is limited by
          * server.hz. */
 
-        if (c->m_blocking_state.timeout != 0 && c->m_blocking_state.timeout < now_ms) {
+        if (c->m_blocking_state.m_timeout != 0 && c->m_blocking_state.m_timeout < now_ms) {
             /* Handle blocking operation specific timeout. */
             replyToBlockedClientTimedOut(c);
             unblockClient(c);

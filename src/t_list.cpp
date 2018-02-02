@@ -645,14 +645,14 @@ void blockForKeys(client *c, robj **keys, int numkeys, mstime_t timeout, robj *t
     list *l;
     int j;
 
-    c->m_blocking_state.timeout = timeout;
-    c->m_blocking_state.target = target;
+    c->m_blocking_state.m_timeout = timeout;
+    c->m_blocking_state.m_target = target;
 
     if (target != NULL) incrRefCount(target);
 
     for (j = 0; j < numkeys; j++) {
         /* If the key already exists in the dict ignore it. */
-        if (c->m_blocking_state.keys->dictAdd(keys[j],NULL) != DICT_OK) continue;
+        if (c->m_blocking_state.m_keys->dictAdd(keys[j],NULL) != DICT_OK) continue;
         incrRefCount(keys[j]);
 
         /* And in the other "side", to map keys -> clients */
@@ -678,9 +678,9 @@ void blockForKeys(client *c, robj **keys, int numkeys, mstime_t timeout, robj *t
 void unblockClientWaitingData(client *c) {
     dictEntry *de;
 
-    serverAssertWithInfo(c,NULL,c->m_blocking_state.keys->dictSize() != 0);
+    serverAssertWithInfo(c,NULL,c->m_blocking_state.m_keys->dictSize() != 0);
     {
-        dictIterator di(c->m_blocking_state.keys);
+        dictIterator di(c->m_blocking_state.m_keys);
         /* The client may wait for multiple keys, so unblock it for every key. */
         while((de = di.dictNext()) != NULL) {
             robj *key = (robj *)de->dictGetKey();
@@ -696,10 +696,10 @@ void unblockClientWaitingData(client *c) {
     }
     
     /* Cleanup the client structure */
-    c->m_blocking_state.keys->dictEmpty(NULL);
-    if (c->m_blocking_state.target) {
-        decrRefCount(c->m_blocking_state.target);
-        c->m_blocking_state.target = NULL;
+    c->m_blocking_state.m_keys->dictEmpty(NULL);
+    if (c->m_blocking_state.m_target) {
+        decrRefCount(c->m_blocking_state.m_target);
+        c->m_blocking_state.m_target = NULL;
     }
 }
 
@@ -846,7 +846,7 @@ void handleClientsBlockedOnLists() {
                     while(numclients--) {
                         listNode *clientnode = clients->listFirst();
                         client *receiver = (client *)clientnode->listNodeValue();
-                        robj *dstkey = receiver->m_blocking_state.target;
+                        robj *dstkey = receiver->m_blocking_state.m_target;
                         int where = (receiver->m_last_cmd &&
                                      receiver->m_last_cmd->proc == blpopCommand) ?
                                     LIST_HEAD : LIST_TAIL;

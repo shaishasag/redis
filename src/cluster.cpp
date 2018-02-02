@@ -5190,7 +5190,7 @@ void readwriteCommand(client *c) {
  *    resharding in progress).
  *
  * On success the function returns the node that is able to serve the request.
- * If the node is not 'myself' a redirection must be perfomed. The kind of
+ * If the node is not 'myself' a redirection must be performed. The kind of
  * redirection is specified setting the integer passed by reference
  * 'error_code', which will be set to CLUSTER_REDIR_ASK or
  * CLUSTER_REDIR_MOVED.
@@ -5430,7 +5430,7 @@ int clusterRedirectBlockedClientIfNeeded(client *c) {
         }
 
         /* All keys must belong to the same slot, so check first key only. */
-        dictIterator di(c->m_blocking_state.keys);
+        dictIterator di(c->m_blocking_state.m_keys);
         if ((de = di.dictNext()) != NULL) {
             robj *key = (robj *)de->dictGetKey();
             int slot = keyHashSlot((char*)key->ptr, sdslen((sds)key->ptr));
