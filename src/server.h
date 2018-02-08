@@ -741,14 +741,14 @@ public:
     void replicationCacheMaster();
     char *replicationGetSlaveName();
 
+    // implemented in blocked.cpp
+    void unblockClient();
+
     // implemented in module.cpp
     void unblockClientFromModule();
 
      // implemented in t_list.cpp
     void unblockClientWaitingData();
-
-    // implemented in block.cpp
-    void unblockClient();
 
   uint64_t m_client_id;            /* Client incremental unique ID. */
     int m_fd;                 /* Client socket. */
