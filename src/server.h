@@ -732,6 +732,10 @@ public:
     int pubsubUnsubscribeChannel(robj *channel, int notify);
     int pubsubUnsubscribePattern(robj *pattern, int notify);
 
+    // implemented in replication.cpp
+    void replicationCacheMaster();
+    char *replicationGetSlaveName();
+
     // implemented in module.cpp
     void unblockClientFromModule();
 
@@ -1608,7 +1612,6 @@ void replicationFeedMonitors(client *c, list *monitors, int dictid, robj **argv,
 void updateSlavesWaitingBgsave(int bgsaveerr, int type);
 void replicationCron();
 void replicationHandleMasterDisconnection();
-void replicationCacheMaster(client *c);
 void resizeReplicationBacklog(long long newsize);
 void replicationSetMaster(char *ip, int port);
 void replicationUnsetMaster();
@@ -1622,7 +1625,6 @@ void unblockClientWaitingReplicas(client *c);
 int replicationCountAcksByOffset(long long offset);
 void replicationSendNewlineToMaster();
 long long replicationGetSlaveOffset();
-char *replicationGetSlaveName(client *c);
 long long getPsyncInitialOffset();
 int replicationSetupSlaveForFullResync(client *slave, long long offset);
 void changeReplicationId();

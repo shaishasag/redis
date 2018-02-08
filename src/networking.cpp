@@ -804,7 +804,7 @@ void freeClient(client *c) {
                           CLIENT_BLOCKED|
                           CLIENT_UNBLOCKED)))
         {
-            replicationCacheMaster(c);
+            c->replicationCacheMaster();
             return;
         }
     }
@@ -812,7 +812,7 @@ void freeClient(client *c) {
     /* Log link disconnection with slave */
     if ((c->m_flags & CLIENT_SLAVE) && !(c->m_flags & CLIENT_MONITOR)) {
         serverLog(LL_WARNING,"Connection with slave %s lost.",
-            replicationGetSlaveName(c));
+            c->replicationGetSlaveName());
     }
 
     /* Free the query buffer */

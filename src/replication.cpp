@@ -49,25 +49,26 @@ int cancelReplicationHandshake();
  * pair. Mostly useful for logging, since we want to log a slave using its
  * IP address and its listening port which is more clear for the user, for
  * example: "Closing connection with slave 10.1.2.3:6380". */
-char *replicationGetSlaveName(client *c) {
+char* client::replicationGetSlaveName() {
     static char buf[NET_PEER_ID_LEN];
     char ip[NET_IP_STR_LEN];
 
     ip[0] = '\0';
     buf[0] = '\0';
-    if (c->m_slave_ip[0] != '\0' ||
-        anetPeerToString(c->m_fd,ip,sizeof(ip),NULL) != -1)
+    if (m_slave_ip[0] != '\0' ||
+        anetPeerToString(m_fd,ip,sizeof(ip),NULL) != -1)
     {
         /* Note that the 'ip' buffer is always larger than 'c->slave_ip' */
-        if (c->m_slave_ip[0] != '\0') memcpy(ip,c->m_slave_ip,sizeof(c->m_slave_ip));
+        if (m_slave_ip[0] != '\0')
+            memcpy(ip, m_slave_ip,sizeof(m_slave_ip));
 
-        if (c->m_slave_listening_port)
-            anetFormatAddr(buf,sizeof(buf),ip,c->m_slave_listening_port);
+        if (m_slave_listening_port)
+            anetFormatAddr(buf,sizeof(buf),ip, m_slave_listening_port);
         else
             snprintf(buf,sizeof(buf),"%s:<unknown-slave-port>",ip);
     } else {
         snprintf(buf,sizeof(buf),"client id #%llu",
-            (unsigned long long) c->m_client_id);
+            (unsigned long long) m_client_id);
     }
     return buf;
 }
@@ -479,7 +480,7 @@ int masterTryPartialResynchronization(client *c) {
             }
         } else {
             serverLog(LL_NOTICE,"Full resync requested by slave %s",
-                replicationGetSlaveName(c));
+                c->replicationGetSlaveName());
         }
         goto need_full_resync;
     }
@@ -490,10 +491,10 @@ int masterTryPartialResynchronization(client *c) {
         psync_offset > (server.repl_backlog_off + server.repl_backlog_histlen))
     {
         serverLog(LL_NOTICE,
-            "Unable to partial resync with slave %s for lack of backlog (Slave request was: %lld).", replicationGetSlaveName(c), psync_offset);
+            "Unable to partial resync with slave %s for lack of backlog (Slave request was: %lld).", c->replicationGetSlaveName(), psync_offset);
         if (psync_offset > server.master_repl_offset) {
             serverLog(LL_WARNING,
-                "Warning: slave %s tried to PSYNC with an offset that is greater than the master replication offset.", replicationGetSlaveName(c));
+                "Warning: slave %s tried to PSYNC with an offset that is greater than the master replication offset.", c->replicationGetSlaveName());
         }
         goto need_full_resync;
     }
@@ -522,7 +523,7 @@ int masterTryPartialResynchronization(client *c) {
     psync_len = addReplyReplicationBacklog(c,psync_offset);
     serverLog(LL_NOTICE,
         "Partial resynchronization request from %s accepted. Sending %lld bytes of backlog starting from offset %lld.",
-            replicationGetSlaveName(c),
+            c->replicationGetSlaveName(),
             psync_len, psync_offset);
     /* Note that we don't need to set the selected DB at server.slaveseldb
      * to -1 to force the master to emit SELECT, since the slave already
@@ -641,7 +642,7 @@ void syncCommand(client *c) {
     }
 
     serverLog(LL_NOTICE,"Slave %s asks for synchronization",
-        replicationGetSlaveName(c));
+        c->replicationGetSlaveName());
 
     /* Try a partial resynchronization if this is a PSYNC command.
      * If it fails, we continue with usual full resynchronization, however
@@ -859,7 +860,7 @@ void putSlaveOnline(client *slave) {
     }
     refreshGoodSlavesCount();
     serverLog(LL_NOTICE,"Synchronization with slave %s succeeded",
-        replicationGetSlaveName(slave));
+        slave->replicationGetSlaveName());
 }
 
 void sendBulkToSlave(aeEventLoop *el, int fd, void *privdata, int mask) {
@@ -956,7 +957,7 @@ void updateSlavesWaitingBgsave(int bgsaveerr, int type) {
             if (type == RDB_CHILD_TYPE_SOCKET) {
                 serverLog(LL_NOTICE,
                     "Streamed RDB transfer with slave %s succeeded (socket). Waiting for REPLCONF ACK from slave to enable streaming",
-                        replicationGetSlaveName(slave));
+                        slave->replicationGetSlaveName());
                 /* Note: we wait for a REPLCONF ACK message from slave in
                  * order to really put it online (install the write handler
                  * so that the accumulated data can be transfered). However
@@ -2113,12 +2114,12 @@ void replicationSendAck() {
  * replicationResurrectCachedMaster() that is used after a successful PSYNC
  * handshake in order to reactivate the cached master.
  */
-void replicationCacheMaster(client *c) {
+void client::replicationCacheMaster() {
     serverAssert(server.master != NULL && server.cached_master == NULL);
     serverLog(LL_NOTICE,"Caching the disconnected master state.");
 
     /* Unlink the client from the server structures. */
-    c->unlinkClient();
+    unlinkClient();
 
     /* Reset the master client so that's ready to accept new commands:
      * we want to discard te non processed query buffers and non processed
@@ -2127,20 +2128,20 @@ void replicationCacheMaster(client *c) {
     sdsclear(server.master->m_query_buf);
     sdsclear(server.master->m_pending_query_buf);
     server.master->m_read_replication_offset = server.master->m_applied_replication_offset;
-    if (c->m_flags & CLIENT_MULTI)
-        discardTransaction(c);
-    c->m_reply->listEmpty();
-    c->m_response_buff_pos = 0;
-    c->resetClient();
+    if (m_flags & CLIENT_MULTI)
+        discardTransaction(this);
+    m_reply->listEmpty();
+    m_response_buff_pos = 0;
+    resetClient();
 
     /* Save the master. Server.master will be set to null later by
      * replicationHandleMasterDisconnection(). */
     server.cached_master = server.master;
 
     /* Invalidate the Peer ID cache. */
-    if (c->m_cached_peer_id) {
-        sdsfree(c->m_cached_peer_id);
-        c->m_cached_peer_id = NULL;
+    if (m_cached_peer_id) {
+        sdsfree(m_cached_peer_id);
+        m_cached_peer_id = NULL;
     }
 
     /* Caching the master happens instead of the actual freeClient() call,
@@ -2587,7 +2588,7 @@ void replicationCron() {
             if ((server.unixtime - slave->m_replication_ack_time) > server.repl_timeout)
             {
                 serverLog(LL_WARNING, "Disconnecting timedout slave: %s",
-                    replicationGetSlaveName(slave));
+                    slave->replicationGetSlaveName());
                 freeClient(slave);
             }
         }

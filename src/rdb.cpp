@@ -1809,14 +1809,14 @@ void backgroundSaveDoneHandlerSocket(int exitcode, int bysignal) {
             if (j == ok_slaves[0] || errorcode != 0) {
                 serverLog(LL_WARNING,
                 "Closing slave %s: child->slave RDB transfer failed: %s",
-                    replicationGetSlaveName(slave),
+                    slave->replicationGetSlaveName(),
                     (errorcode == 0) ? "RDB transfer child aborted"
                                      : strerror(errorcode));
                 freeClient(slave);
             } else {
                 serverLog(LL_WARNING,
                 "Slave %s correctly received the streamed RDB file.",
-                    replicationGetSlaveName(slave));
+                    slave->replicationGetSlaveName());
                 /* Restore the socket as non-blocking. */
                 anetNonBlock(NULL,slave->m_fd);
                 anetSendTimeout(NULL,slave->m_fd,0);
