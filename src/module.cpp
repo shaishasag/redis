@@ -3387,14 +3387,14 @@ void moduleBlockedClientPipeReadable(aeEventLoop *el, int fd, void *privdata, in
  *
  * The structure RedisModuleBlockedClient will be always deallocated when
  * running the list of clients blocked by a module that need to be unblocked. */
-void unblockClientFromModule(client *c) {
-    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)c->m_blocking_state.m_module_blocked_handle;
+void client::unblockClientFromModule() {
+    RedisModuleBlockedClient *bc = (RedisModuleBlockedClient*)m_blocking_state.m_module_blocked_handle;
     bc->_client = NULL;
     /* Reset the client for a new query since, for blocking commands implemented
      * into modules, we do not it immediately after the command returns (and
      * the client blocks) in order to be still able to access the argument
      * vector from callbacks. */
-    c->resetClient();
+    resetClient();
 }
 
 /* Block a client in the context of a blocking command, returning an handle

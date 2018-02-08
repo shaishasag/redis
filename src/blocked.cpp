@@ -137,7 +137,7 @@ void unblockClient(client *c) {
     } else if (c->m_blocking_op_type == BLOCKED_WAIT) {
         unblockClientWaitingReplicas(c);
     } else if (c->m_blocking_op_type == BLOCKED_MODULE) {
-        unblockClientFromModule(c);
+        c->unblockClientFromModule();
     } else {
         serverPanic("Unknown btype in unblockClient().");
     }

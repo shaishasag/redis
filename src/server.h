@@ -732,6 +732,8 @@ public:
     int pubsubUnsubscribeChannel(robj *channel, int notify);
     int pubsubUnsubscribePattern(robj *pattern, int notify);
 
+    // implemented in module.cpp
+    void unblockClientFromModule();
 
      // implemented in t_list.cpp
    void unblockClientWaitingData();
@@ -1468,7 +1470,6 @@ int *moduleGetCommandKeysViaAPI(struct redisCommand *cmd, robj **argv, int argc,
 moduleType *moduleTypeLookupModuleByID(uint64_t id);
 void moduleTypeNameByID(char *name, uint64_t moduleid);
 void moduleFreeContext(struct RedisModuleCtx *ctx);
-void unblockClientFromModule(client *c);
 void moduleHandleBlockedClients();
 void moduleBlockedClientTimedOut(client *c);
 void moduleBlockedClientPipeReadable(aeEventLoop *el, int fd, void *privdata, int mask);
