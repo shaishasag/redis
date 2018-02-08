@@ -3535,7 +3535,7 @@ void moduleHandleBlockedClients() {
         freeClient(bc->reply_client);
 
         if (c != NULL) {
-            unblockClient(c);
+            c->unblockClient();
             /* Put the client in the list of clients that need to write
              * if there are pending replies here. This is needed since
              * during a non blocking command the client may receive output. */

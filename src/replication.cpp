@@ -2430,7 +2430,7 @@ void unblockClientWaitingReplicas(client *c) {
  * we received enough ACKs from slaves. */
 void processClientsWaitingReplicas() {
     long long last_offset = 0;
-    int last_numreplicas = 0;
+    int last_num_replicas = 0;
 
     listNode *ln;
 
@@ -2443,18 +2443,18 @@ void processClientsWaitingReplicas() {
          * may be unblocked without calling replicationCountAcksByOffset()
          * if the requested offset / replicas were equal or less. */
         if (last_offset && last_offset > c->m_blocking_state.m_replication_offset &&
-                           last_numreplicas > c->m_blocking_state.m_num_replicas)
+                           last_num_replicas > c->m_blocking_state.m_num_replicas)
         {
-            unblockClient(c);
-            c->addReplyLongLong(last_numreplicas);
+            c->unblockClient();
+            c->addReplyLongLong(last_num_replicas);
         } else {
-            int numreplicas = replicationCountAcksByOffset(c->m_blocking_state.m_replication_offset);
+            int num_replicas = replicationCountAcksByOffset(c->m_blocking_state.m_replication_offset);
 
-            if (numreplicas >= c->m_blocking_state.m_num_replicas) {
+            if (num_replicas >= c->m_blocking_state.m_num_replicas) {
                 last_offset = c->m_blocking_state.m_replication_offset;
-                last_numreplicas = numreplicas;
-                unblockClient(c);
-                c->addReplyLongLong(numreplicas);
+                last_num_replicas = num_replicas;
+                c->unblockClient();
+                c->addReplyLongLong(num_replicas);
             }
         }
     }

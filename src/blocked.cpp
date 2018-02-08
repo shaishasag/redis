@@ -131,26 +131,26 @@ void processUnblockedClients() {
 
 /* Unblock a client calling the right function depending on the kind
  * of operation the client is blocking for. */
-void unblockClient(client *c) {
-    if (c->m_blocking_op_type == BLOCKED_LIST) {
-        c->unblockClientWaitingData();
-    } else if (c->m_blocking_op_type == BLOCKED_WAIT) {
-        unblockClientWaitingReplicas(c);
-    } else if (c->m_blocking_op_type == BLOCKED_MODULE) {
-        c->unblockClientFromModule();
+void client::unblockClient() {
+    if (m_blocking_op_type == BLOCKED_LIST) {
+        unblockClientWaitingData();
+    } else if (m_blocking_op_type == BLOCKED_WAIT) {
+        unblockClientWaitingReplicas(this);
+    } else if (m_blocking_op_type == BLOCKED_MODULE) {
+        unblockClientFromModule();
     } else {
         serverPanic("Unknown btype in unblockClient().");
     }
     /* Clear the flags, and put the client in the unblocked list so that
      * we'll process new commands in its query buffer ASAP. */
-    c->m_flags &= ~CLIENT_BLOCKED;
-    c->m_blocking_op_type = BLOCKED_NONE;
+    m_flags &= ~CLIENT_BLOCKED;
+    m_blocking_op_type = BLOCKED_NONE;
     server.bpop_blocked_clients--;
     /* The client may already be into the unblocked list because of a previous
      * blocking operation, don't add back it into the list multiple times. */
-    if (!(c->m_flags & CLIENT_UNBLOCKED)) {
-        c->m_flags |= CLIENT_UNBLOCKED;
-        server.unblocked_clients->listAddNodeTail(c);
+    if (!(m_flags & CLIENT_UNBLOCKED)) {
+        m_flags |= CLIENT_UNBLOCKED;
+        server.unblocked_clients->listAddNodeTail(this);
     }
 }
 
@@ -187,7 +187,7 @@ void disconnectAllBlockedClients() {
             c->addReplySds(sdsnew(
                 "-UNBLOCKED force unblock from blocking operation, "
                 "instance state changed (master -> slave?)\r\n"));
-            unblockClient(c);
+            c->unblockClient();
             c->m_flags |= CLIENT_CLOSE_AFTER_REPLY;
         }
     }

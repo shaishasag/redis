@@ -857,7 +857,7 @@ void handleClientsBlockedOnLists() {
                              * freed by the next unblockClient()
                              * call. */
                             if (dstkey) incrRefCount(dstkey);
-                            unblockClient(receiver);
+                            receiver->unblockClient();
 
                             if (serveClientBlockedOnList(receiver,
                                 rl->key,dstkey,rl->db,value,

@@ -801,12 +801,12 @@ int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
         if (c->m_blocking_state.m_timeout != 0 && c->m_blocking_state.m_timeout < now_ms) {
             /* Handle blocking operation specific timeout. */
             replyToBlockedClientTimedOut(c);
-            unblockClient(c);
+            c->unblockClient();
         } else if (server.cluster_enabled) {
             /* Cluster: handle unblock & redirect of clients blocked
              * into keys no longer served by this server. */
             if (clusterRedirectBlockedClientIfNeeded(c))
-                unblockClient(c);
+                c->unblockClient();
         }
     }
     return 0;
@@ -2262,7 +2262,7 @@ void call(client *c, int flags) {
         if (c->m_flags & CLIENT_FORCE_AOF) propagate_flags |= PROPAGATE_AOF;
 
         /* However prevent AOF / replication propagation if the command
-         * implementatino called preventCommandPropagation() or similar,
+         * implementation called preventCommandPropagation() or similar,
          * or if we don't have the call() flags to do so. */
         if (c->m_flags & CLIENT_PREVENT_REPL_PROP ||
             !(flags & CMD_CALL_PROPAGATE_REPL))

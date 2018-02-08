@@ -821,7 +821,8 @@ void freeClient(client *c) {
     c->m_query_buf = NULL;
 
     /* Deallocate structures used to block on blocking ops. */
-    if (c->m_flags & CLIENT_BLOCKED) unblockClient(c);
+    if (c->m_flags & CLIENT_BLOCKED)
+        c->unblockClient();
     dictRelease(c->m_blocking_state.m_keys);
 
     /* UNWATCH all the keys */
@@ -841,7 +842,6 @@ void freeClient(client *c) {
     /* Unlink the client: this will close the socket, remove the I/O
      * handlers, and remove references of the client from different
      * places where active clients may be referenced. */
-    void unlinkClient(client *c);
     c->unlinkClient();
 
     /* Master/slave cleanup Case 1:

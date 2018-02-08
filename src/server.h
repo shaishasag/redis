@@ -745,7 +745,10 @@ public:
     void unblockClientFromModule();
 
      // implemented in t_list.cpp
-   void unblockClientWaitingData();
+    void unblockClientWaitingData();
+
+    // implemented in block.cpp
+    void unblockClient();
 
   uint64_t m_client_id;            /* Client incremental unique ID. */
     int m_fd;                 /* Client socket. */
@@ -1898,7 +1901,6 @@ sds luaCreateFunction(client *c, lua_State *lua, robj *body);
 /* Blocked clients */
 void processUnblockedClients();
 void blockClient(client *c, int btype);
-void unblockClient(client *c);
 void replyToBlockedClientTimedOut(client *c);
 int getTimeoutFromObjectOrReply(client *c, robj *object, mstime_t *timeout, int unit);
 void disconnectAllBlockedClients();
