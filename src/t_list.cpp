@@ -675,31 +675,31 @@ void blockForKeys(client *c, robj **keys, int numkeys, mstime_t timeout, robj *t
 
 /* Unblock a client that's waiting in a blocking operation such as BLPOP.
  * You should never call this function directly, but unblockClient() instead. */
-void unblockClientWaitingData(client *c) {
+void client::unblockClientWaitingData() {
     dictEntry *de;
 
-    serverAssertWithInfo(c,NULL,c->m_blocking_state.m_keys->dictSize() != 0);
+    serverAssertWithInfo(this,NULL,m_blocking_state.m_keys->dictSize() != 0);
     {
-        dictIterator di(c->m_blocking_state.m_keys);
+        dictIterator di(m_blocking_state.m_keys);
         /* The client may wait for multiple keys, so unblock it for every key. */
         while((de = di.dictNext()) != NULL) {
             robj *key = (robj *)de->dictGetKey();
 
             /* Remove this client from the list of clients waiting for this key. */
-            list *l = (list *)(c->m_cur_selected_db->m_blocking_keys)->dictFetchValue(key);
-            serverAssertWithInfo(c,key,l != NULL);
-            l->listDelNode(l->listSearchKey(c));
+            list *l = (list *)(m_cur_selected_db->m_blocking_keys)->dictFetchValue(key);
+            serverAssertWithInfo(this,key,l != NULL);
+            l->listDelNode(l->listSearchKey(this));
             /* If the list is empty we need to remove it to avoid wasting memory */
             if (l->listLength() == 0)
-                c->m_cur_selected_db->m_blocking_keys->dictDelete(key);
+                m_cur_selected_db->m_blocking_keys->dictDelete(key);
         }
     }
     
     /* Cleanup the client structure */
-    c->m_blocking_state.m_keys->dictEmpty(NULL);
-    if (c->m_blocking_state.m_target) {
-        decrRefCount(c->m_blocking_state.m_target);
-        c->m_blocking_state.m_target = NULL;
+    m_blocking_state.m_keys->dictEmpty(NULL);
+    if (m_blocking_state.m_target) {
+        decrRefCount(m_blocking_state.m_target);
+        m_blocking_state.m_target = NULL;
     }
 }
 

@@ -133,7 +133,7 @@ void processUnblockedClients() {
  * of operation the client is blocking for. */
 void unblockClient(client *c) {
     if (c->m_blocking_op_type == BLOCKED_LIST) {
-        unblockClientWaitingData(c);
+        c->unblockClientWaitingData();
     } else if (c->m_blocking_op_type == BLOCKED_WAIT) {
         unblockClientWaitingReplicas(c);
     } else if (c->m_blocking_op_type == BLOCKED_MODULE) {

@@ -732,7 +732,11 @@ public:
     int pubsubUnsubscribeChannel(robj *channel, int notify);
     int pubsubUnsubscribePattern(robj *pattern, int notify);
 
-    uint64_t m_client_id;            /* Client incremental unique ID. */
+
+     // implemented in t_list.cpp
+   void unblockClientWaitingData();
+
+  uint64_t m_client_id;            /* Client incremental unique ID. */
     int m_fd;                 /* Client socket. */
     redisDb *m_cur_selected_db;            /* Pointer to currently SELECTed DB. */
     robj *m_client_name;             /* As set by CLIENT SETNAME. */
@@ -1530,7 +1534,6 @@ robj *listTypeGet(listTypeEntry *entry);
 void listTypeInsert(listTypeEntry *entry, robj *value, int where);
 int listTypeEqual(listTypeEntry *entry, robj *o);
 void listTypeConvert(robj *subject, int enc);
-void unblockClientWaitingData(client *c);
 void handleClientsBlockedOnLists();
 void popGenericCommand(client *c, int where);
 void signalListAsReady(redisDb *db, robj *key);
