@@ -724,6 +724,7 @@ public:
     unsigned long getClientOutputBufferMemoryUsage();
     int getClientType();
     int checkClientOutputBufferLimits();
+    void unlinkClient();
 
     uint64_t m_client_id;            /* Client incremental unique ID. */
     int m_fd;                 /* Client socket. */
@@ -1501,7 +1502,6 @@ void pauseClients(mstime_t duration);
 int clientsArePaused();
 int processEventsWhileBlocked();
 int handleClientsWithPendingWrites();
-void unlinkClient(client *c);
 int writeToClient(int fd, client *c, int handler_installed);
 
 #ifdef __GNUC__

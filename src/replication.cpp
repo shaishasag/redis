@@ -2118,7 +2118,7 @@ void replicationCacheMaster(client *c) {
     serverLog(LL_NOTICE,"Caching the disconnected master state.");
 
     /* Unlink the client from the server structures. */
-    unlinkClient(c);
+    c->unlinkClient();
 
     /* Reset the master client so that's ready to accept new commands:
      * we want to discard te non processed query buffers and non processed
@@ -2127,7 +2127,8 @@ void replicationCacheMaster(client *c) {
     sdsclear(server.master->m_query_buf);
     sdsclear(server.master->m_pending_query_buf);
     server.master->m_read_replication_offset = server.master->m_applied_replication_offset;
-    if (c->m_flags & CLIENT_MULTI) discardTransaction(c);
+    if (c->m_flags & CLIENT_MULTI)
+        discardTransaction(c);
     c->m_reply->listEmpty();
     c->m_response_buff_pos = 0;
     resetClient(c);
@@ -2167,7 +2168,7 @@ void replicationCacheMasterUsingMyself() {
     memcpy(server.master->m_master_replication_id, server.replid, sizeof(server.replid));
 
     /* Set as cached master. */
-    unlinkClient(server.master);
+    server.master->unlinkClient();
     server.cached_master = server.master;
     server.master = NULL;
     serverLog(LL_NOTICE,"Before turning into a slave, using my master parameters to synthesize a cached master: I may be able to synchronize with the new master with just a partial transfer.");
