@@ -825,7 +825,7 @@ void freeClient(client *c) {
     dictRelease(c->m_blocking_state.m_keys);
 
     /* UNWATCH all the keys */
-    unwatchAllKeys(c);
+    c->unwatchAllKeys();
     listRelease(c->m_watched_keys);
 
     /* Unsubscribe from all the pubsub channels */

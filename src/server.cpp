@@ -2368,7 +2368,7 @@ int processCommand(client *c) {
                                         &hashslot,&error_code);
         if (n == NULL || n != server.cluster->m_myself) {
             if (c->m_cmd->proc == execCommand) {
-                discardTransaction(c);
+                c->discardTransaction();
             } else {
                 flagTransaction(c);
             }

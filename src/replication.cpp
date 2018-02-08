@@ -2129,7 +2129,7 @@ void client::replicationCacheMaster() {
     sdsclear(server.master->m_pending_query_buf);
     server.master->m_read_replication_offset = server.master->m_applied_replication_offset;
     if (m_flags & CLIENT_MULTI)
-        discardTransaction(this);
+        discardTransaction();
     m_reply->listEmpty();
     m_response_buff_pos = 0;
     resetClient();

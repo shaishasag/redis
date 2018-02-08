@@ -727,6 +727,11 @@ public:
     int checkClientOutputBufferLimits();
     void unlinkClient();
 
+    // implemented in multi.cpp
+    void unwatchAllKeys();
+    void discardTransaction();
+
+    // implemented in pubsub.cpp
     int pubsubUnsubscribeAllChannels(int notify);
     int pubsubUnsubscribeAllPatterns(int notify);
     int pubsubUnsubscribeChannel(robj *channel, int notify);
@@ -1544,13 +1549,11 @@ void popGenericCommand(client *c, int where);
 void signalListAsReady(redisDb *db, robj *key);
 
 /* MULTI/EXEC/WATCH... */
-void unwatchAllKeys(client *c);
 void initClientMultiState(client *c);
 void freeClientMultiState(client *c);
 void queueMultiCommand(client *c);
 void touchWatchedKey(redisDb *db, robj *key);
 void touchWatchedKeysOnFlush(int dbid);
-void discardTransaction(client *c);
 void flagTransaction(client *c);
 void execCommandPropagateMulti(client *c);
 

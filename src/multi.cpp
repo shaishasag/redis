@@ -42,10 +42,8 @@ void freeClientMultiState(client *c) {
     int j;
 
     for (j = 0; j < c->m_multi_exec_state.m_count; j++) {
-        int i;
         multiCmd *mc = c->m_multi_exec_state.m_commands+j;
-
-        for (i = 0; i < mc->argc; i++)
+        for (int i = 0; i < mc->argc; i++)
             decrRefCount(mc->argv[i]);
         zfree(mc->argv);
     }
@@ -69,11 +67,11 @@ void queueMultiCommand(client *c) {
     c->m_multi_exec_state.m_count++;
 }
 
-void discardTransaction(client *c) {
-    freeClientMultiState(c);
-    initClientMultiState(c);
-    c->m_flags &= ~(CLIENT_MULTI|CLIENT_DIRTY_CAS|CLIENT_DIRTY_EXEC);
-    unwatchAllKeys(c);
+void client::discardTransaction() {
+    freeClientMultiState(this);
+    initClientMultiState(this);
+    m_flags &= ~(CLIENT_MULTI|CLIENT_DIRTY_CAS|CLIENT_DIRTY_EXEC);
+    unwatchAllKeys();
 }
 
 /* Flag the transaction as DIRTY_EXEC so that EXEC will fail.
@@ -97,7 +95,7 @@ void discardCommand(client *c) {
         c->addReplyError("DISCARD without MULTI");
         return;
     }
-    discardTransaction(c);
+    c->discardTransaction();
     c->addReply(shared.ok);
 }
 
@@ -133,12 +131,12 @@ void execCommand(client *c) {
     if (c->m_flags & (CLIENT_DIRTY_CAS|CLIENT_DIRTY_EXEC)) {
         c->addReply( c->m_flags & CLIENT_DIRTY_EXEC ? shared.execaborterr :
                                                   shared.nullmultibulk);
-        discardTransaction(c);
+        c->discardTransaction();
         goto handle_monitor;
     }
 
     /* Exec all the queued commands */
-    unwatchAllKeys(c); /* Unwatch ASAP otherwise we'll waste CPU cycles */
+    c->unwatchAllKeys(); /* Unwatch ASAP otherwise we'll waste CPU cycles */
     orig_argv = c->m_argv;
     orig_argc = c->m_argc;
     orig_cmd = c->m_cmd;
@@ -168,7 +166,7 @@ void execCommand(client *c) {
     c->m_argv = orig_argv;
     c->m_argc = orig_argc;
     c->m_cmd = orig_cmd;
-    discardTransaction(c);
+    c->discardTransaction();
 
     /* Make sure the EXEC command will be propagated as well if MULTI
      * was already propagated. */
@@ -244,23 +242,23 @@ void watchForKey(client *c, robj *key) {
 
 /* Unwatch all the keys watched by this client. To clean the EXEC dirty
  * flag is up to the caller. */
-void unwatchAllKeys(client *c) {
+void client::unwatchAllKeys() {
     listNode *ln;
 
-    if (c->m_watched_keys->listLength() == 0) return;
-    listIter li(c->m_watched_keys);
+    if (m_watched_keys->listLength() == 0) return;
+    listIter li(m_watched_keys);
     while((ln = li.listNext())) {
         /* Lookup the watched key -> clients list and remove the client
          * from the list */
         watchedKey *wk = (watchedKey *)ln->listNodeValue();
         list *clients = (list *)wk->db->m_watched_keys->dictFetchValue(wk->key);
-        serverAssertWithInfo(c,NULL,clients != NULL);
-        clients->listDelNode(clients->listSearchKey(c));
+        serverAssertWithInfo(this,NULL,clients != NULL);
+        clients->listDelNode(clients->listSearchKey(this));
         /* Kill the entry at all if this was the only client */
         if (clients->listLength() == 0)
             wk->db->m_watched_keys->dictDelete( wk->key);
         /* Remove this watched key from the client->watched list */
-        c->m_watched_keys->listDelNode(ln);
+        m_watched_keys->listDelNode(ln);
         decrRefCount(wk->key);
         zfree(wk);
     }
@@ -325,7 +323,7 @@ void watchCommand(client *c) {
 }
 
 void unwatchCommand(client *c) {
-    unwatchAllKeys(c);
+    c->unwatchAllKeys();
     c->m_flags &= (~CLIENT_DIRTY_CAS);
     c->addReply(shared.ok);
 }
