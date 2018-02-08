@@ -829,8 +829,8 @@ void freeClient(client *c) {
     listRelease(c->m_watched_keys);
 
     /* Unsubscribe from all the pubsub channels */
-    pubsubUnsubscribeAllChannels(c,0);
-    pubsubUnsubscribeAllPatterns(c,0);
+    c->pubsubUnsubscribeAllChannels(0);
+    c->pubsubUnsubscribeAllPatterns(0);
     dictRelease(c->m_pubsub_channels);
     listRelease(c->m_pubsub_patterns);
 
@@ -1031,26 +1031,26 @@ int handleClientsWithPendingWrites() {
 }
 
 /* resetClient prepare the client to process the next command */
-void resetClient(client *c) {
-    redisCommandProc *prevcmd = c->m_cmd ? c->m_cmd->proc : NULL;
+void client::resetClient() {
+    redisCommandProc *prevcmd = m_cmd ? m_cmd->proc : NULL;
 
-    c->freeClientArgv();
-    c->m_req_protocol_type = 0;
-    c->m_multi_bulk_len = 0;
-    c->m_bulk_len = -1;
+    freeClientArgv();
+    m_req_protocol_type = 0;
+    m_multi_bulk_len = 0;
+    m_bulk_len = -1;
 
     /* We clear the ASKING flag as well if we are not inside a MULTI, and
      * if what we just executed is not the ASKING command itself. */
-    if (!(c->m_flags & CLIENT_MULTI) && prevcmd != askingCommand)
-        c->m_flags &= ~CLIENT_ASKING;
+    if (!(m_flags & CLIENT_MULTI) && prevcmd != askingCommand)
+        m_flags &= ~CLIENT_ASKING;
 
     /* Remove the CLIENT_REPLY_SKIP flag if any so that the reply
      * to the next command will be sent, but set the flag if the command
      * we just processed was "CLIENT REPLY SKIP". */
-    c->m_flags &= ~CLIENT_REPLY_SKIP;
-    if (c->m_flags & CLIENT_REPLY_SKIP_NEXT) {
-        c->m_flags |= CLIENT_REPLY_SKIP;
-        c->m_flags &= ~CLIENT_REPLY_SKIP_NEXT;
+    m_flags &= ~CLIENT_REPLY_SKIP;
+    if (m_flags & CLIENT_REPLY_SKIP_NEXT) {
+        m_flags |= CLIENT_REPLY_SKIP;
+        m_flags &= ~CLIENT_REPLY_SKIP_NEXT;
     }
 }
 
@@ -1344,7 +1344,7 @@ void client::processInputBuffer() {
 
         /* Multibulk processing could see a <= 0 length. */
         if (m_argc == 0) {
-            resetClient(this);
+            resetClient();
         } else {
             /* Only reset the client when the command was executed. */
             if (processCommand(this) == C_OK) {
@@ -1358,7 +1358,7 @@ void client::processInputBuffer() {
                  * still be able to access the client argv and argc field.
                  * The client will be reset in unblockClientFromModule(). */
                 if (!(m_flags & CLIENT_BLOCKED) || m_blocking_op_type != BLOCKED_MODULE)
-                    resetClient(this);
+                    resetClient();
             }
             /* freeMemoryIfNeeded may flush slave output buffers. This may
              * result into a slave, that may be the active client, to be

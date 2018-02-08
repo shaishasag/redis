@@ -3394,7 +3394,7 @@ void unblockClientFromModule(client *c) {
      * into modules, we do not it immediately after the command returns (and
      * the client blocks) in order to be still able to access the argument
      * vector from callbacks. */
-    resetClient(c);
+    c->resetClient();
 }
 
 /* Block a client in the context of a blocking command, returning an handle

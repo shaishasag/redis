@@ -86,7 +86,7 @@ int pubsubSubscribeChannel(client *c, robj *channel) {
 
 /* Unsubscribe a client from a channel. Returns 1 if the operation succeeded, or
  * 0 if the client was not subscribed to the specified channel. */
-int pubsubUnsubscribeChannel(client *c, robj *channel, int notify) {
+int client::pubsubUnsubscribeChannel(robj *channel, int notify) {
     dictEntry *de;
     list *clients;
     listNode *ln;
@@ -95,14 +95,14 @@ int pubsubUnsubscribeChannel(client *c, robj *channel, int notify) {
     /* Remove the channel from the client -> channels hash table */
     incrRefCount(channel); /* channel may be just a pointer to the same object
                             we have in the hash tables. Protect it... */
-    if (c->m_pubsub_channels->dictDelete(channel) == DICT_OK) {
+    if (m_pubsub_channels->dictDelete(channel) == DICT_OK) {
         retval = 1;
         /* Remove the client from the channel -> clients list hash table */
         de = server.pubsub_channels->dictFind(channel);
-        serverAssertWithInfo(c,NULL,de != NULL);
+        serverAssertWithInfo(this,NULL,de != NULL);
         clients = (list *)de->dictGetVal();
-        ln = clients->listSearchKey(c);
-        serverAssertWithInfo(c,NULL,ln != NULL);
+        ln = clients->listSearchKey(this);
+        serverAssertWithInfo(this,NULL,ln != NULL);
         clients->listDelNode(ln);
         if (clients->listLength() == 0) {
             /* Free the list and associated hash entry at all if this was
@@ -113,11 +113,11 @@ int pubsubUnsubscribeChannel(client *c, robj *channel, int notify) {
     }
     /* Notify the client */
     if (notify) {
-        c->addReply(shared.mbulkhdr[3]);
-        c->addReply(shared.unsubscribebulk);
-        c->addReplyBulk(channel);
-        c->addReplyLongLong(c->m_pubsub_channels->dictSize()+
-                       c->m_pubsub_patterns->listLength());
+        addReply(shared.mbulkhdr[3]);
+        addReply(shared.unsubscribebulk);
+        addReplyBulk(channel);
+        addReplyLongLong(m_pubsub_channels->dictSize()+
+                       m_pubsub_patterns->listLength());
 
     }
     decrRefCount(channel); /* it is finally safe to release it */
@@ -148,27 +148,27 @@ int pubsubSubscribePattern(client *c, robj *pattern) {
 
 /* Unsubscribe a client from a channel. Returns 1 if the operation succeeded, or
  * 0 if the client was not subscribed to the specified channel. */
-int pubsubUnsubscribePattern(client *c, robj *pattern, int notify) {
+int client::pubsubUnsubscribePattern(robj *pattern, int notify) {
     listNode *ln;
     pubsubPattern pat;
     int retval = 0;
 
     incrRefCount(pattern); /* Protect the object. May be the same we remove */
-    if ((ln = c->m_pubsub_patterns->listSearchKey(pattern)) != NULL) {
+    if ((ln = m_pubsub_patterns->listSearchKey(pattern)) != NULL) {
         retval = 1;
-        c->m_pubsub_patterns->listDelNode(ln);
-        pat.client = c;
+        m_pubsub_patterns->listDelNode(ln);
+        pat.client = this;
         pat.pattern = pattern;
         ln = server.pubsub_patterns->listSearchKey(&pat);
         server.pubsub_patterns->listDelNode(ln);
     }
     /* Notify the client */
     if (notify) {
-        c->addReply(shared.mbulkhdr[3]);
-        c->addReply(shared.punsubscribebulk);
-        c->addReplyBulk(pattern);
-        c->addReplyLongLong(c->m_pubsub_channels->dictSize()+
-                       c->m_pubsub_patterns->listLength());
+        addReply(shared.mbulkhdr[3]);
+        addReply(shared.punsubscribebulk);
+        addReplyBulk(pattern);
+        addReplyLongLong(m_pubsub_channels->dictSize()+
+                       m_pubsub_patterns->listLength());
     }
     decrRefCount(pattern);
     return retval;
@@ -176,23 +176,23 @@ int pubsubUnsubscribePattern(client *c, robj *pattern, int notify) {
 
 /* Unsubscribe from all the channels. Return the number of channels the
  * client was subscribed to. */
-int pubsubUnsubscribeAllChannels(client *c, int notify) {
+int client::pubsubUnsubscribeAllChannels(int notify) {
     dictEntry *de;
     int count = 0;
 
-    dictIterator di(c->m_pubsub_channels, 1);
+    dictIterator di(m_pubsub_channels, 1);
     while((de = di.dictNext()) != NULL) {
         robj *channel = (robj *)de->dictGetKey();
 
-        count += pubsubUnsubscribeChannel(c,channel,notify);
+        count += pubsubUnsubscribeChannel(channel,notify);
     }
     /* We were subscribed to nothing? Still reply to the client. */
     if (notify && count == 0) {
-        c->addReply(shared.mbulkhdr[3]);
-        c->addReply(shared.unsubscribebulk);
-        c->addReply(shared.nullbulk);
-        c->addReplyLongLong(c->m_pubsub_channels->dictSize()+
-                       c->m_pubsub_patterns->listLength());
+        addReply(shared.mbulkhdr[3]);
+        addReply(shared.unsubscribebulk);
+        addReply(shared.nullbulk);
+        addReplyLongLong(m_pubsub_channels->dictSize()+
+                       m_pubsub_patterns->listLength());
     }
 
     return count;
@@ -200,23 +200,23 @@ int pubsubUnsubscribeAllChannels(client *c, int notify) {
 
 /* Unsubscribe from all the patterns. Return the number of patterns the
  * client was subscribed from. */
-int pubsubUnsubscribeAllPatterns(client *c, int notify) {
+int client::pubsubUnsubscribeAllPatterns(int notify) {
     listNode *ln;
     int count = 0;
 
-    listIter li(c->m_pubsub_patterns);
+    listIter li(m_pubsub_patterns);
     while ((ln = li.listNext()) != NULL) {
         robj *pattern = (robj *)ln->listNodeValue();
 
-        count += pubsubUnsubscribePattern(c,pattern,notify);
+        count += pubsubUnsubscribePattern(pattern,notify);
     }
     if (notify && count == 0) {
         /* We were subscribed to nothing? Still reply to the client. */
-        c->addReply(shared.mbulkhdr[3]);
-        c->addReply(shared.punsubscribebulk);
-        c->addReply(shared.nullbulk);
-        c->addReplyLongLong(c->m_pubsub_channels->dictSize()+
-                       c->m_pubsub_patterns->listLength());
+        addReply(shared.mbulkhdr[3]);
+        addReply(shared.punsubscribebulk);
+        addReply(shared.nullbulk);
+        addReplyLongLong(m_pubsub_channels->dictSize()+
+                       m_pubsub_patterns->listLength());
     }
     return count;
 }
@@ -282,12 +282,12 @@ void subscribeCommand(client *c) {
 
 void unsubscribeCommand(client *c) {
     if (c->m_argc == 1) {
-        pubsubUnsubscribeAllChannels(c,1);
+        c->pubsubUnsubscribeAllChannels(1);
     } else {
         int j;
 
         for (j = 1; j < c->m_argc; j++)
-            pubsubUnsubscribeChannel(c,c->m_argv[j],1);
+            c->pubsubUnsubscribeChannel(c->m_argv[j],1);
     }
     if (clientSubscriptionsCount(c) == 0) c->m_flags &= ~CLIENT_PUBSUB;
 }
@@ -302,12 +302,12 @@ void psubscribeCommand(client *c) {
 
 void punsubscribeCommand(client *c) {
     if (c->m_argc == 1) {
-        pubsubUnsubscribeAllPatterns(c,1);
+        c->pubsubUnsubscribeAllPatterns(1);
     } else {
         int j;
 
         for (j = 1; j < c->m_argc; j++)
-            pubsubUnsubscribePattern(c,c->m_argv[j],1);
+            c->pubsubUnsubscribePattern(c->m_argv[j],1);
     }
     if (clientSubscriptionsCount(c) == 0) c->m_flags &= ~CLIENT_PUBSUB;
 }

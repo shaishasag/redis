@@ -686,6 +686,7 @@ class client {
 public:
     client(uint64_t in_client_id, int in_fd);
     ~client();
+    void resetClient();
 
     int selectDb(int id);
 
@@ -725,6 +726,11 @@ public:
     int getClientType();
     int checkClientOutputBufferLimits();
     void unlinkClient();
+
+    int pubsubUnsubscribeAllChannels(int notify);
+    int pubsubUnsubscribeAllPatterns(int notify);
+    int pubsubUnsubscribeChannel(robj *channel, int notify);
+    int pubsubUnsubscribePattern(robj *pattern, int notify);
 
     uint64_t m_client_id;            /* Client incremental unique ID. */
     int m_fd;                 /* Client socket. */
@@ -1480,7 +1486,6 @@ client *createClient(int fd);
 void closeTimedoutClients();
 void freeClient(client *c);
 void freeClientAsync(client *c);
-void resetClient(client *c);
 void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask);
 void acceptHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask);
@@ -1782,8 +1787,6 @@ robj *hashTypeGetValueObject(robj *o, sds field);
 int hashTypeSet(robj *o, sds field, sds value, int flags);
 
 /* Pub / Sub */
-int pubsubUnsubscribeAllChannels(client *c, int notify);
-int pubsubUnsubscribeAllPatterns(client *c, int notify);
 void freePubsubPattern(void *p);
 int listMatchPubsubPattern(void *a, void *b);
 int pubsubPublishMessage(robj *channel, robj *message);

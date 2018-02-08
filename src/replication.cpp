@@ -2131,7 +2131,7 @@ void replicationCacheMaster(client *c) {
         discardTransaction(c);
     c->m_reply->listEmpty();
     c->m_response_buff_pos = 0;
-    resetClient(c);
+    c->resetClient();
 
     /* Save the master. Server.master will be set to null later by
      * replicationHandleMasterDisconnection(). */
