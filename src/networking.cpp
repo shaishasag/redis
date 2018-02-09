@@ -790,9 +790,8 @@ void client::unlinkClient() {
 }
 
 void freeClient(client *c) {
-    listNode *ln;
 
-    /* If it is our master that's beging disconnected we should make sure
+    /* If it is our master that's being disconnected we should make sure
      * to cache the state to try a partial resynchronization later.
      *
      * Note that before doing this we make sure that the client is not in
@@ -809,79 +808,88 @@ void freeClient(client *c) {
         }
     }
 
+
+    c->~client();
+    zfree(c);
+}
+
+client::~client()
+{
     /* Log link disconnection with slave */
-    if ((c->m_flags & CLIENT_SLAVE) && !(c->m_flags & CLIENT_MONITOR)) {
+    if ((m_flags & CLIENT_SLAVE) && !(m_flags & CLIENT_MONITOR)) {
         serverLog(LL_WARNING,"Connection with slave %s lost.",
-            c->replicationGetSlaveName());
+            replicationGetSlaveName());
     }
 
     /* Free the query buffer */
-    sdsfree(c->m_query_buf);
-    sdsfree(c->m_pending_query_buf);
-    c->m_query_buf = NULL;
+    sdsfree(m_query_buf);
+    sdsfree(m_pending_query_buf);
+    m_query_buf = NULL;
 
     /* Deallocate structures used to block on blocking ops. */
-    if (c->m_flags & CLIENT_BLOCKED)
-        c->unblockClient();
-    dictRelease(c->m_blocking_state.m_keys);
+    if (m_flags & CLIENT_BLOCKED)
+        unblockClient();
+    dictRelease(m_blocking_state.m_keys);
 
     /* UNWATCH all the keys */
-    c->unwatchAllKeys();
-    listRelease(c->m_watched_keys);
+    unwatchAllKeys();
+    listRelease(m_watched_keys);
 
     /* Unsubscribe from all the pubsub channels */
-    c->pubsubUnsubscribeAllChannels(0);
-    c->pubsubUnsubscribeAllPatterns(0);
-    dictRelease(c->m_pubsub_channels);
-    listRelease(c->m_pubsub_patterns);
+    pubsubUnsubscribeAllChannels(0);
+    pubsubUnsubscribeAllPatterns(0);
+    dictRelease(m_pubsub_channels);
+    listRelease(m_pubsub_patterns);
 
     /* Free data structures. */
-    listRelease(c->m_reply);
-    c->freeClientArgv();
+    listRelease(m_reply);
+    freeClientArgv();
 
     /* Unlink the client: this will close the socket, remove the I/O
      * handlers, and remove references of the client from different
      * places where active clients may be referenced. */
-    c->unlinkClient();
+    unlinkClient();
 
     /* Master/slave cleanup Case 1:
      * we lost the connection with a slave. */
-    if (c->m_flags & CLIENT_SLAVE) {
-        if (c->m_replication_state == SLAVE_STATE_SEND_BULK) {
-            if (c->m_replication_db_fd != -1) close(c->m_replication_db_fd);
-            if (c->m_replication_db_preamble) sdsfree(c->m_replication_db_preamble);
+    if (m_flags & CLIENT_SLAVE) {
+        if (m_replication_state == SLAVE_STATE_SEND_BULK) {
+            if (m_replication_db_fd != -1)
+                close(m_replication_db_fd);
+            if (m_replication_db_preamble)
+                sdsfree(m_replication_db_preamble);
         }
-        list *l = (c->m_flags & CLIENT_MONITOR) ? server.monitors : server.slaves;
-        ln = l->listSearchKey(c);
+        list *l = (m_flags & CLIENT_MONITOR) ? server.monitors : server.slaves;
+        listNode* ln = l->listSearchKey(this);
         serverAssert(ln != NULL);
         l->listDelNode(ln);
         /* We need to remember the time when we started to have zero
          * attached slaves, as after some time we'll free the replication
          * backlog. */
-        if (c->m_flags & CLIENT_SLAVE && server.slaves->listLength() == 0)
+        if (m_flags & CLIENT_SLAVE && server.slaves->listLength() == 0)
             server.repl_no_slaves_since = server.unixtime;
         refreshGoodSlavesCount();
     }
 
     /* Master/slave cleanup Case 2:
      * we lost the connection with the master. */
-    if (c->m_flags & CLIENT_MASTER) replicationHandleMasterDisconnection();
+    if (m_flags & CLIENT_MASTER)
+        replicationHandleMasterDisconnection();
 
     /* If this client was scheduled for async freeing we need to remove it
      * from the queue. */
-    if (c->m_flags & CLIENT_CLOSE_ASAP) {
-        ln = server.clients_to_close->listSearchKey(c);
+    if (m_flags & CLIENT_CLOSE_ASAP) {
+        listNode* ln = server.clients_to_close->listSearchKey(this);
         serverAssert(ln != NULL);
         server.clients_to_close->listDelNode(ln);
     }
-
     /* Release other dynamically allocated client structure fields,
      * and finally release the client structure itself. */
-    if (c->m_client_name) decrRefCount(c->m_client_name);
-    zfree(c->m_argv);
-    freeClientMultiState(c);
-    sdsfree(c->m_cached_peer_id);
-    zfree(c);
+    if (m_client_name)
+        decrRefCount(m_client_name);
+    zfree(m_argv);
+    freeClientMultiState(this);
+    sdsfree(m_cached_peer_id);
 }
 
 /* Schedule a client to free it at a safe time in the serverCron() function.
